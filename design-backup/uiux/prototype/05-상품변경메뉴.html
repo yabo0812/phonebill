@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>상품 변경 - 통신요금 관리 서비스</title>
+    <style>
+        /* CSS Variables - Style Guide */
+        :root {
+            /* Primary Colors */
+            --primary-50: #EBF8FF;
+            --primary-100: #BEE3F8;
+            --primary-200: #90CDF4;
+            --primary-300: #63B3ED;
+            --primary-400: #4299E1;
+            --primary-500: #3182CE;
+            --primary-600: #2B77CB;
+            --primary-700: #2C5282;
+            --primary-800: #2A4365;
+            --primary-900: #1A365D;
+            
+            /* Gray Colors */
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            
+            /* Status Colors */
+            --success-500: #38A169;
+            --error-500: #E53E3E;
+            --warning-500: #ED8936;
+            
+            /* Spacing */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-10: 2.5rem;
+            --space-12: 3rem;
+            
+            /* Typography */
+            --text-xs: 0.75rem;
+            --text-sm: 0.875rem;
+            --text-base: 1rem;
+            --text-lg: 1.125rem;
+            --text-xl: 1.25rem;
+            --text-2xl: 1.5rem;
+            --text-3xl: 1.875rem;
+            --text-4xl: 2.25rem;
+            
+            --font-normal: 400;
+            --font-medium: 500;
+            --font-semibold: 600;
+            --font-bold: 700;
+        }
+        
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            font-size: var(--text-base);
+            line-height: 1.5;
+            color: var(--gray-700);
+            background-color: var(--gray-50);
+            min-height: 100vh;
+        }
+        
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: var(--space-4);
+            min-height: 100vh;
+            background-color: white;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 480px;
+                padding: var(--space-6);
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            }
+        }
+        
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding: var(--space-4) 0;
+            border-bottom: 1px solid var(--gray-200);
+            margin-bottom: var(--space-6);
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+        }
+        
+        .back-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: var(--text-xl);
+            color: var(--gray-600);
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .back-btn:hover {
+            background-color: var(--gray-100);
+            color: var(--gray-800);
+        }
+        
+        .page-title {
+            font-size: var(--text-xl);
+            font-weight: var(--font-bold);
+            color: var(--gray-900);
+        }
+        
+        /* Card */
+        .card {
+            background-color: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: var(--space-6);
+            margin-bottom: var(--space-6);
+            border: 1px solid var(--gray-200);
+        }
+        
+        .card-title {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-4);
+        }
+        
+        /* Customer Info */
+        .info-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: var(--space-3) 0;
+            border-bottom: 1px solid var(--gray-100);
+        }
+        
+        .info-row:last-child {
+            border-bottom: none;
+        }
+        
+        .info-label {
+            font-size: var(--text-sm);
+            color: var(--gray-500);
+            font-weight: var(--font-medium);
+        }
+        
+        .info-value {
+            font-size: var(--text-base);
+            color: var(--gray-900);
+            font-weight: var(--font-semibold);
+        }
+        
+        /* Product Info */
+        .product-card {
+            background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-100) 100%);
+            border: 2px solid var(--primary-200);
+            border-radius: 16px;
+            padding: var(--space-6);
+            margin-bottom: var(--space-6);
+        }
+        
+        .product-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-4);
+        }
+        
+        .product-icon {
+            width: 40px;
+            height: 40px;
+            background: var(--primary-500);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: var(--text-lg);
+        }
+        
+        .product-name {
+            font-size: var(--text-xl);
+            font-weight: var(--font-bold);
+            color: var(--primary-800);
+        }
+        
+        .product-price {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--primary-700);
+            margin-bottom: var(--space-4);
+        }
+        
+        .benefits-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .benefit-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding: var(--space-2) 0;
+            font-size: var(--text-sm);
+            color: var(--gray-700);
+        }
+        
+        .benefit-icon {
+            width: 16px;
+            height: 16px;
+            background: var(--success-500);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+        }
+        
+        /* Notice */
+        .notice {
+            background: #FFF7ED;
+            border: 1px solid #FED7AA;
+            border-radius: 12px;
+            padding: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+        
+        .notice-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+            font-weight: var(--font-semibold);
+            color: var(--warning-500);
+            margin-bottom: var(--space-2);
+        }
+        
+        .notice-text {
+            font-size: var(--text-sm);
+            color: #92400E;
+            line-height: 1.4;
+        }
+        
+        /* Button */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-4) var(--space-6);
+            border-radius: 12px;
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            line-height: 1.5;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: none;
+            min-height: 52px;
+            text-decoration: none;
+            width: 100%;
+            margin-bottom: var(--space-3);
+        }
+        
+        .btn:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(49, 130, 206, 0.2);
+        }
+        
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--gray-600);
+            border: 2px solid var(--gray-200);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-300);
+            color: var(--gray-700);
+        }
+        
+        /* Loading */
+        .loading {
+            position: relative;
+            pointer-events: none;
+        }
+        
+        .loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        /* Skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
+            background-size: 200% 100%;
+            animation: skeleton 1.5s infinite;
+        }
+        
+        @keyframes skeleton {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Alert */
+        .alert {
+            padding: var(--space-4);
+            border-radius: 12px;
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-4);
+            display: none;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert-error {
+            background-color: #FEF2F2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <button class="back-btn" onclick="goBack()" aria-label="뒤로가기">
+                    ←
+                </button>
+                <h1 class="page-title">상품 변경</h1>
+            </div>
+        </header>
+        
+        <!-- Error Alert -->
+        <div id="errorAlert" class="alert alert-error">
+            <span id="errorMessage"></span>
+        </div>
+        
+        <!-- Customer Info Card -->
+        <div class="card">
+            <h2 class="card-title">고객 정보</h2>
+            <div class="info-row">
+                <span class="info-label">회선번호</span>
+                <span class="info-value">010-1234-5678</span>
+            </div>
+            <div class="info-row">
+                <span class="info-label">고객ID</span>
+                <span class="info-value">customer123</span>
+            </div>
+        </div>
+        
+        <!-- Current Product Info -->
+        <div class="product-card">
+            <div class="product-header">
+                <div class="product-icon">📱</div>
+                <div>
+                    <div class="product-name">5G 프리미엄 플랜</div>
+                </div>
+            </div>
+            <div class="product-price">월 69,000원</div>
+            <ul class="benefits-list">
+                <li class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>5G 데이터 무제한</span>
+                </li>
+                <li class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>음성통화 무제한</span>
+                </li>
+                <li class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>문자 무제한</span>
+                </li>
+                <li class="benefit-item">
+                    <span class="benefit-icon">✓</span>
+                    <span>해외 로밍 50% 할인</span>
+                </li>
+            </ul>
+        </div>
+        
+        <!-- Notice -->
+        <div class="notice">
+            <div class="notice-title">
+                <span>⚠️</span>
+                <span>상품 변경 시 주의사항</span>
+            </div>
+            <p class="notice-text">
+                • 상품 변경은 다음 월 1일부터 적용됩니다<br>
+                • 기존 약정 조건에 따라 위약금이 발생할 수 있습니다<br>
+                • 변경 후에는 이전 상품으로 즉시 되돌릴 수 없습니다<br>
+                • 부가서비스는 별도로 재신청이 필요할 수 있습니다
+            </p>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="actions">
+            <button class="btn btn-primary" id="changeBtn" onclick="goToProductChange()">
+                상품 변경하기
+            </button>
+            <button class="btn btn-secondary" onclick="goBack()">
+                취소
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        // Navigation functions
+        function goBack() {
+            window.history.back();
+        }
+        
+        function goToProductChange() {
+            const changeBtn = document.getElementById('changeBtn');
+            
+            // Show loading state
+            changeBtn.classList.add('loading');
+            changeBtn.disabled = true;
+            
+            // Simulate loading
+            setTimeout(() => {
+                window.location.href = '06-상품변경화면.html';
+            }, 800);
+        }
+        
+        // Show error message
+        function showError(message) {
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorAlert.classList.add('show');
+        }
+        
+        // Hide error message
+        function hideError() {
+            const errorAlert = document.getElementById('errorAlert');
+            errorAlert.classList.remove('show');
+        }
+        
+        // Load customer and product info on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentProduct();
+            
+            // Handle keyboard navigation
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    goBack();
+                }
+                
+                if (e.key === 'Enter' && e.target.tagName === 'BUTTON') {
+                    e.target.click();
+                }
+            });
+        });
+        
+        // Load current product from localStorage
+        function loadCurrentProduct() {
+            try {
+                const currentProduct = localStorage.getItem('currentProduct');
+                if (currentProduct) {
+                    const product = JSON.parse(currentProduct);
+                    updateCurrentProductDisplay(product);
+                }
+            } catch (error) {
+                console.warn('localStorage에서 상품 정보를 불러오는 중 오류 발생:', error);
+                // 기본값으로 화면이 이미 설정되어 있음
+            }
+        }
+        
+        // Update current product display
+        function updateCurrentProductDisplay(product) {
+            // Update product name
+            const productNameElement = document.querySelector('.product-name');
+            if (productNameElement && product.name) {
+                productNameElement.textContent = product.name;
+            }
+            
+            // Update product price
+            const productPriceElement = document.querySelector('.product-price');
+            if (productPriceElement && product.price) {
+                productPriceElement.textContent = product.price;
+            }
+            
+            // Update benefits
+            if (product.benefits && Array.isArray(product.benefits)) {
+                const benefitsList = document.querySelector('.benefits-list');
+                if (benefitsList) {
+                    benefitsList.innerHTML = '';
+                    product.benefits.forEach(benefit => {
+                        const li = document.createElement('li');
+                        li.className = 'benefit-item';
+                        li.innerHTML = `
+                            <span class="benefit-icon">✓</span>
+                            <span>${benefit}</span>
+                        `;
+                        benefitsList.appendChild(li);
+                    });
+                }
+            }
+        }
+        
+        // Handle back button for accessibility
+        window.addEventListener('popstate', function(e) {
+            // Handle browser back button
+        });
+        
+        // Add focus management for accessibility
+        const focusableElements = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+        const modal = document.querySelector('.container');
+        const firstFocusableElement = modal.querySelectorAll(focusableElements)[0];
+        const focusableContent = modal.querySelectorAll(focusableElements);
+        const lastFocusableElement = focusableContent[focusableContent.length - 1];
+        
+        document.addEventListener('keydown', function(e) {
+            const isTabPressed = e.key === 'Tab';
+            
+            if (!isTabPressed) {
+                return;
+            }
+            
+            if (e.shiftKey) {
+                if (document.activeElement === firstFocusableElement) {
+                    lastFocusableElement.focus();
+                    e.preventDefault();
+                }
+            } else {
+                if (document.activeElement === lastFocusableElement) {
+                    firstFocusableElement.focus();
+                    e.preventDefault();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

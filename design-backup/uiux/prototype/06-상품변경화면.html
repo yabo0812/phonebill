@@ -1,0 +1,797 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>상품 선택 - 통신요금 관리 서비스</title>
+    <style>
+        /* CSS Variables - Style Guide */
+        :root {
+            /* Primary Colors */
+            --primary-50: #EBF8FF;
+            --primary-100: #BEE3F8;
+            --primary-200: #90CDF4;
+            --primary-300: #63B3ED;
+            --primary-400: #4299E1;
+            --primary-500: #3182CE;
+            --primary-600: #2B77CB;
+            --primary-700: #2C5282;
+            --primary-800: #2A4365;
+            --primary-900: #1A365D;
+            
+            /* Gray Colors */
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            
+            /* Status Colors */
+            --success-500: #38A169;
+            --error-500: #E53E3E;
+            --warning-500: #ED8936;
+            
+            /* Spacing */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-10: 2.5rem;
+            --space-12: 3rem;
+            
+            /* Typography */
+            --text-xs: 0.75rem;
+            --text-sm: 0.875rem;
+            --text-base: 1rem;
+            --text-lg: 1.125rem;
+            --text-xl: 1.25rem;
+            --text-2xl: 1.5rem;
+            --text-3xl: 1.875rem;
+            --text-4xl: 2.25rem;
+            
+            --font-normal: 400;
+            --font-medium: 500;
+            --font-semibold: 600;
+            --font-bold: 700;
+        }
+        
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            font-size: var(--text-base);
+            line-height: 1.5;
+            color: var(--gray-700);
+            background-color: var(--gray-50);
+            min-height: 100vh;
+            padding-bottom: 100px; /* Space for fixed buttons */
+        }
+        
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: var(--space-4);
+            background-color: white;
+            min-height: 100vh;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 480px;
+                padding: var(--space-6);
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            }
+        }
+        
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding: var(--space-4) 0;
+            border-bottom: 1px solid var(--gray-200);
+            margin-bottom: var(--space-6);
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+        }
+        
+        .back-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: var(--text-xl);
+            color: var(--gray-600);
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .back-btn:hover {
+            background-color: var(--gray-100);
+            color: var(--gray-800);
+        }
+        
+        .page-title {
+            font-size: var(--text-xl);
+            font-weight: var(--font-bold);
+            color: var(--gray-900);
+        }
+        
+        /* Current Product Summary */
+        .current-product {
+            background: linear-gradient(135deg, var(--gray-100) 0%, var(--gray-50) 100%);
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            padding: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+        
+        .current-label {
+            font-size: var(--text-sm);
+            color: var(--gray-500);
+            margin-bottom: var(--space-2);
+            font-weight: var(--font-medium);
+        }
+        
+        .current-name {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-800);
+            margin-bottom: var(--space-1);
+        }
+        
+        .current-price {
+            font-size: var(--text-base);
+            color: var(--gray-600);
+        }
+        
+        /* Product List */
+        .products-section {
+            margin-bottom: var(--space-8);
+        }
+        
+        .section-title {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-4);
+        }
+        
+        .product-card {
+            border: 2px solid var(--gray-200);
+            border-radius: 16px;
+            padding: var(--space-5);
+            margin-bottom: var(--space-4);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            position: relative;
+        }
+        
+        .product-card:hover {
+            border-color: var(--primary-300);
+            box-shadow: 0 4px 12px rgba(49, 130, 206, 0.1);
+        }
+        
+        .product-card.selected {
+            border-color: var(--primary-500);
+            background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-100) 100%);
+            box-shadow: 0 4px 12px rgba(49, 130, 206, 0.2);
+        }
+        
+        .product-radio {
+            position: absolute;
+            top: var(--space-4);
+            right: var(--space-4);
+            width: 20px;
+            height: 20px;
+            border: 2px solid var(--gray-300);
+            border-radius: 50%;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .product-card.selected .product-radio {
+            border-color: var(--primary-500);
+            background: var(--primary-500);
+        }
+        
+        .product-card.selected .product-radio::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 8px;
+            height: 8px;
+            background: white;
+            border-radius: 50%;
+        }
+        
+        .product-header {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            margin-bottom: var(--space-3);
+            margin-right: var(--space-8);
+        }
+        
+        .product-icon {
+            width: 36px;
+            height: 36px;
+            background: var(--primary-500);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: var(--text-base);
+            flex-shrink: 0;
+        }
+        
+        .product-card.selected .product-icon {
+            background: var(--primary-600);
+        }
+        
+        .product-info {
+            flex: 1;
+        }
+        
+        .product-name {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-1);
+        }
+        
+        .product-price {
+            font-size: var(--text-base);
+            font-weight: var(--font-medium);
+            color: var(--primary-600);
+        }
+        
+        .benefits-grid {
+            display: grid;
+            gap: var(--space-2);
+            margin-bottom: var(--space-3);
+        }
+        
+        .benefit-item {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+            color: var(--gray-600);
+        }
+        
+        .benefit-icon {
+            width: 14px;
+            height: 14px;
+            background: var(--success-500);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 8px;
+            flex-shrink: 0;
+        }
+        
+        .price-comparison {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+            padding-top: var(--space-3);
+            border-top: 1px solid var(--gray-200);
+            font-size: var(--text-sm);
+        }
+        
+        .price-change {
+            font-weight: var(--font-semibold);
+        }
+        
+        .price-up {
+            color: var(--error-500);
+        }
+        
+        .price-down {
+            color: var(--success-500);
+        }
+        
+        .price-same {
+            color: var(--gray-500);
+        }
+        
+        /* Fixed Action Buttons */
+        .fixed-actions {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            padding: var(--space-4);
+            border-top: 1px solid var(--gray-200);
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (min-width: 768px) {
+            .fixed-actions {
+                max-width: 480px;
+                padding: var(--space-6);
+            }
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-4) var(--space-6);
+            border-radius: 12px;
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            line-height: 1.5;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: none;
+            min-height: 52px;
+            text-decoration: none;
+            width: 100%;
+            margin-bottom: var(--space-3);
+        }
+        
+        .btn:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(49, 130, 206, 0.2);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            background: var(--gray-300);
+            color: var(--gray-500);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--gray-600);
+            border: 2px solid var(--gray-200);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-300);
+            color: var(--gray-700);
+        }
+        
+        /* Loading */
+        .loading {
+            position: relative;
+            pointer-events: none;
+        }
+        
+        .loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        /* Skeleton */
+        .skeleton {
+            background: linear-gradient(90deg, var(--gray-200) 25%, var(--gray-100) 50%, var(--gray-200) 75%);
+            background-size: 200% 100%;
+            animation: skeleton 1.5s infinite;
+            border-radius: 8px;
+        }
+        
+        .skeleton-product {
+            height: 140px;
+            margin-bottom: var(--space-4);
+        }
+        
+        @keyframes skeleton {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+        
+        /* Alert */
+        .alert {
+            padding: var(--space-4);
+            border-radius: 12px;
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-4);
+            display: none;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert-error {
+            background-color: #FEF2F2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <button class="back-btn" onclick="goBack()" aria-label="뒤로가기">
+                    ←
+                </button>
+                <h1 class="page-title">상품 선택</h1>
+            </div>
+        </header>
+        
+        <!-- Error Alert -->
+        <div id="errorAlert" class="alert alert-error">
+            <span id="errorMessage"></span>
+        </div>
+        
+        <!-- Current Product Summary -->
+        <div class="current-product">
+            <div class="current-label">현재 이용 중인 상품</div>
+            <div class="current-name">5G 프리미엄 플랜</div>
+            <div class="current-price">월 69,000원</div>
+        </div>
+        
+        <!-- Products Section -->
+        <div class="products-section">
+            <h2 class="section-title">변경 가능한 상품</h2>
+            
+            <!-- Loading Skeletons (hidden by default) -->
+            <div id="loadingSkeletons" style="display: none;">
+                <div class="skeleton skeleton-product"></div>
+                <div class="skeleton skeleton-product"></div>
+                <div class="skeleton skeleton-product"></div>
+            </div>
+            
+            <!-- Product List -->
+            <div id="productList">
+                <!-- Product Card 1 -->
+                <div class="product-card" data-product-id="basic" onclick="selectProduct(this)">
+                    <div class="product-radio"></div>
+                    <div class="product-header">
+                        <div class="product-icon">📱</div>
+                        <div class="product-info">
+                            <div class="product-name">5G 베이직 플랜</div>
+                            <div class="product-price">월 39,000원</div>
+                        </div>
+                    </div>
+                    <div class="benefits-grid">
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>5G 데이터 10GB</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>음성통화 300분</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>문자 무제한</span>
+                        </div>
+                    </div>
+                    <div class="price-comparison">
+                        <span>현재 상품 대비</span>
+                        <span class="price-change price-down">월 30,000원 절약</span>
+                    </div>
+                </div>
+                
+                <!-- Product Card 2 -->
+                <div class="product-card" data-product-id="standard" onclick="selectProduct(this)">
+                    <div class="product-radio"></div>
+                    <div class="product-header">
+                        <div class="product-icon">📱</div>
+                        <div class="product-info">
+                            <div class="product-name">5G 스탠다드 플랜</div>
+                            <div class="product-price">월 59,000원</div>
+                        </div>
+                    </div>
+                    <div class="benefits-grid">
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>5G 데이터 50GB</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>음성통화 무제한</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>문자 무제한</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>해외 로밍 20% 할인</span>
+                        </div>
+                    </div>
+                    <div class="price-comparison">
+                        <span>현재 상품 대비</span>
+                        <span class="price-change price-down">월 10,000원 절약</span>
+                    </div>
+                </div>
+                
+                <!-- Product Card 3 -->
+                <div class="product-card" data-product-id="unlimited" onclick="selectProduct(this)">
+                    <div class="product-radio"></div>
+                    <div class="product-header">
+                        <div class="product-icon">📱</div>
+                        <div class="product-info">
+                            <div class="product-name">5G 언리미티드 플랜</div>
+                            <div class="product-price">월 89,000원</div>
+                        </div>
+                    </div>
+                    <div class="benefits-grid">
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>5G 데이터 무제한</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>음성통화 무제한</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>문자 무제한</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>해외 로밍 무료</span>
+                        </div>
+                        <div class="benefit-item">
+                            <span class="benefit-icon">✓</span>
+                            <span>OTT 서비스 3개</span>
+                        </div>
+                    </div>
+                    <div class="price-comparison">
+                        <span>현재 상품 대비</span>
+                        <span class="price-change price-up">월 20,000원 추가</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fixed Action Buttons -->
+    <div class="fixed-actions">
+        <button class="btn btn-primary" id="nextBtn" disabled onclick="goToRequest()">
+            선택한 상품으로 변경
+        </button>
+        <button class="btn btn-secondary" onclick="goBack()">
+            취소
+        </button>
+    </div>
+    
+    <script>
+        let selectedProductId = null;
+        
+        // Select product function
+        function selectProduct(cardElement) {
+            // Remove selection from all cards
+            document.querySelectorAll('.product-card').forEach(card => {
+                card.classList.remove('selected');
+            });
+            
+            // Add selection to clicked card
+            cardElement.classList.add('selected');
+            
+            // Store selected product ID
+            selectedProductId = cardElement.dataset.productId;
+            
+            // Enable next button
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.disabled = false;
+            
+            // Update button text based on selection
+            const productName = cardElement.querySelector('.product-name').textContent;
+            nextBtn.textContent = `${productName}으로 변경`;
+        }
+        
+        // Navigation functions
+        function goBack() {
+            window.history.back();
+        }
+        
+        function goToRequest() {
+            if (!selectedProductId) {
+                showError('변경할 상품을 선택해주세요.');
+                return;
+            }
+            
+            const nextBtn = document.getElementById('nextBtn');
+            
+            // Show loading state
+            nextBtn.classList.add('loading');
+            nextBtn.disabled = true;
+            
+            // Store selected product in sessionStorage
+            const selectedCard = document.querySelector(`[data-product-id="${selectedProductId}"]`);
+            const productData = {
+                id: selectedProductId,
+                name: selectedCard.querySelector('.product-name').textContent,
+                price: selectedCard.querySelector('.product-price').textContent,
+                benefits: Array.from(selectedCard.querySelectorAll('.benefit-item span:last-child')).map(el => el.textContent)
+            };
+            sessionStorage.setItem('selectedProduct', JSON.stringify(productData));
+            
+            // Simulate loading
+            setTimeout(() => {
+                window.location.href = '07-상품변경요청.html';
+            }, 800);
+        }
+        
+        // Show error message
+        function showError(message) {
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorAlert.classList.add('show');
+            
+            // Hide after 5 seconds
+            setTimeout(() => {
+                hideError();
+            }, 5000);
+        }
+        
+        // Hide error message
+        function hideError() {
+            const errorAlert = document.getElementById('errorAlert');
+            errorAlert.classList.remove('show');
+        }
+        
+        // Load products on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Load current product from localStorage
+            loadCurrentProduct();
+            // Simulate loading products
+            loadProducts();
+            
+            // Handle keyboard navigation
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    goBack();
+                }
+                
+                if (e.key === 'Enter' && e.target.classList.contains('product-card')) {
+                    selectProduct(e.target);
+                }
+                
+                // Arrow key navigation for product cards
+                if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                    const cards = Array.from(document.querySelectorAll('.product-card'));
+                    const currentIndex = cards.findIndex(card => card === document.activeElement);
+                    
+                    if (e.key === 'ArrowDown' && currentIndex < cards.length - 1) {
+                        cards[currentIndex + 1].focus();
+                        e.preventDefault();
+                    } else if (e.key === 'ArrowUp' && currentIndex > 0) {
+                        cards[currentIndex - 1].focus();
+                        e.preventDefault();
+                    }
+                }
+            });
+            
+            // Make product cards focusable for keyboard navigation
+            document.querySelectorAll('.product-card').forEach(card => {
+                card.setAttribute('tabindex', '0');
+                card.setAttribute('role', 'radio');
+                card.setAttribute('aria-checked', 'false');
+            });
+        });
+        
+        // Load current product from localStorage
+        function loadCurrentProduct() {
+            try {
+                const currentProduct = localStorage.getItem('currentProduct');
+                if (currentProduct) {
+                    const product = JSON.parse(currentProduct);
+                    const currentNameElement = document.querySelector('.current-name');
+                    if (currentNameElement && product.name) {
+                        currentNameElement.textContent = product.name;
+                    }
+                }
+            } catch (error) {
+                console.warn('localStorage에서 상품 정보를 불러오는 중 오류 발생:', error);
+                // 기본값 유지
+            }
+        }
+        
+        function loadProducts() {
+            const loadingSkeletons = document.getElementById('loadingSkeletons');
+            const productList = document.getElementById('productList');
+            
+            // Show loading
+            loadingSkeletons.style.display = 'block';
+            productList.style.display = 'none';
+            
+            // Simulate API call
+            setTimeout(() => {
+                // Hide loading, show products
+                loadingSkeletons.style.display = 'none';
+                productList.style.display = 'block';
+            }, 1000);
+        }
+        
+        // Update aria-checked when product is selected
+        function selectProduct(cardElement) {
+            // Remove selection from all cards
+            document.querySelectorAll('.product-card').forEach(card => {
+                card.classList.remove('selected');
+                card.setAttribute('aria-checked', 'false');
+            });
+            
+            // Add selection to clicked card
+            cardElement.classList.add('selected');
+            cardElement.setAttribute('aria-checked', 'true');
+            
+            // Store selected product ID
+            selectedProductId = cardElement.dataset.productId;
+            
+            // Store selected product info in sessionStorage
+            const productName = cardElement.querySelector('.product-name').textContent;
+            const productPrice = cardElement.querySelector('.product-price').textContent;
+            sessionStorage.setItem('selectedProductName', productName);
+            sessionStorage.setItem('selectedProductPrice', productPrice);
+            
+            // Enable next button
+            const nextBtn = document.getElementById('nextBtn');
+            nextBtn.disabled = false;
+            
+            // Update button text based on selection
+            nextBtn.textContent = `${productName}으로 변경`;
+        }
+    </script>
+</body>
+</html>

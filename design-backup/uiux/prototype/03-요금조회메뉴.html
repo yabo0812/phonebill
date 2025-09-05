@@ -1,0 +1,690 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>요금조회 메뉴 - 통신요금 관리 서비스</title>
+    <style>
+        /* CSS Variables - Style Guide */
+        :root {
+            /* Primary Colors */
+            --primary-50: #EBF8FF;
+            --primary-100: #BEE3F8;
+            --primary-200: #90CDF4;
+            --primary-300: #63B3ED;
+            --primary-400: #4299E1;
+            --primary-500: #3182CE;
+            --primary-600: #2B77CB;
+            --primary-700: #2C5282;
+            --primary-800: #2A4365;
+            --primary-900: #1A365D;
+            
+            /* Gray Colors */
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            
+            /* Status Colors */
+            --success-50: #F0FFF4;
+            --success-500: #38A169;
+            --error-500: #E53E3E;
+            --warning-50: #FFFAF0;
+            --warning-500: #ED8936;
+            
+            /* Spacing */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-10: 2.5rem;
+            --space-12: 3rem;
+            
+            /* Typography */
+            --text-xs: 0.75rem;
+            --text-sm: 0.875rem;
+            --text-base: 1rem;
+            --text-lg: 1.125rem;
+            --text-xl: 1.25rem;
+            --text-2xl: 1.5rem;
+            --text-3xl: 1.875rem;
+            --text-4xl: 2.25rem;
+            
+            --font-normal: 400;
+            --font-medium: 500;
+            --font-semibold: 600;
+            --font-bold: 700;
+        }
+        
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            font-size: var(--text-base);
+            line-height: 1.5;
+            color: var(--gray-700);
+            background-color: var(--gray-50);
+            min-height: 100vh;
+        }
+        
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-color: white;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 600px;
+            }
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-4);
+            background-color: white;
+            border-bottom: 1px solid var(--gray-200);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+        
+        .back-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background-color: var(--gray-100);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+            color: var(--gray-700);
+            font-size: var(--text-lg);
+        }
+        
+        .back-btn:hover {
+            background-color: var(--gray-200);
+        }
+        
+        .page-title {
+            font-size: var(--text-xl);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+        }
+        
+        .menu-btn {
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: var(--gray-600);
+            font-size: var(--text-lg);
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            padding: var(--space-6);
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-8);
+        }
+        
+        /* User Info Card */
+        .user-info-card {
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            color: white;
+            padding: var(--space-6);
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(49, 130, 206, 0.2);
+        }
+        
+        .user-info-title {
+            font-size: var(--text-sm);
+            opacity: 0.9;
+            margin-bottom: var(--space-2);
+        }
+        
+        .user-phone {
+            font-size: var(--text-2xl);
+            font-weight: var(--font-bold);
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+        
+        /* Inquiry Options Card */
+        .inquiry-card {
+            background-color: white;
+            border-radius: 16px;
+            padding: var(--space-6);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--gray-100);
+        }
+        
+        .card-title {
+            font-size: var(--text-xl);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-6);
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+        
+        .card-title-icon {
+            width: 24px;
+            height: 24px;
+            background-color: var(--primary-100);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--primary-600);
+            font-size: var(--text-sm);
+        }
+        
+        .form-group {
+            margin-bottom: var(--space-6);
+        }
+        
+        .form-label {
+            display: block;
+            font-size: var(--text-sm);
+            font-weight: var(--font-medium);
+            color: var(--gray-700);
+            margin-bottom: var(--space-3);
+        }
+        
+        .select-wrapper {
+            position: relative;
+        }
+        
+        .select {
+            width: 100%;
+            padding: var(--space-4);
+            border: 2px solid var(--gray-200);
+            border-radius: 12px;
+            font-size: var(--text-base);
+            line-height: 1.5;
+            background-color: white;
+            cursor: pointer;
+            appearance: none;
+            transition: all 0.2s ease-in-out;
+            min-height: 52px;
+        }
+        
+        .select:focus {
+            outline: none;
+            border-color: var(--primary-500);
+            box-shadow: 0 0 0 3px rgba(49, 130, 206, 0.1);
+        }
+        
+        .select-wrapper::after {
+            content: "▼";
+            position: absolute;
+            top: 50%;
+            right: var(--space-4);
+            transform: translateY(-50%);
+            color: var(--gray-400);
+            font-size: var(--text-sm);
+            pointer-events: none;
+        }
+        
+        .form-help {
+            font-size: var(--text-sm);
+            color: var(--gray-500);
+            margin-top: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+        
+        .help-icon {
+            color: var(--primary-500);
+            font-size: var(--text-xs);
+        }
+        
+        /* Action Buttons */
+        .action-buttons {
+            padding: var(--space-6);
+            padding-top: 0;
+            display: flex;
+            gap: var(--space-4);
+        }
+        
+        .btn {
+            flex: 1;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-4) var(--space-6);
+            border-radius: 12px;
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            line-height: 1.5;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: none;
+            min-height: 52px;
+            text-decoration: none;
+            position: relative;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            color: white;
+            box-shadow: 0 2px 8px rgba(49, 130, 206, 0.2);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+        }
+        
+        .btn-secondary {
+            background-color: white;
+            color: var(--gray-700);
+            border: 2px solid var(--gray-300);
+        }
+        
+        .btn-secondary:hover {
+            background-color: var(--gray-50);
+            border-color: var(--gray-400);
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        /* Loading State */
+        .btn.loading {
+            pointer-events: none;
+        }
+        
+        .btn.loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        /* Alert */
+        .alert {
+            padding: var(--space-4);
+            border-radius: 12px;
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-4);
+            display: none;
+            align-items: flex-start;
+            gap: var(--space-3);
+        }
+        
+        .alert.show {
+            display: flex;
+        }
+        
+        .alert-error {
+            background-color: #FEF2F2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+        }
+        
+        .alert-warning {
+            background-color: var(--warning-50);
+            border: 1px solid #FED7AA;
+            color: #92400E;
+        }
+        
+        .alert-icon {
+            margin-top: var(--space-1);
+            font-size: var(--text-base);
+        }
+        
+        .alert-content {
+            flex: 1;
+        }
+        
+        /* Usage Info */
+        .usage-info {
+            background-color: var(--gray-50);
+            border-radius: 12px;
+            padding: var(--space-4);
+            border: 1px solid var(--gray-200);
+        }
+        
+        .usage-title {
+            font-size: var(--text-sm);
+            font-weight: var(--font-medium);
+            color: var(--gray-700);
+            margin-bottom: var(--space-2);
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+        }
+        
+        .usage-list {
+            list-style: none;
+            font-size: var(--text-sm);
+            color: var(--gray-600);
+            line-height: 1.6;
+        }
+        
+        .usage-list li {
+            position: relative;
+            padding-left: var(--space-4);
+            margin-bottom: var(--space-1);
+        }
+        
+        .usage-list li::before {
+            content: "•";
+            position: absolute;
+            left: 0;
+            color: var(--primary-500);
+            font-weight: var(--font-bold);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <button class="back-btn" onclick="goBack()" aria-label="뒤로가기">
+                    ←
+                </button>
+                <h1 class="page-title">요금 조회</h1>
+            </div>
+            <button class="menu-btn" onclick="showMenu()" aria-label="메뉴">
+                ☰
+            </button>
+        </div>
+        
+        <!-- Main Content -->
+        <div class="main-content">
+            <!-- User Info Card -->
+            <div class="user-info-card">
+                <div class="user-info-title">조회 대상 회선</div>
+                <div class="user-phone">
+                    📱 010-1234-5678
+                </div>
+            </div>
+            
+            <!-- Inquiry Options Card -->
+            <div class="inquiry-card">
+                <h2 class="card-title">
+                    <span class="card-title-icon">📅</span>
+                    조회 옵션 설정
+                </h2>
+                
+                <!-- Error Alert -->
+                <div id="errorAlert" class="alert alert-error">
+                    <span class="alert-icon">⚠️</span>
+                    <div class="alert-content">
+                        <span id="errorMessage"></span>
+                    </div>
+                </div>
+                
+                <!-- Warning Alert -->
+                <div id="warningAlert" class="alert alert-warning">
+                    <span class="alert-icon">💡</span>
+                    <div class="alert-content">
+                        <span id="warningMessage"></span>
+                    </div>
+                </div>
+                
+                <form id="inquiryForm">
+                    <!-- 조회월 선택 -->
+                    <div class="form-group">
+                        <label for="inquiryMonth" class="form-label">조회월 선택</label>
+                        <div class="select-wrapper">
+                            <select id="inquiryMonth" name="inquiryMonth" class="select" required>
+                                <option value="">조회할 월을 선택해주세요</option>
+                            </select>
+                        </div>
+                        <div class="form-help">
+                            <span class="help-icon">ℹ️</span>
+                            최근 6개월 요금 정보를 조회할 수 있습니다
+                        </div>
+                    </div>
+                    
+                    <!-- Usage Info -->
+                    <div class="usage-info">
+                        <div class="usage-title">
+                            <span>📋</span>
+                            조회 가능한 정보
+                        </div>
+                        <ul class="usage-list">
+                            <li>월 요금 상세 내역 (기본료, 통화료, 데이터료 등)</li>
+                            <li>사용량 정보 (통화시간, 데이터 사용량, SMS 등)</li>
+                            <li>할인 및 혜택 내역</li>
+                            <li>단말기 할부금 및 기타 부대비용</li>
+                            <li>약정 정보 및 예상 해지비용</li>
+                        </ul>
+                    </div>
+                </form>
+            </div>
+        </div>
+        
+        <!-- Action Buttons -->
+        <div class="action-buttons">
+            <button type="button" class="btn btn-secondary" onclick="goBack()">
+                취소
+            </button>
+            <button type="submit" form="inquiryForm" class="btn btn-primary" id="inquiryBtn">
+                요금 조회
+            </button>
+        </div>
+    </div>
+    
+    <script>
+        // 현재 날짜 기준으로 최근 6개월 옵션 생성
+        function generateMonthOptions() {
+            const select = document.getElementById('inquiryMonth');
+            const now = new Date();
+            
+            // 현재 월부터 6개월 전까지 옵션 생성
+            for (let i = 0; i < 6; i++) {
+                const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const year = date.getFullYear();
+                const month = date.getMonth() + 1;
+                const monthStr = month.toString().padStart(2, '0');
+                
+                const option = document.createElement('option');
+                option.value = `${year}${monthStr}`;
+                
+                if (i === 0) {
+                    option.textContent = `${year}년 ${month}월 (현재 월)`;
+                    option.selected = true; // 기본값으로 현재 월 선택
+                } else {
+                    option.textContent = `${year}년 ${month}월`;
+                }
+                
+                select.appendChild(option);
+            }
+        }
+        
+        // 폼 요소 참조
+        const inquiryForm = document.getElementById('inquiryForm');
+        const inquiryBtn = document.getElementById('inquiryBtn');
+        const errorAlert = document.getElementById('errorAlert');
+        const warningAlert = document.getElementById('warningAlert');
+        const errorMessage = document.getElementById('errorMessage');
+        const warningMessage = document.getElementById('warningMessage');
+        const monthSelect = document.getElementById('inquiryMonth');
+        
+        // 에러 메시지 표시
+        function showError(message) {
+            errorMessage.textContent = message;
+            errorAlert.classList.add('show');
+            hideWarning();
+        }
+        
+        // 경고 메시지 표시
+        function showWarning(message) {
+            warningMessage.textContent = message;
+            warningAlert.classList.add('show');
+            hideError();
+        }
+        
+        // 에러 메시지 숨기기
+        function hideError() {
+            errorAlert.classList.remove('show');
+        }
+        
+        // 경고 메시지 숨기기
+        function hideWarning() {
+            warningAlert.classList.remove('show');
+        }
+        
+        // 메시지 전체 숨기기
+        function hideAllMessages() {
+            hideError();
+            hideWarning();
+        }
+        
+        // 폼 유효성 검사
+        function validateForm() {
+            const selectedMonth = monthSelect.value;
+            
+            if (!selectedMonth) {
+                showError('조회할 월을 선택해주세요.');
+                monthSelect.focus();
+                return false;
+            }
+            
+            return true;
+        }
+        
+        // 폼 제출 처리
+        inquiryForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            hideAllMessages();
+            
+            if (!validateForm()) {
+                return;
+            }
+            
+            // 로딩 상태 시작
+            inquiryBtn.classList.add('loading');
+            inquiryBtn.disabled = true;
+            
+            const selectedMonth = monthSelect.value;
+            const selectedText = monthSelect.options[monthSelect.selectedIndex].text;
+            
+            // 로딩 시뮬레이션
+            setTimeout(() => {
+                try {
+                    // 현재 날짜와 비교하여 미래 월인지 확인
+                    const now = new Date();
+                    const currentYear = now.getFullYear();
+                    const currentMonth = now.getMonth() + 1;
+                    const currentYearMonth = parseInt(`${currentYear}${currentMonth.toString().padStart(2, '0')}`);
+                    const selectedYearMonth = parseInt(selectedMonth);
+                    
+                    if (selectedYearMonth > currentYearMonth) {
+                        showWarning('미래 월의 요금 정보는 조회할 수 없습니다.');
+                        inquiryBtn.classList.remove('loading');
+                        inquiryBtn.disabled = false;
+                        return;
+                    }
+                    
+                    // 성공 - 조회 결과 페이지로 이동
+                    sessionStorage.setItem('selectedMonth', selectedMonth);
+                    sessionStorage.setItem('selectedMonthText', selectedText);
+                    window.location.href = '04-요금조회결과.html';
+                    
+                } catch (error) {
+                    // 오류 처리
+                    showError('요금 조회 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.');
+                    inquiryBtn.classList.remove('loading');
+                    inquiryBtn.disabled = false;
+                }
+            }, 1500); // 1.5초 로딩 시뮬레이션
+        });
+        
+        // 선택 변경 시 메시지 숨기기
+        monthSelect.addEventListener('change', function() {
+            hideAllMessages();
+        });
+        
+        // 뒤로가기
+        function goBack() {
+            if (confirm('요금 조회를 취소하고 메인 화면으로 돌아가시겠습니까?')) {
+                window.location.href = '02-메인화면.html';
+            }
+        }
+        
+        // 메뉴 표시 (추후 구현)
+        function showMenu() {
+            alert('메뉴 기능은 추후 구현 예정입니다.');
+        }
+        
+        // 키보드 접근성
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                hideAllMessages();
+            }
+        });
+        
+        // 페이지 로드 시 초기화
+        document.addEventListener('DOMContentLoaded', function() {
+            generateMonthOptions();
+            
+            // 페이지 진입 시 현재 월 선택에 대한 안내 표시
+            setTimeout(() => {
+                showWarning('기본적으로 현재 월이 선택되어 있습니다. 다른 월을 조회하려면 드롭다운에서 선택해주세요.');
+            }, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,358 @@
+{
+  "2025-01": {
+    "userId": "user123",
+    "month": "2025-01",
+    "basicFee": 55000,
+    "callFee": 12500,
+    "dataFee": 8500,
+    "smsFee": 2500,
+    "roamingFee": 0,
+    "discountFee": -5500,
+    "totalFee": 72500,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-01-25",
+    "paymentDate": "2025-01-22",
+    "plan": {
+      "name": "5G 프리미엄",
+      "basicFee": 55000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 850,
+      "dataGB": 25.6,
+      "smsCount": 125
+    }
+  },
+  "2025-02": {
+    "userId": "user123", 
+    "month": "2025-02",
+    "basicFee": 55000,
+    "callFee": 18200,
+    "dataFee": 15000,
+    "smsFee": 3200,
+    "roamingFee": 45000,
+    "discountFee": -8500,
+    "totalFee": 127900,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-02-25",
+    "paymentDate": "2025-02-26",
+    "plan": {
+      "name": "5G 프리미엄",
+      "basicFee": 55000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 1240,
+      "dataGB": 42.3,
+      "smsCount": 160
+    },
+    "roamingUsage": {
+      "country": "일본",
+      "days": 5,
+      "dataGB": 2.8
+    }
+  },
+  "2025-03": {
+    "userId": "user123",
+    "month": "2025-03", 
+    "basicFee": 55000,
+    "callFee": 9800,
+    "dataFee": 3200,
+    "smsFee": 1800,
+    "roamingFee": 0,
+    "discountFee": -6500,
+    "totalFee": 63300,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-03-25",
+    "paymentDate": "2025-03-20",
+    "plan": {
+      "name": "5G 프리미엄",
+      "basicFee": 55000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 670,
+      "dataGB": 18.9,
+      "smsCount": 90
+    }
+  },
+  "2025-04": {
+    "userId": "user123",
+    "month": "2025-04",
+    "basicFee": 55000,
+    "callFee": 22400,
+    "dataFee": 25000,
+    "smsFee": 4500,
+    "roamingFee": 0,
+    "discountFee": -12000,
+    "totalFee": 94900,
+    "paymentStatus": "PAID", 
+    "dueDate": "2025-04-25",
+    "paymentDate": "2025-04-24",
+    "plan": {
+      "name": "5G 프리미엄",
+      "basicFee": 55000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 1520,
+      "dataGB": 67.2,
+      "smsCount": 225
+    },
+    "specialUsage": {
+      "internationalCall": {
+        "minutes": 45,
+        "fee": 15000
+      }
+    }
+  },
+  "2025-05": {
+    "userId": "user123",
+    "month": "2025-05",
+    "basicFee": 39000,
+    "callFee": 8500,
+    "dataFee": 18500,
+    "smsFee": 1200,
+    "roamingFee": 0,
+    "discountFee": -3900,
+    "totalFee": 63300,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-05-25", 
+    "paymentDate": "2025-05-23",
+    "plan": {
+      "name": "5G 스탠다드",
+      "basicFee": 39000,
+      "dataLimit": "100GB"
+    },
+    "usage": {
+      "callMinutes": 580,
+      "dataGB": 95.6,
+      "smsCount": 60
+    },
+    "planChangeInfo": {
+      "previousPlan": "5G 프리미엄",
+      "changeDate": "2025-05-01",
+      "reason": "요금절약"
+    }
+  },
+  "2025-06": {
+    "userId": "user123",
+    "month": "2025-06",
+    "basicFee": 39000,
+    "callFee": 15600,
+    "dataFee": 32000,
+    "smsFee": 2800,
+    "roamingFee": 125000,
+    "discountFee": -7800,
+    "totalFee": 206600,
+    "paymentStatus": "OVERDUE",
+    "dueDate": "2025-06-25",
+    "paymentDate": null,
+    "plan": {
+      "name": "5G 스탠다드", 
+      "basicFee": 39000,
+      "dataLimit": "100GB"
+    },
+    "usage": {
+      "callMinutes": 1060,
+      "dataGB": 156.8,
+      "smsCount": 140
+    },
+    "roamingUsage": {
+      "country": "미국",
+      "days": 10,
+      "dataGB": 8.2,
+      "callMinutes": 320
+    },
+    "overdueInfo": {
+      "overdueAmount": 206600,
+      "lateFee": 10000,
+      "overdueDays": 15
+    }
+  },
+  "2025-07": {
+    "userId": "user123",
+    "month": "2025-07",
+    "basicFee": 39000,
+    "callFee": 11200,
+    "dataFee": 45000,
+    "smsFee": 1500,
+    "roamingFee": 0,
+    "discountFee": -9500,
+    "totalFee": 87200,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-07-25",
+    "paymentDate": "2025-07-10",
+    "plan": {
+      "name": "5G 스탠다드",
+      "basicFee": 39000,
+      "dataLimit": "100GB"
+    },
+    "usage": {
+      "callMinutes": 760,
+      "dataGB": 178.9,
+      "smsCount": 75
+    },
+    "extraCharges": {
+      "dataOverage": {
+        "overGB": 78.9,
+        "ratePerGB": 1000,
+        "fee": 45000
+      }
+    }
+  },
+  "2025-08": {
+    "userId": "user123",
+    "month": "2025-08",
+    "basicFee": 69000,
+    "callFee": 9800,
+    "dataFee": 0,
+    "smsFee": 2200,
+    "roamingFee": 0,
+    "discountFee": -15000,
+    "totalFee": 66000,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-08-25",
+    "paymentDate": "2025-08-20",
+    "plan": {
+      "name": "5G 플래티넘",
+      "basicFee": 69000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 670,
+      "dataGB": 89.2,
+      "smsCount": 110
+    },
+    "planChangeInfo": {
+      "previousPlan": "5G 스탠다드", 
+      "changeDate": "2025-08-01",
+      "reason": "데이터 초과 방지"
+    },
+    "promotions": [
+      {
+        "name": "신규가입 할인",
+        "discountAmount": 10000,
+        "remainingMonths": 8
+      }
+    ]
+  },
+  "2025-09": {
+    "userId": "user123",
+    "month": "2025-09",
+    "basicFee": 69000,
+    "callFee": 25600,
+    "dataFee": 0,
+    "smsFee": 5200,
+    "roamingFee": 78000,
+    "discountFee": -13800,
+    "totalFee": 164000,
+    "paymentStatus": "PENDING",
+    "dueDate": "2025-09-25",
+    "paymentDate": null,
+    "plan": {
+      "name": "5G 플래티넘",
+      "basicFee": 69000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 1740,
+      "dataGB": 124.7,
+      "smsCount": 260
+    },
+    "roamingUsage": {
+      "country": "유럽(독일, 프랑스)",
+      "days": 14,
+      "dataGB": 15.6,
+      "callMinutes": 560
+    }
+  },
+  "2025-10": {
+    "userId": "user123", 
+    "month": "2025-10",
+    "basicFee": 69000,
+    "callFee": 13400,
+    "dataFee": 0,
+    "smsFee": 1800,
+    "roamingFee": 0,
+    "discountFee": -8500,
+    "totalFee": 75700,
+    "paymentStatus": "PAID",
+    "dueDate": "2025-10-25",
+    "paymentDate": "2025-10-22",
+    "plan": {
+      "name": "5G 플래티넘", 
+      "basicFee": 69000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 910,
+      "dataGB": 67.3,
+      "smsCount": 90
+    }
+  },
+  "2025-11": {
+    "userId": "user123",
+    "month": "2025-11",
+    "basicFee": 69000,
+    "callFee": 18900,
+    "dataFee": 0,
+    "smsFee": 3600,
+    "roamingFee": 0,
+    "discountFee": -12000,
+    "totalFee": 79500,
+    "paymentStatus": "PAID", 
+    "dueDate": "2025-11-25",
+    "paymentDate": "2025-11-18",
+    "plan": {
+      "name": "5G 플래티넘",
+      "basicFee": 69000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 1285,
+      "dataGB": 145.8,
+      "smsCount": 180
+    },
+    "specialEvents": [
+      {
+        "name": "블랙프라이데이 데이터 보너스",
+        "bonusDataGB": 50,
+        "validUntil": "2025-11-30"
+      }
+    ]
+  },
+  "2025-12": {
+    "userId": "user123",
+    "month": "2025-12",
+    "basicFee": 69000,
+    "callFee": 32500,
+    "dataFee": 0,
+    "smsFee": 6800,
+    "roamingFee": 0,
+    "discountFee": -18000,
+    "totalFee": 90300,
+    "paymentStatus": "CURRENT",
+    "dueDate": "2025-12-25", 
+    "paymentDate": null,
+    "plan": {
+      "name": "5G 플래티넘",
+      "basicFee": 69000,
+      "dataLimit": "무제한"
+    },
+    "usage": {
+      "callMinutes": 2210,
+      "dataGB": 198.4,
+      "smsCount": 340
+    },
+    "yearEndSummary": {
+      "totalPaidAmount": 1021900,
+      "averageMonthlyBill": 93810,
+      "totalDataUsageGB": 1312.7,
+      "totalCallMinutes": 13497,
+      "totalSmsCount": 1825,
+      "planChanges": 3,
+      "roamingCountries": ["일본", "미국", "독일", "프랑스"]
+    }
+  }
+}

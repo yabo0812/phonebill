@@ -1,0 +1,537 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>메인 화면 - 통신요금 관리 서비스</title>
+    <style>
+        /* CSS Variables - Style Guide */
+        :root {
+            /* Primary Colors */
+            --primary-50: #EBF8FF;
+            --primary-100: #BEE3F8;
+            --primary-200: #90CDF4;
+            --primary-300: #63B3ED;
+            --primary-400: #4299E1;
+            --primary-500: #3182CE;
+            --primary-600: #2B77CB;
+            --primary-700: #2C5282;
+            --primary-800: #2A4365;
+            --primary-900: #1A365D;
+            
+            /* Gray Colors */
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            
+            /* Status Colors */
+            --success-50: #F0FFF4;
+            --success-500: #38A169;
+            --error-500: #E53E3E;
+            --warning-50: #FFFAF0;
+            --warning-500: #ED8936;
+            
+            /* Spacing */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-10: 2.5rem;
+            --space-12: 3rem;
+            
+            /* Typography */
+            --text-xs: 0.75rem;
+            --text-sm: 0.875rem;
+            --text-base: 1rem;
+            --text-lg: 1.125rem;
+            --text-xl: 1.25rem;
+            --text-2xl: 1.5rem;
+            --text-3xl: 1.875rem;
+            --text-4xl: 2.25rem;
+            
+            --font-normal: 400;
+            --font-medium: 500;
+            --font-semibold: 600;
+            --font-bold: 700;
+        }
+        
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            font-size: var(--text-base);
+            line-height: 1.5;
+            color: var(--gray-700);
+            background-color: var(--gray-50);
+            min-height: 100vh;
+        }
+        
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 480px;
+            margin: 0 auto;
+            padding: var(--space-4);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 600px;
+                padding: var(--space-6);
+            }
+        }
+        
+        /* Header */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: var(--space-4) 0;
+            margin-bottom: var(--space-6);
+        }
+        
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: var(--space-3);
+        }
+        
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: var(--text-lg);
+            font-weight: var(--font-bold);
+        }
+        
+        .service-title {
+            font-size: var(--text-lg);
+            font-weight: var(--font-bold);
+            color: var(--gray-900);
+        }
+        
+        .logout-btn {
+            padding: var(--space-2) var(--space-4);
+            background-color: white;
+            color: var(--gray-600);
+            border: 1px solid var(--gray-300);
+            border-radius: 8px;
+            font-size: var(--text-sm);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .logout-btn:hover {
+            background-color: var(--gray-50);
+            color: var(--gray-700);
+        }
+        
+        /* Welcome Section */
+        .welcome-section {
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            color: white;
+            padding: var(--space-8);
+            border-radius: 20px;
+            margin-bottom: var(--space-8);
+            box-shadow: 0 4px 20px rgba(49, 130, 206, 0.2);
+        }
+        
+        .welcome-title {
+            font-size: var(--text-2xl);
+            font-weight: var(--font-bold);
+            margin-bottom: var(--space-2);
+        }
+        
+        .user-info {
+            font-size: var(--text-base);
+            opacity: 0.9;
+            margin-bottom: var(--space-4);
+        }
+        
+        .user-details {
+            display: flex;
+            flex-direction: column;
+            gap: var(--space-3);
+        }
+        
+        @media (min-width: 768px) {
+            .user-details {
+                flex-direction: row;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+        
+        .user-phone {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: var(--space-2) var(--space-4);
+            border-radius: 999px;
+            display: inline-block;
+        }
+        
+        .current-product {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: var(--space-1);
+        }
+        
+        @media (min-width: 768px) {
+            .current-product {
+                align-items: flex-end;
+                text-align: right;
+            }
+        }
+        
+        .current-product-label {
+            font-size: var(--text-sm);
+            opacity: 0.8;
+            font-weight: var(--font-normal);
+        }
+        
+        .current-product-name {
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            background-color: rgba(255, 255, 255, 0.2);
+            padding: var(--space-1) var(--space-3);
+            border-radius: 8px;
+            display: inline-block;
+        }
+        
+        /* Service Menu */
+        .service-menu {
+            flex: 1;
+        }
+        
+        .menu-title {
+            font-size: var(--text-xl);
+            font-weight: var(--font-bold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-6);
+        }
+        
+        .menu-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: var(--space-4);
+        }
+        
+        @media (min-width: 768px) {
+            .menu-grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: var(--space-6);
+            }
+        }
+        
+        /* Menu Card */
+        .menu-card {
+            background-color: white;
+            border-radius: 16px;
+            padding: var(--space-6);
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+            border: 1px solid var(--gray-100);
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .menu-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+        }
+        
+        .menu-card.disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            background-color: var(--gray-50);
+        }
+        
+        .menu-card.disabled:hover {
+            transform: none;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+        }
+        
+        .menu-icon {
+            width: 60px;
+            height: 60px;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: var(--text-2xl);
+            margin-bottom: var(--space-4);
+        }
+        
+        .menu-icon.bill {
+            background: linear-gradient(135deg, #10B981 0%, #059669 100%);
+        }
+        
+        .menu-icon.product {
+            background: linear-gradient(135deg, #F59E0B 0%, #D97706 100%);
+        }
+        
+        .menu-title-text {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-2);
+        }
+        
+        .menu-description {
+            font-size: var(--text-sm);
+            color: var(--gray-500);
+            line-height: 1.6;
+        }
+        
+        /* Access Denied Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        
+        .modal {
+            background-color: white;
+            border-radius: 16px;
+            padding: var(--space-8);
+            margin: var(--space-4);
+            max-width: 320px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2);
+        }
+        
+        .modal-icon {
+            width: 60px;
+            height: 60px;
+            background-color: var(--error-500);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto var(--space-4);
+            color: white;
+            font-size: var(--text-2xl);
+        }
+        
+        .modal-title {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-2);
+        }
+        
+        .modal-message {
+            font-size: var(--text-sm);
+            color: var(--gray-600);
+            margin-bottom: var(--space-6);
+            line-height: 1.6;
+        }
+        
+        .modal-btn {
+            padding: var(--space-3) var(--space-6);
+            background-color: var(--primary-500);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: var(--text-sm);
+            font-weight: var(--font-medium);
+            cursor: pointer;
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .modal-btn:hover {
+            background-color: var(--primary-600);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-left">
+                <div class="logo">📱</div>
+                <h1 class="service-title">통신요금 관리</h1>
+            </div>
+            <button class="logout-btn" onclick="handleLogout()">로그아웃</button>
+        </div>
+        
+        <!-- Welcome Section -->
+        <div class="welcome-section">
+            <h2 class="welcome-title">안녕하세요!</h2>
+            <p class="user-info">통신요금 관리 서비스에 오신 것을 환영합니다.</p>
+            <div class="user-details">
+                <span class="user-phone">010-1234-5678</span>
+                <div class="current-product">
+                    <span class="current-product-label">현재 상품</span>
+                    <span class="current-product-name" id="currentProductName">5G 프리미엄 플랜</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Service Menu -->
+        <div class="service-menu">
+            <h3 class="menu-title">서비스 메뉴</h3>
+            
+            <div class="menu-grid">
+                <!-- 요금 조회 메뉴 -->
+                <a href="03-요금조회메뉴.html" class="menu-card" id="billCard">
+                    <div class="menu-icon bill">📊</div>
+                    <h4 class="menu-title-text">요금 조회</h4>
+                    <p class="menu-description">
+                        월별 통신요금과 사용량을<br>
+                        상세하게 확인할 수 있습니다.
+                    </p>
+                </a>
+                
+                <!-- 상품 변경 메뉴 -->
+                <a href="05-상품변경메뉴.html" class="menu-card" id="productCard">
+                    <div class="menu-icon product">🔄</div>
+                    <h4 class="menu-title-text">상품 변경</h4>
+                    <p class="menu-description">
+                        현재 이용 중인 요금제를<br>
+                        다른 상품으로 변경할 수 있습니다.
+                    </p>
+                </a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Access Denied Modal -->
+    <div class="modal-overlay" id="accessDeniedModal">
+        <div class="modal">
+            <div class="modal-icon">🚫</div>
+            <h3 class="modal-title">접근 권한 없음</h3>
+            <p class="modal-message">해당 서비스를 이용할 권한이 없습니다.<br>고객센터로 문의해주세요.</p>
+            <button class="modal-btn" onclick="closeModal()">확인</button>
+        </div>
+    </div>
+    
+    <script>
+        // User permissions simulation
+        const userPermissions = {
+            bill: true,    // 요금 조회 권한
+            product: true  // 상품 변경 권한
+        };
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            loadCurrentProduct();
+            checkPermissions();
+        });
+        
+        // Load current product from localStorage
+        function loadCurrentProduct() {
+            try {
+                const currentProduct = localStorage.getItem('currentProduct');
+                if (currentProduct) {
+                    const product = JSON.parse(currentProduct);
+                    const productNameElement = document.getElementById('currentProductName');
+                    if (productNameElement && product.name) {
+                        productNameElement.textContent = product.name;
+                    }
+                }
+            } catch (error) {
+                console.warn('localStorage에서 상품 정보를 불러오는 중 오류 발생:', error);
+                // 기본값 유지 (5G 프리미엄 플랜)
+            }
+        }
+        
+        // Check user permissions and update UI
+        function checkPermissions() {
+            const billCard = document.getElementById('billCard');
+            const productCard = document.getElementById('productCard');
+            
+            // 요금 조회 권한 확인
+            if (!userPermissions.bill) {
+                billCard.classList.add('disabled');
+                billCard.href = '#';
+                billCard.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showAccessDeniedModal('요금 조회');
+                });
+            }
+            
+            // 상품 변경 권한 확인
+            if (!userPermissions.product) {
+                productCard.classList.add('disabled');
+                productCard.href = '#';
+                productCard.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    showAccessDeniedModal('상품 변경');
+                });
+            }
+        }
+        
+        // Show access denied modal
+        function showAccessDeniedModal(serviceName) {
+            const modal = document.getElementById('accessDeniedModal');
+            const message = modal.querySelector('.modal-message');
+            message.innerHTML = `${serviceName} 서비스를 이용할 권한이 없습니다.<br>고객센터로 문의해주세요.`;
+            modal.style.display = 'flex';
+        }
+        
+        // Close modal
+        function closeModal() {
+            const modal = document.getElementById('accessDeniedModal');
+            modal.style.display = 'none';
+        }
+        
+        // Handle logout
+        function handleLogout() {
+            if (confirm('로그아웃 하시겠습니까?')) {
+                alert('안전하게 로그아웃되었습니다.');
+                window.location.href = '01-로그인.html';
+            }
+        }
+        
+        // Modal close on overlay click
+        document.getElementById('accessDeniedModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeModal();
+            }
+        });
+        
+        // Escape key to close modal
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                closeModal();
+            }
+        });
+    </script>
+</body>
+</html>

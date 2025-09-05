@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>상품 변경 요청 - 통신요금 관리 서비스</title>
+    <style>
+        /* CSS Variables - Style Guide */
+        :root {
+            /* Primary Colors */
+            --primary-50: #EBF8FF;
+            --primary-100: #BEE3F8;
+            --primary-200: #90CDF4;
+            --primary-300: #63B3ED;
+            --primary-400: #4299E1;
+            --primary-500: #3182CE;
+            --primary-600: #2B77CB;
+            --primary-700: #2C5282;
+            --primary-800: #2A4365;
+            --primary-900: #1A365D;
+            
+            /* Gray Colors */
+            --gray-50: #F9FAFB;
+            --gray-100: #F3F4F6;
+            --gray-200: #E5E7EB;
+            --gray-300: #D1D5DB;
+            --gray-400: #9CA3AF;
+            --gray-500: #6B7280;
+            --gray-600: #4B5563;
+            --gray-700: #374151;
+            --gray-800: #1F2937;
+            --gray-900: #111827;
+            
+            /* Status Colors */
+            --success-500: #38A169;
+            --error-500: #E53E3E;
+            --warning-500: #ED8936;
+            
+            /* Spacing */
+            --space-1: 0.25rem;
+            --space-2: 0.5rem;
+            --space-3: 0.75rem;
+            --space-4: 1rem;
+            --space-5: 1.25rem;
+            --space-6: 1.5rem;
+            --space-8: 2rem;
+            --space-10: 2.5rem;
+            --space-12: 3rem;
+            
+            /* Typography */
+            --text-xs: 0.75rem;
+            --text-sm: 0.875rem;
+            --text-base: 1rem;
+            --text-lg: 1.125rem;
+            --text-xl: 1.25rem;
+            --text-2xl: 1.5rem;
+            --text-3xl: 1.875rem;
+            --text-4xl: 2.25rem;
+            
+            --font-normal: 400;
+            --font-medium: 500;
+            --font-semibold: 600;
+            --font-bold: 700;
+        }
+        
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Noto Sans KR', -apple-system, BlinkMacSystemFont, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+            font-size: var(--text-base);
+            line-height: 1.5;
+            color: var(--gray-700);
+            background-color: var(--gray-50);
+            min-height: 100vh;
+            padding-bottom: 120px; /* Space for fixed buttons */
+        }
+        
+        /* Container */
+        .container {
+            width: 100%;
+            max-width: 400px;
+            margin: 0 auto;
+            padding: var(--space-4);
+            background-color: white;
+            min-height: 100vh;
+        }
+        
+        @media (min-width: 768px) {
+            .container {
+                max-width: 480px;
+                padding: var(--space-6);
+                box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
+            }
+        }
+        
+        /* Header */
+        .header {
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+            padding: var(--space-4) 0;
+            border-bottom: 1px solid var(--gray-200);
+            margin-bottom: var(--space-6);
+        }
+        
+        .header-content {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+        }
+        
+        .back-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 40px;
+            height: 40px;
+            border: none;
+            background: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: var(--text-xl);
+            color: var(--gray-600);
+            transition: all 0.2s ease-in-out;
+        }
+        
+        .back-btn:hover {
+            background-color: var(--gray-100);
+            color: var(--gray-800);
+        }
+        
+        .page-title {
+            font-size: var(--text-xl);
+            font-weight: var(--font-bold);
+            color: var(--gray-900);
+        }
+        
+        /* Card */
+        .card {
+            background-color: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+            padding: var(--space-6);
+            margin-bottom: var(--space-6);
+            border: 1px solid var(--gray-200);
+        }
+        
+        .card-title {
+            font-size: var(--text-lg);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-4);
+        }
+        
+        /* Change Comparison */
+        .change-comparison {
+            display: flex;
+            align-items: center;
+            gap: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+        
+        .product-summary {
+            flex: 1;
+            padding: var(--space-4);
+            border-radius: 12px;
+            border: 2px solid var(--gray-200);
+        }
+        
+        .product-summary.current {
+            background: var(--gray-50);
+        }
+        
+        .product-summary.new {
+            background: linear-gradient(135deg, var(--primary-50) 0%, var(--primary-100) 100%);
+            border-color: var(--primary-200);
+        }
+        
+        .product-label {
+            font-size: var(--text-xs);
+            color: var(--gray-500);
+            margin-bottom: var(--space-1);
+            font-weight: var(--font-medium);
+            text-transform: uppercase;
+        }
+        
+        .product-name {
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            color: var(--gray-900);
+            margin-bottom: var(--space-1);
+        }
+        
+        .product-price {
+            font-size: var(--text-sm);
+            color: var(--primary-600);
+            font-weight: var(--font-medium);
+        }
+        
+        .change-arrow {
+            font-size: var(--text-2xl);
+            color: var(--primary-500);
+            flex-shrink: 0;
+        }
+        
+        /* Notice */
+        .notice {
+            background: #FFF7ED;
+            border: 1px solid #FED7AA;
+            border-radius: 12px;
+            padding: var(--space-4);
+            margin-bottom: var(--space-6);
+        }
+        
+        .notice-title {
+            display: flex;
+            align-items: center;
+            gap: var(--space-2);
+            font-size: var(--text-sm);
+            font-weight: var(--font-semibold);
+            color: var(--warning-500);
+            margin-bottom: var(--space-3);
+        }
+        
+        .notice-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .notice-item {
+            font-size: var(--text-sm);
+            color: #92400E;
+            line-height: 1.4;
+            margin-bottom: var(--space-2);
+            padding-left: var(--space-4);
+            position: relative;
+        }
+        
+        .notice-item::before {
+            content: '•';
+            position: absolute;
+            left: 0;
+            color: var(--warning-500);
+            font-weight: bold;
+        }
+        
+        .notice-item:last-child {
+            margin-bottom: 0;
+        }
+        
+        /* Progress */
+        .progress-section {
+            margin-bottom: var(--space-8);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: var(--gray-200);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: var(--space-4);
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(135deg, var(--primary-500) 0%, var(--primary-600) 100%);
+            border-radius: 4px;
+            transition: width 0.3s ease-in-out;
+            width: 0%;
+        }
+        
+        .progress-text {
+            text-align: center;
+            font-size: var(--text-sm);
+            color: var(--gray-600);
+            margin-bottom: var(--space-2);
+        }
+        
+        .progress-status {
+            text-align: center;
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            color: var(--primary-600);
+        }
+        
+        .progress-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-top: var(--space-4);
+        }
+        
+        .progress-step {
+            flex: 1;
+            text-align: center;
+            font-size: var(--text-xs);
+            color: var(--gray-400);
+            position: relative;
+        }
+        
+        .progress-step.active {
+            color: var(--primary-600);
+            font-weight: var(--font-semibold);
+        }
+        
+        .progress-step.completed {
+            color: var(--success-500);
+            font-weight: var(--font-semibold);
+        }
+        
+        /* Fixed Action Buttons */
+        .fixed-actions {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            max-width: 400px;
+            background: white;
+            padding: var(--space-4);
+            border-top: 1px solid var(--gray-200);
+            box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        @media (min-width: 768px) {
+            .fixed-actions {
+                max-width: 480px;
+                padding: var(--space-6);
+            }
+        }
+        
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: var(--space-4) var(--space-6);
+            border-radius: 12px;
+            font-size: var(--text-base);
+            font-weight: var(--font-semibold);
+            line-height: 1.5;
+            transition: all 0.2s ease-in-out;
+            cursor: pointer;
+            border: none;
+            min-height: 52px;
+            text-decoration: none;
+            width: 100%;
+            margin-bottom: var(--space-3);
+        }
+        
+        .btn:last-child {
+            margin-bottom: 0;
+        }
+        
+        .btn-primary {
+            background-color: #3182CE !important; /* Fallback color with important */
+            background: linear-gradient(135deg, #3182CE 0%, #2B77CB 100%) !important;
+            color: white !important;
+            box-shadow: 0 2px 8px rgba(49, 130, 206, 0.2);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(49, 130, 206, 0.3);
+        }
+        
+        .btn-primary:disabled {
+            background: var(--gray-300);
+            color: var(--gray-500);
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .btn-secondary {
+            background: white;
+            color: var(--gray-600);
+            border: 2px solid var(--gray-200);
+        }
+        
+        .btn-secondary:hover {
+            background: var(--gray-50);
+            border-color: var(--gray-300);
+            color: var(--gray-700);
+        }
+        
+        .btn-outline {
+            background: transparent;
+            color: var(--primary-600);
+            border: 2px solid var(--primary-200);
+        }
+        
+        .btn-outline:hover {
+            background: var(--primary-50);
+            border-color: var(--primary-300);
+        }
+        
+        /* Loading */
+        .loading {
+            position: relative;
+            pointer-events: none;
+        }
+        
+        .loading::after {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes spin {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        /* Alert */
+        .alert {
+            padding: var(--space-4);
+            border-radius: 12px;
+            font-size: var(--text-sm);
+            margin-bottom: var(--space-4);
+            display: none;
+        }
+        
+        .alert.show {
+            display: block;
+        }
+        
+        .alert-error {
+            background-color: #FEF2F2;
+            border: 1px solid #FECACA;
+            color: #991B1B;
+        }
+        
+        .alert-success {
+            background-color: #F0FDF4;
+            border: 1px solid #BBF7D0;
+            color: #166534;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <button class="back-btn" onclick="goBack()" aria-label="뒤로가기">
+                    ←
+                </button>
+                <h1 class="page-title">상품 변경 요청</h1>
+            </div>
+        </header>
+        
+        <!-- Alerts -->
+        <div id="errorAlert" class="alert alert-error">
+            <span id="errorMessage"></span>
+        </div>
+        
+        <div id="successAlert" class="alert alert-success">
+            <span id="successMessage"></span>
+        </div>
+        
+        <!-- Change Confirmation -->
+        <div class="card">
+            <h2 class="card-title">변경 내용 확인</h2>
+            <div class="change-comparison">
+                <div class="product-summary current">
+                    <div class="product-label">현재 상품</div>
+                    <div class="product-name">5G 프리미엄 플랜</div>
+                    <div class="product-price">월 69,000원</div>
+                </div>
+                <div class="change-arrow">→</div>
+                <div class="product-summary new">
+                    <div class="product-label">변경할 상품</div>
+                    <div class="product-name" id="newProductName">5G 스탠다드 플랜</div>
+                    <div class="product-price" id="newProductPrice">월 59,000원</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Important Notice -->
+        <div class="notice">
+            <div class="notice-title">
+                <span>⚠️</span>
+                <span>중요 안내사항</span>
+            </div>
+            <ul class="notice-list">
+                <li class="notice-item">상품 변경은 다음 월 1일부터 적용됩니다</li>
+                <li class="notice-item">현재 약정 기간이 남아있는 경우 위약금이 발생할 수 있습니다</li>
+                <li class="notice-item">기존 부가서비스는 자동으로 해지되며, 필요시 재신청해야 합니다</li>
+                <li class="notice-item">변경 후 14일 이내에 취소 가능하나, 일부 제약이 있을 수 있습니다</li>
+                <li class="notice-item">요금제 변경에 따른 데이터 이월은 불가능합니다</li>
+            </ul>
+        </div>
+        
+        <!-- Progress Section -->
+        <div class="card progress-section">
+            <h2 class="card-title">사전 검증 진행 상황</h2>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="progress-text" id="progressText">검증을 시작하세요</div>
+            <div class="progress-status" id="progressStatus">검증 대기중</div>
+            
+            <div class="progress-steps">
+                <div class="progress-step" data-step="1">
+                    <div>약정 확인</div>
+                </div>
+                <div class="progress-step" data-step="2">
+                    <div>자격 검증</div>
+                </div>
+                <div class="progress-step" data-step="3">
+                    <div>요금 계산</div>
+                </div>
+                <div class="progress-step" data-step="4">
+                    <div>승인 완료</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Fixed Action Buttons -->
+    <div class="fixed-actions">
+        <button class="btn btn-primary" id="submitBtn" disabled onclick="startValidation()">
+            사전 검증 시작
+        </button>
+        <button class="btn btn-secondary" onclick="goBack()">
+            취소
+        </button>
+        <button class="btn btn-outline" onclick="goToPrevious()">
+            이전 단계
+        </button>
+    </div>
+    
+    <script>
+        let validationStep = 0;
+        let validationCompleted = false;
+        
+        // Load selected product data from previous screen
+        document.addEventListener('DOMContentLoaded', function() {
+            loadSelectedProduct();
+            enableSubmitButton();
+            
+            // Handle keyboard navigation
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape') {
+                    goBack();
+                }
+            });
+        });
+        
+        function loadSelectedProduct() {
+            const selectedProduct = sessionStorage.getItem('selectedProduct');
+            if (selectedProduct) {
+                const product = JSON.parse(selectedProduct);
+                document.getElementById('newProductName').textContent = product.name;
+                document.getElementById('newProductPrice').textContent = product.price;
+            }
+        }
+        
+        function enableSubmitButton() {
+            const submitBtn = document.getElementById('submitBtn');
+            submitBtn.disabled = false;
+        }
+        
+        function startValidation() {
+            const submitBtn = document.getElementById('submitBtn');
+            
+            if (validationCompleted) {
+                // Already validated, proceed to result
+                goToResult();
+                return;
+            }
+            
+            // Disable button during validation
+            submitBtn.disabled = true;
+            submitBtn.textContent = '검증 중...';
+            
+            // Start validation process
+            runValidationSteps();
+        }
+        
+        function runValidationSteps() {
+            const steps = [
+                { name: '약정 확인', duration: 2000 },
+                { name: '자격 검증', duration: 1500 },
+                { name: '요금 계산', duration: 1800 },
+                { name: '승인 완료', duration: 1000 }
+            ];
+            
+            let currentStep = 0;
+            
+            function processNextStep() {
+                if (currentStep >= steps.length) {
+                    onValidationComplete();
+                    return;
+                }
+                
+                const step = steps[currentStep];
+                const stepIndex = currentStep + 1;
+                
+                // Update progress
+                updateProgress(stepIndex, steps.length, `${step.name} 진행 중...`);
+                
+                // Mark current step as active
+                document.querySelectorAll('.progress-step').forEach((el, index) => {
+                    if (index < stepIndex - 1) {
+                        el.classList.add('completed');
+                        el.classList.remove('active');
+                    } else if (index === stepIndex - 1) {
+                        el.classList.add('active');
+                        el.classList.remove('completed');
+                    } else {
+                        el.classList.remove('active', 'completed');
+                    }
+                });
+                
+                // Simulate step processing
+                setTimeout(() => {
+                    currentStep++;
+                    processNextStep();
+                }, step.duration);
+            }
+            
+            processNextStep();
+        }
+        
+        function updateProgress(current, total, statusText) {
+            const progress = (current / total) * 100;
+            const progressFill = document.getElementById('progressFill');
+            const progressText = document.getElementById('progressText');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            progressFill.style.width = `${progress}%`;
+            progressText.textContent = `${current}/${total} 단계`;
+            progressStatus.textContent = statusText;
+        }
+        
+        function onValidationComplete() {
+            validationCompleted = true;
+            
+            // Update UI
+            const submitBtn = document.getElementById('submitBtn');
+            const progressStatus = document.getElementById('progressStatus');
+            
+            updateProgress(4, 4, '모든 검증이 완료되었습니다');
+            
+            // Mark all steps as completed
+            document.querySelectorAll('.progress-step').forEach(el => {
+                el.classList.add('completed');
+                el.classList.remove('active');
+            });
+            
+            // Show success message
+            showSuccess('사전 검증이 성공적으로 완료되었습니다.');
+            
+            // Enable submit button
+            submitBtn.disabled = false;
+            submitBtn.textContent = '변경 신청하기';
+            
+            // Add some celebration effect
+            setTimeout(() => {
+                submitBtn.style.background = 'linear-gradient(135deg, var(--success-500) 0%, var(--success-600) 100%)';
+            }, 500);
+        }
+        
+        function submitRequest() {
+            const progressStatus = document.getElementById('progressStatus');
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Update status text
+            progressStatus.textContent = '상품 변경 요청을 처리하고 있습니다...';
+            
+            // Show loading on button
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            submitBtn.textContent = '처리 중...';
+            
+            // Start actual submission process
+            setTimeout(() => {
+                goToResult();
+            }, 800);
+        }
+        
+        function goToResult() {
+            const submitBtn = document.getElementById('submitBtn');
+            
+            // Show loading state
+            submitBtn.classList.add('loading');
+            submitBtn.disabled = true;
+            
+            // Store request data
+            let currentProductName = '5G 프리미엄 플랜';
+            try {
+                const currentProduct = localStorage.getItem('currentProduct');
+                if (currentProduct) {
+                    const product = JSON.parse(currentProduct);
+                    currentProductName = product.name;
+                }
+            } catch (error) {
+                console.warn('localStorage에서 상품 정보를 불러오는 중 오류 발생:', error);
+            }
+            
+            const requestData = {
+                currentProduct: currentProductName,
+                newProduct: sessionStorage.getItem('selectedProductName') || '5G 스탠다드 플랜',
+                newPrice: sessionStorage.getItem('selectedProductPrice') || '월 59,000원',
+                requestTime: new Date().toISOString(),
+                status: 'success'
+            };
+            sessionStorage.setItem('changeRequest', JSON.stringify(requestData));
+            
+            // Simulate final processing
+            setTimeout(() => {
+                window.location.href = '08-처리결과화면.html';
+            }, 1500);
+        }
+        
+        // Navigation functions
+        function goBack() {
+            window.history.back();
+        }
+        
+        function goToPrevious() {
+            window.location.href = '06-상품변경화면.html';
+        }
+        
+        // Alert functions
+        function showError(message) {
+            const errorAlert = document.getElementById('errorAlert');
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorAlert.classList.add('show');
+            
+            setTimeout(() => {
+                hideError();
+            }, 5000);
+        }
+        
+        function hideError() {
+            const errorAlert = document.getElementById('errorAlert');
+            errorAlert.classList.remove('show');
+        }
+        
+        function showSuccess(message) {
+            const successAlert = document.getElementById('successAlert');
+            const successMessage = document.getElementById('successMessage');
+            successMessage.textContent = message;
+            successAlert.classList.add('show');
+            
+            setTimeout(() => {
+                hideSuccess();
+            }, 3000);
+        }
+        
+        function hideSuccess() {
+            const successAlert = document.getElementById('successAlert');
+            successAlert.classList.remove('show');
+        }
+    </script>
+</body>
+</html>

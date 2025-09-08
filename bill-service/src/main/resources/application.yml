@@ -94,9 +94,8 @@ spring:
 
 # 서버 설정
 server:
-  port: ${SERVER_PORT:8081}
+  port: ${SERVER_PORT:8082}
   servlet:
-    context-path: /bill-service
     encoding:
       charset: UTF-8
       enabled: true

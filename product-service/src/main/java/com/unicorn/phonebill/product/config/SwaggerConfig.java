@@ -1,4 +1,4 @@
-package com.phonebill.kosmock.config;
+package com.unicorn.phonebill.product.config;
 
 import io.swagger.v3.oas.models.Components;
 import io.swagger.v3.oas.models.OpenAPI;
@@ -12,7 +12,7 @@ import org.springframework.context.annotation.Configuration;
 
 /**
  * Swagger/OpenAPI 설정
- * KOS Mock Service API 문서화를 위한 설정
+ * Product Service API 문서화를 위한 설정
  */
 @Configuration
 public class SwaggerConfig {
@@ -22,7 +22,7 @@ public class SwaggerConfig {
         return new OpenAPI()
                 .info(apiInfo())
                 .addServersItem(new Server()
-                        .url("http://localhost:8084")
+                        .url("http://localhost:8083")
                         .description("Local Development"))
                 .addServersItem(new Server()
                         .url("{protocol}://{host}:{port}")
@@ -37,7 +37,7 @@ public class SwaggerConfig {
                                         ._default("localhost")
                                         .description("Server host"))
                                 .addServerVariable("port", new io.swagger.v3.oas.models.servers.ServerVariable()
-                                        ._default("8084")
+                                        ._default("8083")
                                         .description("Server port"))))
                 .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
                 .components(new Components()
@@ -46,8 +46,8 @@ public class SwaggerConfig {
 
     private Info apiInfo() {
         return new Info()
-                .title("KOS Mock Service API")
-                .description("통신요금 관리 서비스 - KOS 시스템 Mock API")
+                .title("Product Service API")
+                .description("통신요금 관리 서비스 - 상품 변경 및 관리 API")
                 .version("1.0.0")
                 .contact(new Contact()
                         .name("PhoneBill Development Team")

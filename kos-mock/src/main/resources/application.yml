@@ -5,9 +5,7 @@ spring:
     active: dev
     
 server:
-  port: ${SERVER_PORT:8080}
-  servlet:
-    context-path: /kos-mock
+  port: ${SERVER_PORT:8084}
     
 management:
   endpoints:

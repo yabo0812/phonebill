@@ -52,8 +52,11 @@ public class SecurityConfig {
                     "/actuator/info",
                     "/actuator/prometheus",
                     "/v3/api-docs/**",
+                    "/api-docs/**",
                     "/swagger-ui/**",
-                    "/swagger-ui.html"
+                    "/swagger-ui.html",
+                    "/swagger-resources/**",
+                    "/webjars/**"
                 ).permitAll()
                 
                 // Protected endpoints (인증 필요)

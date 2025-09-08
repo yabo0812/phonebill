@@ -66,8 +66,9 @@ public class SecurityConfig {
                 // 권한 설정
                 .authorizeHttpRequests(authorize -> authorize
                     // Health Check 및 문서화 API는 인증 불필요
-                    .requestMatchers("/actuator/health", "/actuator/info").permitAll()
-                    .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                    .requestMatchers("/actuator/**").permitAll()
+                    .requestMatchers("/v3/api-docs/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
+                    .requestMatchers("/swagger-resources/**", "/webjars/**").permitAll()
                     
                     // OPTIONS 요청은 인증 불필요 (CORS Preflight)
                     .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()

@@ -1,0 +1,124 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.0' apply false
+    id 'io.spring.dependency-management' version '1.1.6' apply false
+    id 'io.freefair.lombok' version '8.10' apply false
+}
+
+group = 'com.unicorn.phonebill'
+version = '1.0.0'
+
+allprojects {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+subprojects {
+    apply plugin: 'java'
+    apply plugin: 'org.springframework.boot'
+    apply plugin: 'io.spring.dependency-management'
+    apply plugin: 'io.freefair.lombok'
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    configurations {
+        compileOnly {
+            extendsFrom annotationProcessor
+        }
+    }
+
+    tasks.named('test') {
+        useJUnitPlatform()
+    }
+    
+    // Common versions for all subprojects
+    ext {
+        jjwtVersion = '0.12.5'
+        springdocVersion = '2.5.0'
+        mapstructVersion = '1.5.5.Final'
+        commonsLang3Version = '3.14.0'
+        commonsIoVersion = '2.16.1'
+        hypersistenceVersion = '3.7.3'
+        openaiVersion = '0.18.2'
+        feignJacksonVersion = '13.1'
+    }
+}
+
+// Configure only service modules (exclude common and api-gateway)
+configure(subprojects.findAll { it.name != 'common' && it.name != 'api-gateway' }) {
+
+    dependencies {
+
+        // Common Spring Boot Starters
+        implementation 'org.springframework.boot:spring-boot-starter-web'
+        implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+        implementation 'org.springframework.boot:spring-boot-starter-data-redis'
+        implementation 'org.springframework.boot:spring-boot-starter-security'
+        implementation 'org.springframework.boot:spring-boot-starter-validation'
+        implementation 'org.springframework.boot:spring-boot-starter-cache'
+        
+        // Actuator for health checks and monitoring
+        implementation 'org.springframework.boot:spring-boot-starter-actuator'
+        
+        // JWT Authentication (common across all services)
+        implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+        runtimeOnly "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+        runtimeOnly "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+        
+        // JSON Processing
+        implementation 'com.fasterxml.jackson.core:jackson-databind'
+        implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+        
+        // API Documentation (common across all services)
+        implementation "org.springdoc:springdoc-openapi-starter-webmvc-ui:${springdocVersion}"
+        
+        // Common Utilities
+        implementation "org.apache.commons:commons-lang3:${commonsLang3Version}"
+        
+        // Testing
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testImplementation 'org.springframework.security:spring-security-test'
+        testImplementation 'org.testcontainers:junit-jupiter'
+        testImplementation 'org.testcontainers:testcontainers'
+        testImplementation 'org.mockito:mockito-junit-jupiter'
+        testImplementation 'org.awaitility:awaitility:4.2.0'
+        
+        // Configuration Processor
+        annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    }
+}
+
+// Configure API Gateway separately (uses WebFlux instead of Web)
+configure(subprojects.findAll { it.name == 'api-gateway' }) {
+    dependencies {
+        // WebFlux instead of Web for reactive programming
+        implementation 'org.springframework.boot:spring-boot-starter-webflux'
+        implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
+        implementation 'org.springframework.boot:spring-boot-starter-validation'
+        
+        // Actuator for health checks and monitoring
+        implementation 'org.springframework.boot:spring-boot-starter-actuator'
+        
+        // JWT Authentication (same as other services)
+        implementation "io.jsonwebtoken:jjwt-api:${jjwtVersion}"
+        implementation "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
+        implementation "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
+        
+        // API Documentation for WebFlux
+        implementation "org.springdoc:springdoc-openapi-starter-webflux-ui:${springdocVersion}"
+        
+        // Testing (WebFlux specific)
+        testImplementation 'org.springframework.boot:spring-boot-starter-test'
+        testImplementation 'io.projectreactor:reactor-test'
+        
+        // Configuration Processor
+        annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
+    }
+}
+

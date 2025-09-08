@@ -1,0 +1,48 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="user-service" type="GradleRunConfiguration" factoryName="Gradle">
+    <ExternalSystemSettings>
+      <option name="env">
+        <map>
+          <entry key="BILL_INQUIRY_URL" value="http://localhost:8082" />
+          <entry key="DB_HOST" value="20.249.70.6" />
+          <entry key="DB_KIND" value="postgresql" />
+          <entry key="DB_NAME" value="phonebill_auth" />
+          <entry key="DB_PASSWORD" value="AuthUser2025!" />
+          <entry key="DB_PORT" value="5432" />
+          <entry key="DB_USERNAME" value="auth_user" />
+          <entry key="DDL_AUTO" value="update" />
+          <entry key="JWT_SECRET" value="phonebill-jwt-secret-key-2025-dev" />
+          <entry key="LOG_FILE" value="logs/user-service.log" />
+          <entry key="LOG_LEVEL_APP" value="DEBUG" />
+          <entry key="LOG_LEVEL_ROOT" value="INFO" />
+          <entry key="PRODUCT_CHANGE_URL" value="http://localhost:8083" />
+          <entry key="REDIS_DATABASE" value="0" />
+          <entry key="REDIS_HOST" value="20.249.193.103" />
+          <entry key="REDIS_PASSWORD" value="Redis2025Dev!" />
+          <entry key="REDIS_PORT" value="6379" />
+          <entry key="SERVER_PORT" value="8081" />
+          <entry key="SHOW_SQL" value="true" />
+          <entry key="SPRING_PROFILES_ACTIVE" value="dev" />
+        </map>
+      </option>
+      <option name="executionName" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <option name="scriptParameters" value="" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value="user-service:bootRun" />
+        </list>
+      </option>
+      <option name="vmOptions" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>true</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <RunAsTest>false</RunAsTest>
+    <method v="2" />
+  </configuration>
+</component>

@@ -1,0 +1,12 @@
+rootProject.name = 'phonebill'
+
+// 공통 모듈
+include 'common'
+
+// 마이크로서비스 모듈들
+include 'api-gateway'
+include 'user-service'
+include 'bill-service' 
+include 'product-service'
+include 'kos-mock'
+

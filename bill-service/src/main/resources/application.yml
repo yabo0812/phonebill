@@ -1,0 +1,256 @@
+# 통신요금 관리 서비스 - Bill Service 기본 설정
+# 공통 설정 및 개발환경 기본값
+#
+# @author 이개발(백엔더)
+# @version 1.0.0
+# @since 2025-09-08
+
+spring:
+  application:
+    name: bill-service
+  
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+    include:
+      - common
+  
+  # 데이터베이스 설정
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bill_inquiry_db}
+    username: ${DB_USERNAME:bill_user}
+    password: ${DB_PASSWORD:bill_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      minimum-idle: ${DB_MIN_IDLE:5}
+      maximum-pool-size: ${DB_MAX_POOL:20}
+      idle-timeout: ${DB_IDLE_TIMEOUT:300000}
+      max-lifetime: ${DB_MAX_LIFETIME:1800000}
+      connection-timeout: ${DB_CONNECTION_TIMEOUT:30000}
+      validation-timeout: ${DB_VALIDATION_TIMEOUT:5000}
+      leak-detection-threshold: ${DB_LEAK_DETECTION:60000}
+  
+  # JPA 설정
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: ${JPA_FORMAT_SQL:false}
+        use_sql_comments: ${JPA_SQL_COMMENTS:false}
+        default_batch_fetch_size: ${JPA_BATCH_SIZE:100}
+        jdbc:
+          batch_size: ${JPA_JDBC_BATCH_SIZE:20}
+          order_inserts: true
+          order_updates: true
+        connection:
+          provider_disables_autocommit: true
+    open-in-view: false
+  
+  # Redis 설정
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:0}
+    timeout: ${REDIS_TIMEOUT:5000}
+    lettuce:
+      pool:
+        max-active: ${REDIS_MAX_ACTIVE:20}
+        max-idle: ${REDIS_MAX_IDLE:8}
+        min-idle: ${REDIS_MIN_IDLE:0}
+        max-wait: ${REDIS_MAX_WAIT:-1}
+  
+  # Jackson 설정
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+      write-durations-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+      accept-single-value-as-array: true
+    time-zone: Asia/Seoul
+    date-format: yyyy-MM-dd HH:mm:ss
+  
+  # Servlet 설정
+  servlet:
+    multipart:
+      max-file-size: ${SERVLET_MAX_FILE_SIZE:10MB}
+      max-request-size: ${SERVLET_MAX_REQUEST_SIZE:100MB}
+  
+  # 비동기 처리 설정
+  task:
+    execution:
+      pool:
+        core-size: ${ASYNC_CORE_SIZE:5}
+        max-size: ${ASYNC_MAX_SIZE:20}
+        queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
+        keep-alive: ${ASYNC_KEEP_ALIVE:60s}
+      thread-name-prefix: "bill-async-"
+
+# 서버 설정
+server:
+  port: ${SERVER_PORT:8081}
+  servlet:
+    context-path: /bill-service
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+  tomcat:
+    uri-encoding: UTF-8
+    max-connections: ${TOMCAT_MAX_CONNECTIONS:8192}
+    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
+    threads:
+      max: ${TOMCAT_MAX_THREADS:200}
+      min-spare: ${TOMCAT_MIN_THREADS:10}
+
+# 액추에이터 설정 (모니터링)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,beans
+      base-path: /actuator
+      path-mapping:
+        health: health
+    enabled-by-default: false
+  endpoint:
+    health:
+      enabled: true
+      show-details: ${ACTUATOR_HEALTH_DETAILS:when_authorized}
+      show-components: always
+      probes:
+        enabled: true
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+    ping:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+      sla:
+        http.server.requests: 100ms, 300ms, 500ms
+
+# KOS 시스템 연동 설정
+kos:
+  base-url: ${KOS_BASE_URL:http://localhost:9090}
+  connect-timeout: ${KOS_CONNECT_TIMEOUT:5000}
+  read-timeout: ${KOS_READ_TIMEOUT:30000}
+  max-retries: ${KOS_MAX_RETRIES:3}
+  retry-delay: ${KOS_RETRY_DELAY:1000}
+  
+  # Circuit Breaker 설정
+  circuit-breaker:
+    failure-rate-threshold: ${KOS_CB_FAILURE_RATE:0.5}
+    slow-call-duration-threshold: ${KOS_CB_SLOW_DURATION:10000}
+    slow-call-rate-threshold: ${KOS_CB_SLOW_RATE:0.5}
+    sliding-window-size: ${KOS_CB_WINDOW_SIZE:10}
+    minimum-number-of-calls: ${KOS_CB_MIN_CALLS:5}
+    permitted-number-of-calls-in-half-open-state: ${KOS_CB_HALF_OPEN_CALLS:3}
+    wait-duration-in-open-state: ${KOS_CB_OPEN_DURATION:60000}
+  
+  # 인증 설정
+  authentication:
+    enabled: ${KOS_AUTH_ENABLED:true}
+    api-key: ${KOS_API_KEY:}
+    secret-key: ${KOS_SECRET_KEY:}
+    token-expiration-seconds: ${KOS_TOKEN_EXPIRATION:3600}
+    token-refresh-threshold-seconds: ${KOS_TOKEN_REFRESH_THRESHOLD:300}
+  
+  # 모니터링 설정
+  monitoring:
+    performance-logging-enabled: ${KOS_PERF_LOGGING:true}
+    slow-request-threshold: ${KOS_SLOW_THRESHOLD:3000}
+    metrics-enabled: ${KOS_METRICS_ENABLED:true}
+    health-check-interval: ${KOS_HEALTH_INTERVAL:30000}
+
+# 로깅 설정
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.phonebill: ${LOG_LEVEL_APP:INFO}
+    com.phonebill.bill.service: ${LOG_LEVEL_SERVICE:INFO}
+    com.phonebill.bill.repository: ${LOG_LEVEL_REPOSITORY:INFO}
+    org.springframework.cache: ${LOG_LEVEL_CACHE:INFO}
+    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${LOG_LEVEL_SQL_PARAM:WARN}
+    io.github.resilience4j: ${LOG_LEVEL_RESILIENCE4J:INFO}
+    redis.clients.jedis: ${LOG_LEVEL_REDIS:INFO}
+  pattern:
+    console: "${LOG_PATTERN_CONSOLE:%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}}"
+    file: "${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:%5p} ${PID:- } --- [%t] %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}}"
+  file:
+    name: ${LOG_FILE_NAME:logs/bill-service.log}
+    max-size: ${LOG_FILE_MAX_SIZE:100MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+
+# Swagger/OpenAPI 설정
+springdoc:
+  api-docs:
+    enabled: ${SWAGGER_ENABLED:true}
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: ${SWAGGER_UI_ENABLED:true}
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+    display-request-duration: true
+    default-models-expand-depth: 1
+    default-model-expand-depth: 1
+  show-actuator: ${SWAGGER_SHOW_ACTUATOR:false}
+  writer-with-default-pretty-printer: true
+
+# JWT 보안 설정
+jwt:
+  secret: ${JWT_SECRET:dev-jwt-secret-key-for-development-only}
+  expiration: ${JWT_EXPIRATION:86400000}  # 24시간 (밀리초)
+  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7일 (밀리초)
+  header: ${JWT_HEADER:Authorization}
+  prefix: ${JWT_PREFIX:Bearer }
+
+# 애플리케이션 정보
+info:
+  app:
+    name: ${spring.application.name}
+    description: 통신요금 조회 및 관리 서비스
+    version: ${BUILD_VERSION:1.0.0}
+    author: 이개발(백엔더)
+    contact: dev@phonebill.com
+  build:
+    time: ${BUILD_TIME:@project.build.time@}
+    artifact: ${BUILD_ARTIFACT:@project.artifactId@}
+    group: ${BUILD_GROUP:@project.groupId@}
+  java:
+    version: ${java.version}
+  git:
+    branch: ${GIT_BRANCH:unknown}
+    commit: ${GIT_COMMIT:unknown}

@@ -1,0 +1,943 @@
+openapi: 3.0.3
+info:
+  title: Product-Change Service API
+  description: |
+    통신요금 관리 서비스 중 상품변경 서비스 API
+    
+    ## 주요 기능
+    - 상품변경 메뉴 조회 (UFR-PROD-010)
+    - 상품변경 화면 데이터 조회 (UFR-PROD-020) 
+    - 상품변경 요청 및 사전체크 (UFR-PROD-030)
+    - KOS 연동 상품변경 처리 (UFR-PROD-040)
+    
+    ## 설계 원칙
+    - KOS 시스템 연동 고려
+    - 사전체크 단계 포함
+    - 상태 관리 (진행중/완료/실패)
+    - 트랜잭션 처리 고려
+    - Circuit Breaker 패턴 적용
+    
+  version: 1.0.0
+  contact:
+    name: Backend Development Team
+    email: backend@mvno.com
+
+servers:
+  - url: https://api.mvno.com/v1/product-change
+    description: Production Server
+  - url: https://api-dev.mvno.com/v1/product-change
+    description: Development Server
+
+tags:
+  - name: menu
+    description: 상품변경 메뉴 관련 API
+  - name: customer
+    description: 고객 정보 관련 API
+  - name: product
+    description: 상품 정보 관련 API
+  - name: change
+    description: 상품변경 처리 관련 API
+  - name: history
+    description: 상품변경 이력 관련 API
+
+paths:
+  /products/menu:
+    get:
+      tags:
+        - menu
+      summary: 상품변경 메뉴 조회
+      description: |
+        상품변경 메뉴 접근 시 필요한 기본 정보를 조회합니다.
+        - UFR-PROD-010 구현
+        - 고객 회선번호 및 기본 정보 제공
+        - 캐시를 활용한 성능 최적화
+      operationId: getProductMenu
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 메뉴 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductMenuResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/customer/{lineNumber}:
+    get:
+      tags:
+        - customer
+      summary: 고객 정보 조회
+      description: |
+        특정 회선번호의 고객 정보와 현재 상품 정보를 조회합니다.
+        - UFR-PROD-020 구현
+        - KOS 시스템 연동
+        - Redis 캐시 활용 (TTL: 4시간)
+      operationId: getCustomerInfo
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lineNumber
+          in: path
+          required: true
+          description: 고객 회선번호
+          schema:
+            type: string
+            pattern: '^010[0-9]{8}$'
+            example: "01012345678"
+      responses:
+        '200':
+          description: 고객 정보 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CustomerInfoResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: 고객 정보를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/available:
+    get:
+      tags:
+        - product
+      summary: 변경 가능한 상품 목록 조회
+      description: |
+        현재 판매중이고 변경 가능한 상품 목록을 조회합니다.
+        - UFR-PROD-020 구현
+        - KOS 시스템 연동
+        - Redis 캐시 활용 (TTL: 24시간)
+      operationId: getAvailableProducts
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: currentProductCode
+          in: query
+          required: false
+          description: 현재 상품코드 (필터링용)
+          schema:
+            type: string
+            example: "PLAN001"
+        - name: operatorCode
+          in: query
+          required: false
+          description: 사업자 코드
+          schema:
+            type: string
+            example: "MVNO001"
+      responses:
+        '200':
+          description: 상품 목록 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvailableProductsResponse'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/change/validation:
+    post:
+      tags:
+        - change
+      summary: 상품변경 사전체크
+      description: |
+        상품변경 요청 전 사전체크를 수행합니다.
+        - UFR-PROD-030 구현
+        - 판매중인 상품 확인
+        - 사업자 일치 확인
+        - 회선 사용상태 확인
+      operationId: validateProductChange
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductChangeValidationRequest'
+      responses:
+        '200':
+          description: 사전체크 완료 (성공/실패 포함)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductChangeValidationResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/change:
+    post:
+      tags:
+        - change
+      summary: 상품변경 요청
+      description: |
+        실제 상품변경 처리를 요청합니다.
+        - UFR-PROD-040 구현
+        - KOS 시스템 연동
+        - Circuit Breaker 패턴 적용
+        - 비동기 이력 저장
+      operationId: requestProductChange
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProductChangeRequest'
+      responses:
+        '200':
+          description: 상품변경 처리 완료
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductChangeResponse'
+        '202':
+          description: 상품변경 요청 접수 (비동기 처리)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductChangeAsyncResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '409':
+          description: 사전체크 실패 또는 처리 불가 상태
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductChangeFailureResponse'
+        '503':
+          description: KOS 시스템 장애 (Circuit Breaker Open)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/change/{requestId}:
+    get:
+      tags:
+        - change
+      summary: 상품변경 결과 조회
+      description: |
+        특정 요청ID의 상품변경 처리 결과를 조회합니다.
+        - 비동기 처리 결과 조회
+        - 상태별 상세 정보 제공
+      operationId: getProductChangeResult
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: 상품변경 요청 ID
+          schema:
+            type: string
+            format: uuid
+            example: "123e4567-e89b-12d3-a456-426614174000"
+      responses:
+        '200':
+          description: 처리 결과 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductChangeResultResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '404':
+          description: 요청 정보를 찾을 수 없음
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /products/history:
+    get:
+      tags:
+        - history
+      summary: 상품변경 이력 조회
+      description: |
+        고객의 상품변경 이력을 조회합니다.
+        - UFR-PROD-040 구현 (이력 관리)
+        - 페이징 지원
+        - 기간별 필터링 지원
+      operationId: getProductChangeHistory
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lineNumber
+          in: query
+          required: false
+          description: 회선번호 (미입력시 로그인 고객 기준)
+          schema:
+            type: string
+            pattern: '^010[0-9]{8}$'
+        - name: startDate
+          in: query
+          required: false
+          description: 조회 시작일 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: endDate
+          in: query
+          required: false
+          description: 조회 종료일 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2024-12-31"
+        - name: page
+          in: query
+          required: false
+          description: 페이지 번호 (1부터 시작)
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: size
+          in: query
+          required: false
+          description: 페이지 크기
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+      responses:
+        '200':
+          description: 이력 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductChangeHistoryResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT 토큰을 Authorization 헤더에 포함
+
+  schemas:
+    ProductMenuResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - customerId
+            - lineNumber
+            - menuItems
+          properties:
+            customerId:
+              type: string
+              description: 고객 ID
+              example: "CUST001"
+            lineNumber:
+              type: string
+              description: 고객 회선번호
+              example: "01012345678"
+            currentProduct:
+              $ref: '#/components/schemas/ProductInfo'
+            menuItems:
+              type: array
+              description: 메뉴 항목들
+              items:
+                type: object
+                properties:
+                  menuId:
+                    type: string
+                    example: "MENU001"
+                  menuName:
+                    type: string
+                    example: "상품변경"
+                  available:
+                    type: boolean
+                    example: true
+
+    CustomerInfoResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/CustomerInfo'
+
+    CustomerInfo:
+      type: object
+      required:
+        - customerId
+        - lineNumber
+        - customerName
+        - currentProduct
+        - lineStatus
+      properties:
+        customerId:
+          type: string
+          description: 고객 ID
+          example: "CUST001"
+        lineNumber:
+          type: string
+          description: 회선번호
+          example: "01012345678"
+        customerName:
+          type: string
+          description: 고객명
+          example: "홍길동"
+        currentProduct:
+          $ref: '#/components/schemas/ProductInfo'
+        lineStatus:
+          type: string
+          description: 회선 상태
+          enum: [ACTIVE, SUSPENDED, TERMINATED]
+          example: "ACTIVE"
+        contractInfo:
+          type: object
+          properties:
+            contractDate:
+              type: string
+              format: date
+              description: 계약일
+            termEndDate:
+              type: string
+              format: date
+              description: 약정 만료일
+            earlyTerminationFee:
+              type: number
+              description: 예상 해지비용
+              example: 150000
+
+    AvailableProductsResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - products
+          properties:
+            products:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductInfo'
+            totalCount:
+              type: integer
+              description: 전체 상품 수
+              example: 15
+
+    ProductInfo:
+      type: object
+      required:
+        - productCode
+        - productName
+        - monthlyFee
+        - isAvailable
+      properties:
+        productCode:
+          type: string
+          description: 상품 코드
+          example: "PLAN001"
+        productName:
+          type: string
+          description: 상품명
+          example: "5G 프리미엄 플랜"
+        monthlyFee:
+          type: number
+          description: 월 요금
+          example: 55000
+        dataAllowance:
+          type: string
+          description: 데이터 제공량
+          example: "100GB"
+        voiceAllowance:
+          type: string
+          description: 음성 제공량
+          example: "무제한"
+        smsAllowance:
+          type: string
+          description: SMS 제공량
+          example: "기본 무료"
+        isAvailable:
+          type: boolean
+          description: 변경 가능 여부
+          example: true
+        operatorCode:
+          type: string
+          description: 사업자 코드
+          example: "MVNO001"
+
+    ProductChangeValidationRequest:
+      type: object
+      required:
+        - lineNumber
+        - currentProductCode
+        - targetProductCode
+      properties:
+        lineNumber:
+          type: string
+          description: 회선번호
+          pattern: '^010[0-9]{8}$'
+          example: "01012345678"
+        currentProductCode:
+          type: string
+          description: 현재 상품 코드
+          example: "PLAN001"
+        targetProductCode:
+          type: string
+          description: 변경 대상 상품 코드
+          example: "PLAN002"
+
+    ProductChangeValidationResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - validationResult
+          properties:
+            validationResult:
+              type: string
+              enum: [SUCCESS, FAILURE]
+              example: "SUCCESS"
+            validationDetails:
+              type: array
+              items:
+                type: object
+                properties:
+                  checkType:
+                    type: string
+                    enum: [PRODUCT_AVAILABLE, OPERATOR_MATCH, LINE_STATUS]
+                    example: "PRODUCT_AVAILABLE"
+                  result:
+                    type: string
+                    enum: [PASS, FAIL]
+                    example: "PASS"
+                  message:
+                    type: string
+                    example: "현재 판매중인 상품입니다"
+            failureReason:
+              type: string
+              description: 실패 사유 (실패 시에만)
+              example: "회선이 정지 상태입니다"
+
+    ProductChangeRequest:
+      type: object
+      required:
+        - lineNumber
+        - currentProductCode
+        - targetProductCode
+      properties:
+        lineNumber:
+          type: string
+          description: 회선번호
+          pattern: '^010[0-9]{8}$'
+          example: "01012345678"
+        currentProductCode:
+          type: string
+          description: 현재 상품 코드
+          example: "PLAN001"
+        targetProductCode:
+          type: string
+          description: 변경 대상 상품 코드
+          example: "PLAN002"
+        requestDate:
+          type: string
+          format: date-time
+          description: 요청 일시
+          example: "2024-03-15T10:30:00Z"
+        changeEffectiveDate:
+          type: string
+          format: date
+          description: 변경 적용일 (선택)
+          example: "2024-03-16"
+
+    ProductChangeResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - requestId
+            - processStatus
+            - resultCode
+          properties:
+            requestId:
+              type: string
+              format: uuid
+              description: 요청 ID
+              example: "123e4567-e89b-12d3-a456-426614174000"
+            processStatus:
+              type: string
+              enum: [COMPLETED, FAILED]
+              example: "COMPLETED"
+            resultCode:
+              type: string
+              description: 처리 결과 코드
+              example: "SUCCESS"
+            resultMessage:
+              type: string
+              description: 처리 결과 메시지
+              example: "상품 변경이 완료되었습니다"
+            changedProduct:
+              $ref: '#/components/schemas/ProductInfo'
+            processedAt:
+              type: string
+              format: date-time
+              description: 처리 완료 시간
+              example: "2024-03-15T10:35:00Z"
+
+    ProductChangeAsyncResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - requestId
+            - processStatus
+          properties:
+            requestId:
+              type: string
+              format: uuid
+              description: 요청 ID
+              example: "123e4567-e89b-12d3-a456-426614174000"
+            processStatus:
+              type: string
+              enum: [PENDING, PROCESSING]
+              example: "PROCESSING"
+            estimatedCompletionTime:
+              type: string
+              format: date-time
+              description: 예상 완료 시간
+              example: "2024-03-15T10:35:00Z"
+            message:
+              type: string
+              example: "상품 변경이 진행되었습니다"
+
+    ProductChangeFailureResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              enum: [VALIDATION_FAILED, CHANGE_DENIED, LINE_SUSPENDED]
+              example: "VALIDATION_FAILED"
+            message:
+              type: string
+              example: "상품 사전 체크에 실패하였습니다"
+            details:
+              type: string
+              description: 상세 실패 사유
+              example: "회선이 정지 상태입니다"
+
+    ProductChangeResultResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - requestId
+            - processStatus
+          properties:
+            requestId:
+              type: string
+              format: uuid
+              example: "123e4567-e89b-12d3-a456-426614174000"
+            lineNumber:
+              type: string
+              example: "01012345678"
+            processStatus:
+              type: string
+              enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+              example: "COMPLETED"
+            currentProductCode:
+              type: string
+              example: "PLAN001"
+            targetProductCode:
+              type: string
+              example: "PLAN002"
+            requestedAt:
+              type: string
+              format: date-time
+              example: "2024-03-15T10:30:00Z"
+            processedAt:
+              type: string
+              format: date-time
+              example: "2024-03-15T10:35:00Z"
+            resultCode:
+              type: string
+              example: "SUCCESS"
+            resultMessage:
+              type: string
+              example: "상품 변경이 완료되었습니다"
+            failureReason:
+              type: string
+              description: 실패 사유 (실패 시에만)
+
+    ProductChangeHistoryResponse:
+      type: object
+      required:
+        - success
+        - data
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - history
+            - pagination
+          properties:
+            history:
+              type: array
+              items:
+                $ref: '#/components/schemas/ProductChangeHistoryItem'
+            pagination:
+              $ref: '#/components/schemas/PaginationInfo'
+
+    ProductChangeHistoryItem:
+      type: object
+      required:
+        - requestId
+        - lineNumber
+        - processStatus
+        - requestedAt
+      properties:
+        requestId:
+          type: string
+          format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+        lineNumber:
+          type: string
+          example: "01012345678"
+        processStatus:
+          type: string
+          enum: [PENDING, PROCESSING, COMPLETED, FAILED]
+          example: "COMPLETED"
+        currentProductCode:
+          type: string
+          example: "PLAN001"
+        currentProductName:
+          type: string
+          example: "5G 베이직 플랜"
+        targetProductCode:
+          type: string
+          example: "PLAN002"
+        targetProductName:
+          type: string
+          example: "5G 프리미엄 플랜"
+        requestedAt:
+          type: string
+          format: date-time
+          example: "2024-03-15T10:30:00Z"
+        processedAt:
+          type: string
+          format: date-time
+          example: "2024-03-15T10:35:00Z"
+        resultMessage:
+          type: string
+          example: "상품 변경이 완료되었습니다"
+
+    PaginationInfo:
+      type: object
+      required:
+        - page
+        - size
+        - totalElements
+        - totalPages
+      properties:
+        page:
+          type: integer
+          description: 현재 페이지 번호
+          example: 1
+        size:
+          type: integer
+          description: 페이지 크기
+          example: 10
+        totalElements:
+          type: integer
+          description: 전체 요소 수
+          example: 45
+        totalPages:
+          type: integer
+          description: 전체 페이지 수
+          example: 5
+        hasNext:
+          type: boolean
+          description: 다음 페이지 존재 여부
+          example: true
+        hasPrevious:
+          type: boolean
+          description: 이전 페이지 존재 여부
+          example: false
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: object
+          required:
+            - code
+            - message
+          properties:
+            code:
+              type: string
+              example: "INVALID_REQUEST"
+            message:
+              type: string
+              example: "요청이 올바르지 않습니다"
+            details:
+              type: string
+              description: 상세 오류 정보
+            timestamp:
+              type: string
+              format: date-time
+              example: "2024-03-15T10:30:00Z"
+            path:
+              type: string
+              description: 요청 경로
+              example: "/products/change"
+
+  responses:
+    BadRequestError:
+      description: 잘못된 요청
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INVALID_REQUEST"
+              message: "요청 파라미터가 올바르지 않습니다"
+              timestamp: "2024-03-15T10:30:00Z"
+
+    UnauthorizedError:
+      description: 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "인증이 필요합니다"
+              timestamp: "2024-03-15T10:30:00Z"
+
+    ForbiddenError:
+      description: 권한 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "FORBIDDEN"
+              message: "서비스 이용 권한이 없습니다"
+              timestamp: "2024-03-15T10:30:00Z"
+
+    InternalServerError:
+      description: 서버 내부 오류
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_SERVER_ERROR"
+              message: "서버 내부 오류가 발생했습니다"
+              timestamp: "2024-03-15T10:30:00Z"

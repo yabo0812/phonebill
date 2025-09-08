@@ -1,0 +1,79 @@
+# values.yaml - Bill-Inquiry DB 개발환경 설정
+# PostgreSQL 기본 설정
+global:
+  postgresql:
+    auth:
+      postgresPassword: "Bill2025Dev!"
+      database: "bill_inquiry_db"
+      username: "bill_inquiry_user"
+      password: "BillUser2025!"
+  storageClass: "managed"
+
+# Primary 설정 (개발환경 단독 구성)
+architecture: standalone
+
+primary:
+  # 리소스 설정 (개발환경 최적화)
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+    requests:
+      memory: "512Mi"
+      cpu: "250m"
+
+  # 스토리지 설정
+  persistence:
+    enabled: true
+    storageClass: "managed"
+    size: 20Gi
+
+  # PostgreSQL 성능 설정 (개발환경 최적화)
+  extraEnvVars:
+    - name: POSTGRESQL_SHARED_BUFFERS
+      value: "256MB"
+    - name: POSTGRESQL_EFFECTIVE_CACHE_SIZE
+      value: "1GB"
+    - name: POSTGRESQL_MAX_CONNECTIONS
+      value: "100"
+    - name: POSTGRESQL_WORK_MEM
+      value: "4MB"
+    - name: POSTGRESQL_MAINTENANCE_WORK_MEM
+      value: "64MB"
+
+  # 초기화 스크립트 설정
+  initdb:
+    scripts:
+      00-extensions.sql: |
+        -- PostgreSQL 확장 설치
+        CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+        CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+      01-database.sql: |
+        -- Bill-Inquiry 데이터베이스 생성 확인
+        SELECT 'bill_inquiry_db database ready' as status;
+
+# 서비스 설정
+service:
+  type: ClusterIP
+  ports:
+    postgresql: 5432
+
+# 네트워크 정책 (개발환경 허용적 설정)
+networkPolicy:
+  enabled: false
+
+# 보안 설정 (개발환경 기본 설정)
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+# 메트릭 설정 (개발환경 모니터링)
+metrics:
+  enabled: true
+  service:
+    type: ClusterIP
+
+# 백업 설정 (개발환경 기본)
+backup:
+  enabled: false  # 개발환경에서는 수동 백업

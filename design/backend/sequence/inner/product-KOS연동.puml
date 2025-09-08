@@ -1,0 +1,183 @@
+@startuml
+!theme mono
+title Product-Change Service - KOS 연동 내부 시퀀스
+
+participant "ProductChangeService" as Service
+participant "KosClientService" as KosClient
+participant "CircuitBreakerService" as CircuitBreaker
+participant "RetryService" as RetryService
+participant "KosAdapterService" as KosAdapter
+participant "ProductRepository" as ProductRepo
+participant "Product DB<<E>>" as ProductDB
+participant "KOS-Mock Service<<E>>" as KOSMock
+participant "MVNO AP Server<<E>>" as MVNO
+
+== UFR-PROD-040: KOS 상품변경 처리 ==
+
+note over Service
+사전체크가 통과된 상품변경 요청에 대해
+KOS 시스템과 연동하여 실제 상품변경 처리
+end note
+
+Service -> KosClient: processProductChange(changeRequest)
+activate KosClient
+
+KosClient -> CircuitBreaker: isCallAllowed()
+activate CircuitBreaker
+
+alt Circuit Breaker - OPEN 상태
+    CircuitBreaker --> KosClient: Circuit Open\n"시스템 일시 장애"
+    deactivate CircuitBreaker
+    
+    KosClient -> MVNO: sendSystemErrorNotification\n"시스템 일시 장애, 잠시 후 재시도"
+    activate MVNO
+    MVNO --> KosClient: 장애 안내 전송 완료
+    deactivate MVNO
+    
+    KosClient --> Service: CircuitBreakerException\n"시스템 일시 장애, 잠시 후 재시도"
+
+else Circuit Breaker - CLOSED/HALF_OPEN 상태
+    CircuitBreaker --> KosClient: Call Allowed
+    deactivate CircuitBreaker
+    
+    KosClient -> RetryService: executeProductChangeWithRetry(changeRequest)
+    activate RetryService
+    
+    loop 최대 3회 재시도 (상품변경은 중요한 거래)
+        RetryService -> KosAdapter: callKosProductChange(changeRequest)
+        activate KosAdapter
+        
+        KosAdapter -> KosAdapter: 요청 데이터 변환\n- 회선번호 형식 검증\n- 상품코드 매핑\n- 거래ID 생성\n- 인증 헤더 설정
+        
+        == KOS-Mock Service 상품변경 호출 ==
+        
+        KosAdapter -> KOSMock: POST /kos/product/change\nContent-Type: application/json\n{\n  "transactionId": "TXN20241201001",\n  "lineNumber": "01012345678",\n  "currentProductCode": "PROD001",\n  "newProductCode": "PROD002",\n  "changeReason": "고객 요청",\n  "effectiveDate": "20241201"\n}
+        activate KOSMock
+        note right: KOS-Mock 상품변경 서비스\n- 실제 KOS 대신 Mock 처리\n- 타임아웃: 5초 (중요 거래)\n- 성공/실패 시나리오 시뮬레이션
+        
+        alt KOS-Mock 상품변경 성공
+            KOSMock --> KosAdapter: 200 OK\n{\n  "resultCode": "0000",\n  "resultMessage": "상품변경 완료",\n  "transactionId": "TXN20241201001",\n  "data": {\n    "lineNumber": "01012345678",\n    "newProductCode": "PROD002",\n    "newProductName": "5G 프리미엄",\n    "changeDate": "20241201",\n    "effectiveDate": "20241201",\n    "processResult": "정상"\n  }\n}
+            deactivate KOSMock
+            
+            KosAdapter -> KosAdapter: 성공 응답 데이터 변환\n- KOS 응답 → ProductChangeResult\n- 상품변경 완료 정보 매핑
+            
+            KosAdapter --> RetryService: ProductChangeResult{success: true}
+            deactivate KosAdapter
+            break 성공 시 재시도 중단
+            
+        else KOS-Mock 상품변경 실패
+            KOSMock --> KosAdapter: 400 Bad Request\n{\n  "resultCode": "E101",\n  "resultMessage": "상품변경 처리 실패",\n  "transactionId": "TXN20241201001",\n  "errorDetail": "현재 상품에서 요청한 상품으로 변경할 수 없습니다"\n}
+            deactivate KOSMock
+            
+            KosAdapter -> KosAdapter: 실패 응답 데이터 변환\n- 오류 코드별 예외 매핑\n- E101: ProductChangeNotAllowedException\n- E102: InsufficientBalanceException\n- E999: SystemErrorException
+            
+            KosAdapter --> RetryService: ProductChangeException{reason: errorDetail}
+            deactivate KosAdapter
+            
+        else 네트워크 오류 (타임아웃, 연결 실패)
+            KOSMock --> KosAdapter: IOException/TimeoutException
+            deactivate KOSMock
+            
+            KosAdapter --> RetryService: NetworkException
+            deactivate KosAdapter
+        end
+        
+        alt 재시도 가능한 오류 (네트워크, 일시적 오류)
+            RetryService -> RetryService: 재시도 대기\n- 1차: 2초 대기\n- 2차: 5초 대기\n- 3차: 10초 대기
+            note right: 상품변경은 중요한 거래\n재시도 간격을 길게 설정
+        else 재시도 불가능한 오류 (비즈니스 로직 오류)
+            break 재시도 중단
+        end
+    end
+    
+    alt 상품변경 성공
+        RetryService --> KosClient: ProductChangeResult{success: true}
+        deactivate RetryService
+        
+        KosClient -> CircuitBreaker: recordSuccess()
+        activate CircuitBreaker
+        CircuitBreaker -> CircuitBreaker: 성공 카운트 증가
+        deactivate CircuitBreaker
+        
+        == UFR-PROD-040: 상품변경 완료 처리 ==
+        
+        KosClient -> MVNO: sendProductChangeResult\n{newProductCode, processResult: "정상", message: "상품 변경이 완료되었다"}
+        activate MVNO
+        MVNO --> KosClient: 변경완료 결과 전송 완료
+        deactivate MVNO
+        
+        KosClient -> ProductRepo: updateProductChangeStatus(transactionId, "COMPLETED", result)
+        activate ProductRepo
+        ProductRepo -> ProductDB: UPDATE product_change_request\nSET status = 'COMPLETED',\n    completion_time = NOW(),\n    new_product_code = ?,\n    result_message = 'COMPLETED'\nWHERE transaction_id = ?
+        activate ProductDB
+        ProductDB --> ProductRepo: 상태 업데이트 완료
+        deactivate ProductDB
+        
+        ProductRepo -> ProductDB: INSERT INTO product_change_history\n(transaction_id, line_number, \n current_product_code, new_product_code,\n change_date, process_result, result_message)
+        activate ProductDB
+        note right: 비동기 처리\n상품변경 이력 저장
+        ProductDB --> ProductRepo: 이력 저장 완료
+        deactivate ProductDB
+        deactivate ProductRepo
+        
+        KosClient --> Service: ProductChangeSuccess\n{newProductCode, changeDate, message: "상품 변경이 완료되었다"}
+        deactivate KosClient
+        
+    else 상품변경 실패
+        RetryService --> KosClient: ProductChangeException
+        deactivate RetryService
+        
+        KosClient -> CircuitBreaker: recordFailure()
+        activate CircuitBreaker
+        CircuitBreaker -> CircuitBreaker: 실패 카운트 증가
+        deactivate CircuitBreaker
+        
+        KosClient -> MVNO: sendProductChangeResult\n{processResult: "실패", failureReason, message: "상품 변경에 실패하여 실패 사유에 따라 문구를 화면에 출력한다"}
+        activate MVNO
+        MVNO --> KosClient: 변경실패 결과 전송 완료
+        deactivate MVNO
+        
+        KosClient -> ProductRepo: updateProductChangeStatus(transactionId, "FAILED", errorReason)
+        activate ProductRepo
+        ProductRepo -> ProductDB: UPDATE product_change_request\nSET status = 'FAILED',\n    completion_time = NOW(),\n    failure_reason = ?,\n    result_message = 'FAILED'\nWHERE transaction_id = ?
+        activate ProductDB
+        ProductDB --> ProductRepo: 상태 업데이트 완료
+        deactivate ProductDB
+        
+        ProductRepo -> ProductDB: INSERT INTO product_change_history\n(..., process_result = 'FAILED', error_detail)
+        activate ProductDB
+        ProductDB --> ProductRepo: 실패 이력 저장 완료
+        deactivate ProductDB
+        deactivate ProductRepo
+        
+        KosClient --> Service: ProductChangeFailure\n{reason, message: "상품 변경 요청을 실패하였다"}
+        deactivate KosClient
+    end
+end
+
+== 상품변경 결과 후처리 ==
+
+alt 상품변경 성공
+    Service -> Service: 캐시 무효화 처리
+    Service -> "Redis Cache<<E>>": 고객 상품 정보 캐시 삭제\nDEL customer_product:{userId}\nDEL current_product:{userId}
+    note right: 변경된 상품 정보로\n캐시 갱신 필요
+    
+    Service -> Service: 고객 알림 처리 (비동기)\n- SMS/Push 알림\n- 이메일 통지
+    note right: 상품변경 완료\n고객 안내 필요
+
+else 상품변경 실패
+    Service -> Service: 실패 분석 및 로깅\n- 실패 패턴 분석\n- 모니터링 지표 업데이트
+    note right: 실패 원인 분석\n서비스 개선 활용
+end
+
+== 트랜잭션 무결성 보장 ==
+
+note over Service, ProductDB
+상품변경 트랜잭션 처리:
+1. KOS 연동 성공 → 로컬 DB 상태 업데이트
+2. 로컬 DB 실패 → KOS 보상 트랜잭션 (롤백)
+3. 데이터 일관성 보장
+4. 분산 트랜잭션 패턴 적용
+end note
+
+@enduml

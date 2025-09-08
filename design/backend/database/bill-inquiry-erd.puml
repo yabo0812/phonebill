@@ -1,0 +1,145 @@
+@startuml
+!theme mono
+title Bill-Inquiry Service - 데이터베이스 ERD
+
+' 고객정보 테이블 (캐시용)
+entity "customer_info" {
+  * customer_id : VARCHAR(50) <<PK>>
+  --
+  * line_number : VARCHAR(20) <<UK>>
+  customer_name : VARCHAR(100)
+  * status : VARCHAR(10) <<DEFAULT: 'ACTIVE'>>
+  * operator_code : VARCHAR(10)
+  * cached_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  * expires_at : TIMESTAMP
+  * created_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  * updated_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+}
+
+' 요금조회 요청 이력 테이블
+entity "bill_inquiry_history" {
+  * id : BIGSERIAL <<PK>>
+  --
+  * request_id : VARCHAR(50) <<UK>>
+  * user_id : VARCHAR(50)
+  * line_number : VARCHAR(20)
+  inquiry_month : VARCHAR(7)
+  * request_time : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  process_time : TIMESTAMP
+  * status : VARCHAR(20) <<DEFAULT: 'PROCESSING'>>
+  result_summary : TEXT
+  bill_info_json : JSONB
+  error_message : TEXT
+  * created_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  * updated_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+}
+
+' KOS 연동 이력 테이블
+entity "kos_inquiry_history" {
+  * id : BIGSERIAL <<PK>>
+  --
+  bill_request_id : VARCHAR(50) <<FK>>
+  * line_number : VARCHAR(20)
+  inquiry_month : VARCHAR(7)
+  * request_time : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  response_time : TIMESTAMP
+  result_code : VARCHAR(10)
+  result_message : TEXT
+  kos_data_json : JSONB
+  error_detail : TEXT
+  * retry_count : INTEGER <<DEFAULT: 0>>
+  circuit_breaker_state : VARCHAR(20)
+  * created_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  * updated_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+}
+
+' 요금정보 캐시 테이블
+entity "bill_info_cache" {
+  * cache_key : VARCHAR(100) <<PK>>
+  --
+  * line_number : VARCHAR(20)
+  * inquiry_month : VARCHAR(7)
+  * bill_info_json : JSONB
+  * cached_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  * expires_at : TIMESTAMP
+  * access_count : INTEGER <<DEFAULT: 1>>
+  * last_accessed_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+}
+
+' 시스템 설정 테이블
+entity "system_config" {
+  * config_key : VARCHAR(100) <<PK>>
+  --
+  * config_value : TEXT
+  description : VARCHAR(500)
+  * config_type : VARCHAR(20) <<DEFAULT: 'STRING'>>
+  * is_active : BOOLEAN <<DEFAULT: true>>
+  * created_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+  * updated_at : TIMESTAMP <<DEFAULT: CURRENT_TIMESTAMP>>
+}
+
+' 외래키 관계
+bill_inquiry_history ||--o{ kos_inquiry_history : "bill_request_id"
+
+' 인덱스 정보 (주석)
+note right of bill_inquiry_history
+  **인덱스**
+  - idx_bill_history_user_line (user_id, line_number)
+  - idx_bill_history_request_time (request_time DESC)
+  - idx_bill_history_status (status)
+  - idx_bill_history_inquiry_month (inquiry_month)
+  
+  **상태값 (status)**
+  - PROCESSING: 처리중
+  - COMPLETED: 완료
+  - FAILED: 실패
+  - TIMEOUT: 타임아웃
+end note
+
+note right of kos_inquiry_history
+  **인덱스**
+  - idx_kos_history_line_month (line_number, inquiry_month)
+  - idx_kos_history_request_time (request_time DESC)
+  - idx_kos_history_result_code (result_code)
+  - idx_kos_history_bill_request (bill_request_id)
+end note
+
+note right of bill_info_cache
+  **인덱스**
+  - idx_cache_line_month (line_number, inquiry_month)
+  - idx_cache_expires (expires_at)
+  
+  **캐시 키 형식**
+  {line_number}:{inquiry_month}
+end note
+
+note right of customer_info
+  **캐시 데이터**
+  Redis 보조용 임시 저장
+  TTL: 1시간 (expires_at)
+end note
+
+note right of system_config
+  **설정 예시**
+  - bill.cache.ttl.hours
+  - kos.connection.timeout.ms
+  - kos.retry.max.attempts
+  - bill.inquiry.available.months
+end note
+
+' 범례
+note bottom
+  **테이블 설명**
+  - customer_info: 캐시에서 가져온 고객 기본 정보 임시 저장
+  - bill_inquiry_history: MVNO → MP 요금조회 요청 이력
+  - kos_inquiry_history: MP → KOS 연동 이력
+  - bill_info_cache: KOS 조회 요금정보 캐시 (Redis 보조)
+  - system_config: 서비스별 시스템 설정
+  
+  **데이터 독립성**
+  - 서비스 간 FK 관계 없음
+  - 캐시(Redis)를 통한 데이터 공유
+  - 서비스 내부에서만 FK 관계 설정
+end note
+
+@enduml

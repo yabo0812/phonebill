@@ -1,0 +1,564 @@
+@startuml
+!theme mono
+
+title Auth Service - Detailed Class Design
+
+package "com.unicorn.phonebill.auth" {
+
+  package "controller" {
+    class AuthController {
+      -authService: AuthService
+      -tokenService: TokenService
+      
+      +login(request: LoginRequest): ApiResponse<LoginResponse>
+      +logout(): ApiResponse<SuccessResponse>
+      +verifyToken(): ApiResponse<TokenVerifyResponse>
+      +refreshToken(request: RefreshTokenRequest): ApiResponse<RefreshTokenResponse>
+      +getUserPermissions(): ApiResponse<PermissionsResponse>
+      +checkPermission(request: PermissionCheckRequest): ApiResponse<PermissionCheckResponse>
+      +getUserInfo(): ApiResponse<UserInfoResponse>
+    }
+  }
+
+  package "dto" {
+    class LoginRequest {
+      -userId: String
+      -password: String
+      -autoLogin: boolean
+      
+      +getUserId(): String
+      +getPassword(): String
+      +isAutoLogin(): boolean
+      +validate(): void
+    }
+
+    class LoginResponse {
+      -accessToken: String
+      -refreshToken: String
+      -expiresIn: int
+      -user: UserInfo
+      
+      +getAccessToken(): String
+      +getRefreshToken(): String
+      +getExpiresIn(): int
+      +getUser(): UserInfo
+    }
+
+    class RefreshTokenRequest {
+      -refreshToken: String
+      
+      +getRefreshToken(): String
+      +validate(): void
+    }
+
+    class RefreshTokenResponse {
+      -accessToken: String
+      -expiresIn: int
+      
+      +getAccessToken(): String
+      +getExpiresIn(): int
+    }
+
+    class TokenVerifyResponse {
+      -valid: boolean
+      -user: UserInfo
+      -expiresIn: int
+      
+      +isValid(): boolean
+      +getUser(): UserInfo
+      +getExpiresIn(): int
+    }
+
+    class PermissionCheckRequest {
+      -serviceType: String
+      
+      +getServiceType(): String
+      +validate(): void
+    }
+
+    class PermissionCheckResponse {
+      -serviceType: String
+      -hasPermission: boolean
+      -permissionDetails: Permission
+      
+      +getServiceType(): String
+      +isHasPermission(): boolean
+      +getPermissionDetails(): Permission
+    }
+
+    class PermissionsResponse {
+      -userId: String
+      -permissions: List<Permission>
+      
+      +getUserId(): String
+      +getPermissions(): List<Permission>
+    }
+
+    class UserInfoResponse {
+      -userId: String
+      -userName: String
+      -phoneNumber: String
+      -email: String
+      -status: String
+      -lastLoginAt: LocalDateTime
+      -permissions: List<String>
+      
+      +getUserId(): String
+      +getUserName(): String
+      +getPhoneNumber(): String
+      +getEmail(): String
+      +getStatus(): String
+      +getLastLoginAt(): LocalDateTime
+      +getPermissions(): List<String>
+    }
+
+    class UserInfo {
+      -userId: String
+      -userName: String
+      -phoneNumber: String
+      -permissions: List<String>
+      
+      +getUserId(): String
+      +getUserName(): String
+      +getPhoneNumber(): String
+      +getPermissions(): List<String>
+    }
+
+    class Permission {
+      -permission: String
+      -description: String
+      -granted: boolean
+      
+      +getPermission(): String
+      +getDescription(): String
+      +isGranted(): boolean
+    }
+
+    class SuccessResponse {
+      -message: String
+      
+      +getMessage(): String
+    }
+  }
+
+  package "service" {
+    interface AuthService {
+      +authenticateUser(userId: String, password: String): AuthenticationResult
+      +getUserInfo(userId: String): UserInfoDetail
+      +refreshUserToken(userId: String): TokenRefreshResult
+      +checkServicePermission(userId: String, serviceType: String): PermissionResult
+      +invalidateUserPermissions(userId: String): void
+    }
+
+    class AuthServiceImpl {
+      -userRepository: UserRepository
+      -tokenService: TokenService
+      -permissionService: PermissionService
+      -redisTemplate: RedisTemplate
+      -passwordEncoder: PasswordEncoder
+      -loginHistoryRepository: LoginHistoryRepository
+      
+      +authenticateUser(userId: String, password: String): AuthenticationResult
+      +getUserInfo(userId: String): UserInfoDetail
+      +refreshUserToken(userId: String): TokenRefreshResult
+      +checkServicePermission(userId: String, serviceType: String): PermissionResult
+      +invalidateUserPermissions(userId: String): void
+      -validateLoginAttempts(user: User): void
+      -handleFailedLogin(userId: String): void
+      -handleSuccessfulLogin(user: User): void
+      -createUserSession(user: User, autoLogin: boolean): void
+      -saveLoginHistory(userId: String, ipAddress: String): void
+    }
+
+    interface TokenService {
+      +generateAccessToken(userInfo: UserInfoDetail): String
+      +generateRefreshToken(userId: String): String
+      +validateAccessToken(token: String): DecodedToken
+      +validateRefreshToken(token: String): boolean
+      +extractUserId(token: String): String
+      +getTokenExpiration(token: String): LocalDateTime
+    }
+
+    class TokenServiceImpl {
+      -jwtSecret: String
+      -accessTokenExpiry: int
+      -refreshTokenExpiry: int
+      
+      +generateAccessToken(userInfo: UserInfoDetail): String
+      +generateRefreshToken(userId: String): String
+      +validateAccessToken(token: String): DecodedToken
+      +validateRefreshToken(token: String): boolean
+      +extractUserId(token: String): String
+      +getTokenExpiration(token: String): LocalDateTime
+      -createJwtToken(subject: String, claims: Map<String, Object>, expiry: int): String
+      -parseJwtToken(token: String): Claims
+    }
+
+    interface PermissionService {
+      +validateServiceAccess(permissions: List<String>, serviceType: String): PermissionResult
+      +getUserPermissions(userId: String): List<Permission>
+      +cacheUserPermissions(userId: String, permissions: List<Permission>): void
+      +invalidateUserPermissions(userId: String): void
+    }
+
+    class PermissionServiceImpl {
+      -userPermissionRepository: UserPermissionRepository
+      -redisTemplate: RedisTemplate
+      
+      +validateServiceAccess(permissions: List<String>, serviceType: String): PermissionResult
+      +getUserPermissions(userId: String): List<Permission>
+      +cacheUserPermissions(userId: String, permissions: List<Permission>): void
+      +invalidateUserPermissions(userId: String): void
+      -mapServiceTypeToPermission(serviceType: String): String
+      -checkPermissionGranted(permissions: List<String>, requiredPermission: String): boolean
+    }
+  }
+
+  package "domain" {
+    class User {
+      -userId: String
+      -userName: String
+      -phoneNumber: String
+      -email: String
+      -passwordHash: String
+      -salt: String
+      -status: UserStatus
+      -loginAttemptCount: int
+      -lockedUntil: LocalDateTime
+      -lastLoginAt: LocalDateTime
+      -createdAt: LocalDateTime
+      -updatedAt: LocalDateTime
+      
+      +getUserId(): String
+      +getUserName(): String
+      +getPhoneNumber(): String
+      +getEmail(): String
+      +getPasswordHash(): String
+      +getSalt(): String
+      +getStatus(): UserStatus
+      +getLoginAttemptCount(): int
+      +getLockedUntil(): LocalDateTime
+      +getLastLoginAt(): LocalDateTime
+      +isAccountLocked(): boolean
+      +canAttemptLogin(): boolean
+      +incrementLoginAttempt(): void
+      +resetLoginAttempt(): void
+      +lockAccount(duration: Duration): void
+      +updateLastLoginAt(loginTime: LocalDateTime): void
+    }
+
+    enum UserStatus {
+      ACTIVE
+      INACTIVE
+      LOCKED
+      
+      +getValue(): String
+    }
+
+    class UserSession {
+      -userId: String
+      -sessionId: String
+      -userInfo: UserInfoDetail
+      -permissions: List<String>
+      -lastAccessTime: LocalDateTime
+      -createdAt: LocalDateTime
+      -ttl: Duration
+      
+      +getUserId(): String
+      +getSessionId(): String
+      +getUserInfo(): UserInfoDetail
+      +getPermissions(): List<String>
+      +getLastAccessTime(): LocalDateTime
+      +getCreatedAt(): LocalDateTime
+      +getTtl(): Duration
+      +updateLastAccessTime(): void
+      +isExpired(): boolean
+    }
+
+    class AuthenticationResult {
+      -success: boolean
+      -accessToken: String
+      -refreshToken: String
+      -userInfo: UserInfoDetail
+      -errorMessage: String
+      
+      +isSuccess(): boolean
+      +getAccessToken(): String
+      +getRefreshToken(): String
+      +getUserInfo(): UserInfoDetail
+      +getErrorMessage(): String
+    }
+
+    class DecodedToken {
+      -userId: String
+      -permissions: List<String>
+      -expiresAt: LocalDateTime
+      -issuedAt: LocalDateTime
+      
+      +getUserId(): String
+      +getPermissions(): List<String>
+      +getExpiresAt(): LocalDateTime
+      +getIssuedAt(): LocalDateTime
+      +isExpired(): boolean
+    }
+
+    class PermissionResult {
+      -granted: boolean
+      -serviceType: String
+      -reason: String
+      -permissionDetails: Permission
+      
+      +isGranted(): boolean
+      +getServiceType(): String
+      +getReason(): String
+      +getPermissionDetails(): Permission
+    }
+
+    class TokenRefreshResult {
+      -newAccessToken: String
+      -expiresIn: int
+      
+      +getNewAccessToken(): String
+      +getExpiresIn(): int
+    }
+
+    class UserInfoDetail {
+      -userId: String
+      -userName: String
+      -phoneNumber: String
+      -email: String
+      -status: UserStatus
+      -lastLoginAt: LocalDateTime
+      -permissions: List<String>
+      
+      +getUserId(): String
+      +getUserName(): String
+      +getPhoneNumber(): String
+      +getEmail(): String
+      +getStatus(): UserStatus
+      +getLastLoginAt(): LocalDateTime
+      +getPermissions(): List<String>
+    }
+  }
+
+  package "repository" {
+    interface UserRepository {
+      +findUserById(userId: String): Optional<User>
+      +save(user: User): User
+      +incrementLoginAttempt(userId: String): void
+      +resetLoginAttempt(userId: String): void
+      +lockAccount(userId: String, duration: Duration): void
+      +updateLastLoginAt(userId: String, loginTime: LocalDateTime): void
+    }
+
+    interface UserPermissionRepository {
+      +findPermissionsByUserId(userId: String): List<UserPermission>
+      +save(userPermission: UserPermission): UserPermission
+      +deleteByUserId(userId: String): void
+    }
+
+    interface LoginHistoryRepository {
+      +save(loginHistory: LoginHistory): LoginHistory
+      +findByUserIdOrderByLoginTimeDesc(userId: String, pageable: Pageable): List<LoginHistory>
+    }
+
+    package "entity" {
+      class UserEntity {
+        -id: Long
+        -userId: String
+        -userName: String
+        -phoneNumber: String
+        -email: String
+        -passwordHash: String
+        -salt: String
+        -status: String
+        -loginAttemptCount: int
+        -lockedUntil: LocalDateTime
+        -lastLoginAt: LocalDateTime
+        -createdAt: LocalDateTime
+        -updatedAt: LocalDateTime
+        
+        +getId(): Long
+        +getUserId(): String
+        +getUserName(): String
+        +getPhoneNumber(): String
+        +getEmail(): String
+        +getPasswordHash(): String
+        +getSalt(): String
+        +getStatus(): String
+        +getLoginAttemptCount(): int
+        +getLockedUntil(): LocalDateTime
+        +getLastLoginAt(): LocalDateTime
+        +getCreatedAt(): LocalDateTime
+        +getUpdatedAt(): LocalDateTime
+        +toDomain(): User
+      }
+
+      class UserPermissionEntity {
+        -id: Long
+        -userId: String
+        -permissionCode: String
+        -status: String
+        -createdAt: LocalDateTime
+        -updatedAt: LocalDateTime
+        
+        +getId(): Long
+        +getUserId(): String
+        +getPermissionCode(): String
+        +getStatus(): String
+        +getCreatedAt(): LocalDateTime
+        +getUpdatedAt(): LocalDateTime
+        +toDomain(): UserPermission
+      }
+
+      class LoginHistoryEntity {
+        -id: Long
+        -userId: String
+        -loginTime: LocalDateTime
+        -ipAddress: String
+        -userAgent: String
+        -success: boolean
+        -failureReason: String
+        -createdAt: LocalDateTime
+        
+        +getId(): Long
+        +getUserId(): String
+        +getLoginTime(): LocalDateTime
+        +getIpAddress(): String
+        +getUserAgent(): String
+        +isSuccess(): boolean
+        +getFailureReason(): String
+        +getCreatedAt(): LocalDateTime
+        +toDomain(): LoginHistory
+      }
+    }
+
+    package "jpa" {
+      interface UserJpaRepository {
+        +findByUserId(userId: String): Optional<UserEntity>
+        +save(userEntity: UserEntity): UserEntity
+        +existsByUserId(userId: String): boolean
+      }
+
+      interface UserPermissionJpaRepository {
+        +findByUserIdAndStatus(userId: String, status: String): List<UserPermissionEntity>
+        +save(userPermissionEntity: UserPermissionEntity): UserPermissionEntity
+        +deleteByUserId(userId: String): void
+      }
+
+      interface LoginHistoryJpaRepository {
+        +save(loginHistoryEntity: LoginHistoryEntity): LoginHistoryEntity
+        +findByUserIdOrderByLoginTimeDesc(userId: String, pageable: Pageable): List<LoginHistoryEntity>
+      }
+    }
+  }
+
+  package "config" {
+    class SecurityConfig {
+      -jwtSecret: String
+      -accessTokenExpiry: int
+      -refreshTokenExpiry: int
+      
+      +passwordEncoder(): PasswordEncoder
+      +corsConfigurationSource(): CorsConfigurationSource
+      +filterChain(http: HttpSecurity): SecurityFilterChain
+      +authenticationManager(): AuthenticationManager
+    }
+
+    class JwtConfig {
+      -secret: String
+      -accessTokenExpiry: int
+      -refreshTokenExpiry: int
+      
+      +getSecret(): String
+      +getAccessTokenExpiry(): int
+      +getRefreshTokenExpiry(): int
+      +jwtEncoder(): JwtEncoder
+      +jwtDecoder(): JwtDecoder
+    }
+
+    class RedisConfig {
+      -host: String
+      -port: int
+      -password: String
+      -database: int
+      
+      +redisConnectionFactory(): RedisConnectionFactory
+      +redisTemplate(): RedisTemplate<String, Object>
+      +cacheManager(): RedisCacheManager
+      +sessionRedisTemplate(): RedisTemplate<String, UserSession>
+    }
+  }
+}
+
+' Common Base Classes 사용
+package "Common Module" <<External>> {
+  class ApiResponse<T>
+  class ErrorResponse
+  abstract class BaseTimeEntity
+  enum ErrorCode
+  class BusinessException
+}
+
+' 관계 정의
+AuthController --> AuthService : uses
+AuthController --> TokenService : uses
+AuthController ..> LoginRequest : uses
+AuthController ..> LoginResponse : creates
+AuthController ..> UserInfoResponse : creates
+AuthController ..> PermissionCheckResponse : creates
+
+AuthServiceImpl --> UserRepository : uses
+AuthServiceImpl --> TokenService : uses
+AuthServiceImpl --> PermissionService : uses
+AuthServiceImpl --> LoginHistoryRepository : uses
+
+TokenServiceImpl ..> DecodedToken : creates
+TokenServiceImpl ..> AuthenticationResult : creates
+
+PermissionServiceImpl --> UserPermissionRepository : uses
+
+UserRepository --> UserEntity : works with
+UserPermissionRepository --> UserPermissionEntity : works with
+LoginHistoryRepository --> LoginHistoryEntity : works with
+
+UserRepository --> User : returns
+UserPermissionRepository --> UserPermission : returns
+LoginHistoryRepository --> LoginHistory : returns
+
+UserEntity ..> User : converts to
+UserPermissionEntity ..> UserPermission : converts to
+LoginHistoryEntity ..> LoginHistory : converts to
+
+UserJpaRepository --> UserEntity : manages
+UserPermissionJpaRepository --> UserPermissionEntity : manages
+LoginHistoryJpaRepository --> LoginHistoryEntity : manages
+
+User --> UserStatus : has
+UserSession --> UserInfoDetail : contains
+
+AuthServiceImpl ..> AuthenticationResult : creates
+AuthServiceImpl ..> UserInfoDetail : creates
+PermissionServiceImpl ..> PermissionResult : creates
+
+' Inheritance
+UserEntity --|> BaseTimeEntity
+UserPermissionEntity --|> BaseTimeEntity
+LoginHistoryEntity --|> BaseTimeEntity
+
+AuthService <|-- AuthServiceImpl : implements
+TokenService <|-- TokenServiceImpl : implements
+PermissionService <|-- PermissionServiceImpl : implements
+
+UserRepository <|-- UserJpaRepository : implements
+UserPermissionRepository <|-- UserPermissionJpaRepository : implements
+LoginHistoryRepository <|-- LoginHistoryJpaRepository : implements
+
+' Notes
+note top of AuthController : "REST API 엔드포인트 제공\n- 로그인/로그아웃\n- 토큰 검증/갱신\n- 권한 확인"
+note top of AuthServiceImpl : "인증/인가 비즈니스 로직\n- 사용자 인증 처리\n- 세션 관리\n- 권한 검증"
+note top of TokenServiceImpl : "JWT 토큰 관리\n- 토큰 생성/검증\n- 페이로드 추출"
+note top of UserEntity : "사용자 정보 저장\n- 로그인 시도 횟수 관리\n- 계정 잠금 처리"
+note top of RedisConfig : "Redis 캐시 설정\n- 세션 캐싱\n- 권한 캐싱"
+
+@enduml

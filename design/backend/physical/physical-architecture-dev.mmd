@@ -1,0 +1,72 @@
+graph TB
+    %% 사용자 및 외부 시스템
+    subgraph "External"
+        User[사용자<br/>MVNO 고객]
+        MVNO[MVNO AP Server<br/>프론트엔드]
+        KOS[KOS-Order System<br/>통신사 백엔드]
+    end
+
+    %% Azure 클라우드 환경
+    subgraph "Azure Cloud - 개발환경"
+        subgraph "Azure Kubernetes Service (AKS)"
+            subgraph "Ingress Layer"
+                Ingress[NGINX Ingress Controller<br/>Azure Load Balancer Basic]
+            end
+            
+            subgraph "Application Layer"
+                Auth[Auth Service Pod<br/>CPU: 50m-200m<br/>Memory: 128Mi-256Mi<br/>Replicas: 1]
+                Bill[Bill-Inquiry Service Pod<br/>CPU: 100m-500m<br/>Memory: 256Mi-512Mi<br/>Replicas: 1]
+                Product[Product-Change Service Pod<br/>CPU: 100m-500m<br/>Memory: 256Mi-512Mi<br/>Replicas: 1]
+                KOSMock[KOS-Mock Service Pod<br/>CPU: 50m-200m<br/>Memory: 128Mi-256Mi<br/>Replicas: 1]
+            end
+            
+            subgraph "Data Layer"
+                PostgreSQL[PostgreSQL Pod<br/>bitnami/postgresql:16<br/>CPU: 500m-1000m<br/>Memory: 1Gi-2Gi<br/>Storage: 20GB hostPath]
+                Redis[Redis Pod<br/>bitnami/redis:7.2<br/>CPU: 100m-500m<br/>Memory: 256Mi-1Gi<br/>Memory Only]
+            end
+        end
+        
+        
+        subgraph "Container Registry"
+            ACR[Azure Container Registry<br/>Basic Tier<br/>phonebilldev.azurecr.io]
+        end
+    end
+
+    %% 연결 관계
+    User --> MVNO
+    MVNO --> Ingress
+    Ingress --> Auth
+    Ingress --> Bill
+    Ingress --> Product
+    Ingress --> KOSMock
+    
+    Auth --> PostgreSQL
+    Bill --> PostgreSQL
+    Product --> PostgreSQL
+    KOSMock --> PostgreSQL
+    
+    Auth --> Redis
+    Bill --> Redis
+    Product --> Redis
+    
+    Bill --> KOSMock
+    Product --> KOSMock
+    
+    ACR -.-> Auth
+    ACR -.-> Bill
+    ACR -.-> Product
+    ACR -.-> KOSMock
+
+    %% 스타일링
+    classDef external fill:#e1f5fe
+    classDef ingress fill:#f3e5f5
+    classDef application fill:#e8f5e8
+    classDef data fill:#fff3e0
+    classDef managed fill:#fce4ec
+    classDef registry fill:#f1f8e9
+
+    class User,MVNO,KOS external
+    class Ingress ingress
+    class Auth,Bill,Product,KOSMock application
+    class PostgreSQL,Redis data
+    class ACR registry

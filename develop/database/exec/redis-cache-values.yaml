@@ -1,0 +1,82 @@
+# values.yaml - Redis Cache 개발환경 설정
+# Redis 기본 설정
+global:
+  storageClass: "managed"
+
+# 아키텍처 (개발환경 단일 구성)
+architecture: standalone
+
+# Auth 설정
+auth:
+  enabled: true
+  password: "Redis2025Dev!"
+
+# Master 설정 (개발환경 최적화)
+master:
+  # 리소스 설정 (개발환경 최적화)
+  resources:
+    limits:
+      memory: "1Gi"
+      cpu: "500m"
+    requests:
+      memory: "256Mi"
+      cpu: "100m"
+
+  # 스토리지 설정 (메모리 전용)
+  persistence:
+    enabled: false  # 개발환경에서는 메모리만 사용
+
+  # Redis 설정
+  configuration: |-
+    # Redis 7.2 최적화 설정 (개발환경)
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    
+    # 보안 설정
+    protected-mode yes
+    bind 0.0.0.0
+    
+    # 성능 설정
+    timeout 0
+    tcp-keepalive 300
+    
+    # 개발환경 로그 설정
+    loglevel notice
+    logfile ""
+    
+    # 데이터베이스 설정 (개발환경 16개)
+    databases 16
+    
+    # 캐시 TTL 정책 (기본값)
+    # 실제 TTL은 애플리케이션에서 설정
+
+# 서비스 설정
+service:
+  type: ClusterIP
+  ports:
+    redis: 6379
+
+# 네트워크 정책 (개발환경 허용적 설정)
+networkPolicy:
+  enabled: false
+
+# 보안 설정
+securityContext:
+  enabled: true
+  fsGroup: 1001
+  runAsUser: 1001
+
+# 메트릭 설정 (개발환경 모니터링)
+metrics:
+  enabled: true
+  service:
+    type: ClusterIP
+    port: 9121
+
+# 센티넬 비활성화 (개발환경 단일 구성)
+sentinel:
+  enabled: false
+
+# 복제본 비활성화 (개발환경 단일 구성) 
+replica:
+  replicaCount: 0

@@ -1,0 +1,255 @@
+@startuml
+!theme mono
+
+title Product-Change Service - 간단 클래스 설계
+
+' ============= 패키지 정의 =============
+package "com.unicorn.phonebill.product" {
+
+  ' ============= Controller Layer =============
+  package "controller" {
+    class ProductController {
+      ' API 매핑 정보는 아래 Note에 표시
+    }
+  }
+
+  ' ============= DTO Layer =============
+  package "dto" {
+    ' Request DTOs
+    class ProductChangeValidationRequest
+    class ProductChangeRequest
+
+    ' Response DTOs
+    class ProductMenuResponse
+    class CustomerInfoResponse
+    class AvailableProductsResponse
+    class ProductChangeValidationResponse
+    class ProductChangeResponse
+    class ProductChangeResultResponse
+    class ProductChangeHistoryResponse
+
+    ' Data DTOs
+    class ProductInfo
+    class CustomerInfo
+    class ContractInfo
+    class MenuItem
+    class ValidationDetail
+    class ProductChangeHistoryItem
+    class PaginationInfo
+
+    ' Enums
+    enum ValidationResult {
+      SUCCESS
+      FAILURE
+    }
+
+    enum ProcessStatus {
+      PENDING
+      PROCESSING
+      COMPLETED
+      FAILED
+    }
+
+    enum LineStatus {
+      ACTIVE
+      SUSPENDED
+      TERMINATED
+    }
+
+    enum CheckType {
+      PRODUCT_AVAILABLE
+      OPERATOR_MATCH
+      LINE_STATUS
+    }
+
+    enum CheckResult {
+      PASS
+      FAIL
+    }
+  }
+
+  ' ============= Service Layer =============
+  package "service" {
+    interface ProductService
+
+    class ProductServiceImpl
+
+    class ProductValidationService
+
+    class ProductCacheService
+
+    class KosClientService
+
+    class CircuitBreakerService
+
+    class RetryService
+  }
+
+  ' ============= Domain Layer =============
+  package "domain" {
+    class Product
+
+    class ProductChangeHistory
+
+    class ProductChangeResult
+
+    class ProductStatus
+
+    enum ProductStatus {
+      ACTIVE
+      INACTIVE
+      DISCONTINUED
+    }
+
+    enum CacheType {
+      CUSTOMER_PRODUCT
+      CURRENT_PRODUCT
+      AVAILABLE_PRODUCTS
+      PRODUCT_STATUS
+      LINE_STATUS
+    }
+  }
+
+  ' ============= Repository Layer =============
+  package "repository" {
+    interface ProductRepository
+
+    interface ProductChangeHistoryRepository
+
+    package "entity" {
+      class ProductChangeHistoryEntity
+    }
+
+    package "jpa" {
+      interface ProductChangeHistoryJpaRepository
+    }
+  }
+
+  ' ============= Config Layer =============
+  package "config" {
+    class RestTemplateConfig
+
+    class CacheConfig
+
+    class CircuitBreakerConfig
+
+    class KosProperties
+  }
+
+  ' ============= External Interface =============
+  package "external" {
+    class KosRequest
+
+    class KosResponse
+
+    class KosAdapterService
+  }
+
+  ' ============= Exception Classes =============
+  package "exception" {
+    class ProductChangeException
+
+    class ProductValidationException
+
+    class KosConnectionException
+
+    class CircuitBreakerException
+  }
+}
+
+' Import Common Classes
+class "com.unicorn.phonebill.common.dto.ApiResponse" as ApiResponse
+class "com.unicorn.phonebill.common.entity.BaseTimeEntity" as BaseTimeEntity
+class "com.unicorn.phonebill.common.exception.BusinessException" as BusinessException
+
+' ============= 관계 설정 =============
+
+' Controller Layer Relationships
+ProductController --> ProductService : "uses"
+ProductController --> ApiResponse : "returns"
+
+' DTO Layer Relationships
+ProductMenuResponse --> ProductInfo : "contains"
+CustomerInfoResponse --> CustomerInfo : "contains"
+CustomerInfo --> ProductInfo : "contains"
+CustomerInfo --> ContractInfo : "contains"
+AvailableProductsResponse --> ProductInfo : "contains"
+ProductChangeValidationResponse --> ValidationDetail : "contains"
+ProductChangeResponse --> ProductInfo : "contains"
+ProductChangeHistoryResponse --> ProductChangeHistoryItem : "contains"
+ProductChangeHistoryResponse --> PaginationInfo : "contains"
+
+' Service Layer Relationships
+ProductService <|.. ProductServiceImpl : "implements"
+ProductServiceImpl --> KosClientService : "uses"
+ProductServiceImpl --> ProductValidationService : "uses"
+ProductServiceImpl --> ProductCacheService : "uses"
+ProductServiceImpl --> ProductChangeHistoryRepository : "uses"
+
+ProductValidationService --> ProductRepository : "uses"
+ProductValidationService --> ProductCacheService : "uses"
+ProductValidationService --> KosClientService : "uses"
+
+ProductCacheService --> KosClientService : "uses"
+
+KosClientService --> CircuitBreakerService : "uses"
+KosClientService --> RetryService : "uses"
+KosClientService --> KosAdapterService : "uses"
+
+' Domain Layer Relationships
+ProductChangeResult --> Product : "contains"
+
+' Repository Layer Relationships
+ProductRepository <-- ProductServiceImpl : "uses"
+ProductChangeHistoryRepository <-- ProductServiceImpl : "uses"
+ProductChangeHistoryRepository --> ProductChangeHistoryJpaRepository : "uses"
+ProductChangeHistoryEntity --|> BaseTimeEntity : "extends"
+
+' Config Layer Relationships
+RestTemplateConfig --> KosClientService : "configures"
+CacheConfig --> ProductCacheService : "configures"
+CircuitBreakerConfig --> CircuitBreakerService : "configures"
+KosProperties --> KosClientService : "configures"
+
+' External Interface Relationships
+KosAdapterService --> KosRequest : "creates"
+KosAdapterService --> KosResponse : "processes"
+KosClientService --> KosAdapterService : "uses"
+
+' Exception Relationships
+ProductChangeException --|> BusinessException : "extends"
+ProductValidationException --|> BusinessException : "extends"
+KosConnectionException --|> BusinessException : "extends"
+CircuitBreakerException --|> BusinessException : "extends"
+
+ProductValidationException --> ValidationDetail : "contains"
+
+' ============= API 매핑표 =============
+note top of ProductController
+**ProductController API 매핑표**
+┌─────────────────────────────────────────────────────────────────────────────┐
+│ HTTP Method │ URL Path                      │ Method Name                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ GET         │ /products/menu                │ getProductMenu()               │
+│ GET         │ /products/customer/{line}     │ getCustomerInfo(lineNumber)    │
+│ GET         │ /products/available           │ getAvailableProducts()         │
+│ POST        │ /products/change/validation   │ validateProductChange()        │
+│ POST        │ /products/change              │ requestProductChange()         │
+│ GET         │ /products/change/{requestId}  │ getProductChangeResult()       │
+│ GET         │ /products/history             │ getProductChangeHistory()      │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+**주요 기능**
+• UFR-PROD-010: 상품변경 메뉴 조회
+• UFR-PROD-020: 상품변경 화면 데이터 조회  
+• UFR-PROD-030: 상품변경 요청 및 사전체크
+• UFR-PROD-040: KOS 연동 상품변경 처리
+
+**설계 특징**
+• Layered 아키텍처 패턴 적용
+• KOS 연동을 위한 Circuit Breaker 패턴
+• Redis 캐시를 활용한 성능 최적화
+• 비동기 이력 저장 처리
+end note
+
+@enduml

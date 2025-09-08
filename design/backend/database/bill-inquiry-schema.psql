@@ -1,0 +1,278 @@
+-- ============================================================================
+-- Bill-Inquiry Service Database Schema
+-- 데이터베이스: bill_inquiry_db
+-- DBMS: PostgreSQL 14
+-- 문자셋: UTF8
+-- 타임존: Asia/Seoul
+-- ============================================================================
+
+-- 데이터베이스 생성 (필요 시)
+-- CREATE DATABASE bill_inquiry_db
+--     WITH ENCODING = 'UTF8'
+--     LC_COLLATE = 'ko_KR.UTF-8'
+--     LC_CTYPE = 'ko_KR.UTF-8'
+--     TEMPLATE = template0;
+
+-- 타임존 설정
+SET timezone = 'Asia/Seoul';
+
+-- 확장 모듈 활성화
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_stat_statements";
+
+-- ============================================================================
+-- 1. 고객정보 테이블 (캐시용)
+-- ============================================================================
+CREATE TABLE customer_info (
+    customer_id VARCHAR(50) NOT NULL,
+    line_number VARCHAR(20) NOT NULL,
+    customer_name VARCHAR(100),
+    status VARCHAR(10) NOT NULL DEFAULT 'ACTIVE',
+    operator_code VARCHAR(10) NOT NULL,
+    cached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 제약 조건
+    CONSTRAINT pk_customer_info PRIMARY KEY (customer_id),
+    CONSTRAINT uk_customer_info_line UNIQUE (line_number),
+    CONSTRAINT ck_customer_info_status CHECK (status IN ('ACTIVE', 'INACTIVE'))
+);
+
+-- 고객정보 테이블 코멘트
+COMMENT ON TABLE customer_info IS '캐시에서 가져온 고객 기본 정보 임시 저장';
+COMMENT ON COLUMN customer_info.customer_id IS '고객 식별자';
+COMMENT ON COLUMN customer_info.line_number IS '회선번호';
+COMMENT ON COLUMN customer_info.customer_name IS '고객명 (암호화)';
+COMMENT ON COLUMN customer_info.status IS '고객상태 (ACTIVE, INACTIVE)';
+COMMENT ON COLUMN customer_info.operator_code IS '사업자 코드';
+COMMENT ON COLUMN customer_info.cached_at IS '캐시 저장 시각';
+COMMENT ON COLUMN customer_info.expires_at IS '캐시 만료 시각';
+
+-- ============================================================================
+-- 2. 요금조회 요청 이력 테이블
+-- ============================================================================
+CREATE TABLE bill_inquiry_history (
+    id BIGSERIAL NOT NULL,
+    request_id VARCHAR(50) NOT NULL,
+    user_id VARCHAR(50) NOT NULL,
+    line_number VARCHAR(20) NOT NULL,
+    inquiry_month VARCHAR(7),
+    request_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    process_time TIMESTAMP,
+    status VARCHAR(20) NOT NULL DEFAULT 'PROCESSING',
+    result_summary TEXT,
+    bill_info_json JSONB,
+    error_message TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 제약 조건
+    CONSTRAINT pk_bill_inquiry_history PRIMARY KEY (id),
+    CONSTRAINT uk_bill_inquiry_request_id UNIQUE (request_id),
+    CONSTRAINT ck_bill_inquiry_status CHECK (status IN ('PROCESSING', 'COMPLETED', 'FAILED', 'TIMEOUT')),
+    CONSTRAINT ck_bill_inquiry_month CHECK (inquiry_month IS NULL OR inquiry_month ~ '^[0-9]{4}-[0-9]{2}$')
+);
+
+-- 요금조회 이력 테이블 인덱스
+CREATE INDEX idx_bill_history_user_line ON bill_inquiry_history (user_id, line_number);
+CREATE INDEX idx_bill_history_request_time ON bill_inquiry_history (request_time DESC);
+CREATE INDEX idx_bill_history_status ON bill_inquiry_history (status);
+CREATE INDEX idx_bill_history_inquiry_month ON bill_inquiry_history (inquiry_month);
+CREATE INDEX idx_bill_history_bill_info_json ON bill_inquiry_history USING GIN (bill_info_json);
+
+-- 요금조회 이력 테이블 코멘트
+COMMENT ON TABLE bill_inquiry_history IS 'MVNO에서 MP로의 요금조회 요청 이력 관리';
+COMMENT ON COLUMN bill_inquiry_history.request_id IS '요청 식별자 (UUID)';
+COMMENT ON COLUMN bill_inquiry_history.user_id IS '요청 사용자 ID';
+COMMENT ON COLUMN bill_inquiry_history.line_number IS '회선번호';
+COMMENT ON COLUMN bill_inquiry_history.inquiry_month IS '조회월 (YYYY-MM, null이면 당월)';
+COMMENT ON COLUMN bill_inquiry_history.status IS '처리상태 (PROCESSING, COMPLETED, FAILED, TIMEOUT)';
+COMMENT ON COLUMN bill_inquiry_history.bill_info_json IS '요금정보 JSON (암호화)';
+
+-- ============================================================================
+-- 3. KOS 연동 이력 테이블
+-- ============================================================================
+CREATE TABLE kos_inquiry_history (
+    id BIGSERIAL NOT NULL,
+    bill_request_id VARCHAR(50),
+    line_number VARCHAR(20) NOT NULL,
+    inquiry_month VARCHAR(7),
+    request_time TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    response_time TIMESTAMP,
+    result_code VARCHAR(10),
+    result_message TEXT,
+    kos_data_json JSONB,
+    error_detail TEXT,
+    retry_count INTEGER NOT NULL DEFAULT 0,
+    circuit_breaker_state VARCHAR(20),
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 제약 조건
+    CONSTRAINT pk_kos_inquiry_history PRIMARY KEY (id),
+    CONSTRAINT fk_kos_bill_request FOREIGN KEY (bill_request_id) 
+        REFERENCES bill_inquiry_history(request_id) ON DELETE CASCADE,
+    CONSTRAINT ck_kos_inquiry_month CHECK (inquiry_month IS NULL OR inquiry_month ~ '^[0-9]{4}-[0-9]{2}$'),
+    CONSTRAINT ck_kos_retry_count CHECK (retry_count >= 0),
+    CONSTRAINT ck_kos_circuit_state CHECK (circuit_breaker_state IN ('CLOSED', 'OPEN', 'HALF_OPEN'))
+);
+
+-- KOS 연동 이력 테이블 인덱스
+CREATE INDEX idx_kos_history_line_month ON kos_inquiry_history (line_number, inquiry_month);
+CREATE INDEX idx_kos_history_request_time ON kos_inquiry_history (request_time DESC);
+CREATE INDEX idx_kos_history_result_code ON kos_inquiry_history (result_code);
+CREATE INDEX idx_kos_history_bill_request ON kos_inquiry_history (bill_request_id);
+CREATE INDEX idx_kos_history_kos_data_json ON kos_inquiry_history USING GIN (kos_data_json);
+
+-- KOS 연동 이력 테이블 코멘트
+COMMENT ON TABLE kos_inquiry_history IS 'MP에서 KOS로의 요금조회 연동 이력 관리';
+COMMENT ON COLUMN kos_inquiry_history.bill_request_id IS '요금조회 요청 ID (FK)';
+COMMENT ON COLUMN kos_inquiry_history.result_code IS 'KOS 응답코드';
+COMMENT ON COLUMN kos_inquiry_history.kos_data_json IS 'KOS 응답 데이터 JSON';
+COMMENT ON COLUMN kos_inquiry_history.retry_count IS '재시도 횟수';
+COMMENT ON COLUMN kos_inquiry_history.circuit_breaker_state IS 'Circuit Breaker 상태';
+
+-- ============================================================================
+-- 4. 요금정보 캐시 테이블 (Redis 보조용)
+-- ============================================================================
+CREATE TABLE bill_info_cache (
+    cache_key VARCHAR(100) NOT NULL,
+    line_number VARCHAR(20) NOT NULL,
+    inquiry_month VARCHAR(7) NOT NULL,
+    bill_info_json JSONB NOT NULL,
+    cached_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP NOT NULL,
+    access_count INTEGER NOT NULL DEFAULT 1,
+    last_accessed_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 제약 조건
+    CONSTRAINT pk_bill_info_cache PRIMARY KEY (cache_key),
+    CONSTRAINT ck_cache_inquiry_month CHECK (inquiry_month ~ '^[0-9]{4}-[0-9]{2}$'),
+    CONSTRAINT ck_cache_access_count CHECK (access_count > 0)
+);
+
+-- 요금정보 캐시 테이블 인덱스
+CREATE INDEX idx_cache_line_month ON bill_info_cache (line_number, inquiry_month);
+CREATE INDEX idx_cache_expires ON bill_info_cache (expires_at);
+CREATE INDEX idx_cache_bill_info_json ON bill_info_cache USING GIN (bill_info_json);
+
+-- 요금정보 캐시 테이블 코멘트
+COMMENT ON TABLE bill_info_cache IS 'KOS에서 조회한 요금정보의 임시 캐시 (Redis 보조용)';
+COMMENT ON COLUMN bill_info_cache.cache_key IS '캐시 키 (line_number:inquiry_month)';
+COMMENT ON COLUMN bill_info_cache.bill_info_json IS '요금정보 JSON';
+COMMENT ON COLUMN bill_info_cache.access_count IS '접근 횟수';
+
+-- ============================================================================
+-- 5. 시스템 설정 테이블
+-- ============================================================================
+CREATE TABLE system_config (
+    config_key VARCHAR(100) NOT NULL,
+    config_value TEXT NOT NULL,
+    description VARCHAR(500),
+    config_type VARCHAR(20) NOT NULL DEFAULT 'STRING',
+    is_active BOOLEAN NOT NULL DEFAULT true,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    
+    -- 제약 조건
+    CONSTRAINT pk_system_config PRIMARY KEY (config_key),
+    CONSTRAINT ck_config_type CHECK (config_type IN ('STRING', 'INTEGER', 'BOOLEAN', 'JSON'))
+);
+
+-- 시스템 설정 테이블 인덱스
+CREATE INDEX idx_config_active ON system_config (is_active);
+CREATE INDEX idx_config_type ON system_config (config_type);
+
+-- 시스템 설정 테이블 코멘트
+COMMENT ON TABLE system_config IS 'Bill-Inquiry 서비스 관련 시스템 설정 관리';
+COMMENT ON COLUMN system_config.config_key IS '설정 키';
+COMMENT ON COLUMN system_config.config_value IS '설정 값';
+COMMENT ON COLUMN system_config.config_type IS '설정 타입 (STRING, INTEGER, BOOLEAN, JSON)';
+
+-- ============================================================================
+-- 6. 트리거 함수 생성 (updated_at 자동 갱신)
+-- ============================================================================
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- 각 테이블에 updated_at 트리거 적용
+CREATE TRIGGER tr_customer_info_updated_at 
+    BEFORE UPDATE ON customer_info 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER tr_bill_inquiry_history_updated_at 
+    BEFORE UPDATE ON bill_inquiry_history 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER tr_kos_inquiry_history_updated_at 
+    BEFORE UPDATE ON kos_inquiry_history 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER tr_system_config_updated_at 
+    BEFORE UPDATE ON system_config 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ============================================================================
+-- 7. 파티셔닝 설정 (월별 파티셔닝)
+-- ============================================================================
+
+-- 요금조회 이력 테이블 월별 파티셔닝 준비
+-- ALTER TABLE bill_inquiry_history PARTITION BY RANGE (request_time);
+
+-- KOS 연동 이력 테이블 월별 파티셔닝 준비  
+-- ALTER TABLE kos_inquiry_history PARTITION BY RANGE (request_time);
+
+-- 파티션 생성 예시 (월별)
+-- CREATE TABLE bill_inquiry_history_202501 PARTITION OF bill_inquiry_history
+--     FOR VALUES FROM ('2025-01-01') TO ('2025-02-01');
+
+-- ============================================================================
+-- 8. 기본 데이터 삽입
+-- ============================================================================
+
+-- 시스템 설정 기본값
+INSERT INTO system_config (config_key, config_value, description, config_type) VALUES
+('bill.cache.ttl.hours', '4', '요금정보 캐시 TTL (시간)', 'INTEGER'),
+('bill.customer.cache.ttl.hours', '1', '고객정보 캐시 TTL (시간)', 'INTEGER'),
+('bill.inquiry.available.months', '24', '조회 가능한 개월 수', 'INTEGER'),
+('kos.connection.timeout.ms', '30000', 'KOS 연결 타임아웃 (밀리초)', 'INTEGER'),
+('kos.read.timeout.ms', '60000', 'KOS 읽기 타임아웃 (밀리초)', 'INTEGER'),
+('kos.retry.max.attempts', '3', 'KOS 최대 재시도 횟수', 'INTEGER'),
+('kos.retry.delay.ms', '1000', 'KOS 재시도 지연시간 (밀리초)', 'INTEGER'),
+('circuit.breaker.failure.threshold', '5', 'Circuit Breaker 실패 임계값', 'INTEGER'),
+('circuit.breaker.recovery.timeout.ms', '60000', 'Circuit Breaker 복구 대기시간 (밀리초)', 'INTEGER'),
+('circuit.breaker.success.threshold', '3', 'Circuit Breaker 성공 임계값', 'INTEGER'),
+('mvno.connection.timeout.ms', '10000', 'MVNO 연결 타임아웃 (밀리초)', 'INTEGER'),
+('bill.history.retention.days', '730', '요금조회 이력 보관 기간 (일)', 'INTEGER'),
+('kos.history.retention.days', '365', 'KOS 연동 이력 보관 기간 (일)', 'INTEGER');
+
+-- ============================================================================
+-- 9. 인덱스 통계 업데이트
+-- ============================================================================
+ANALYZE customer_info;
+ANALYZE bill_inquiry_history;
+ANALYZE kos_inquiry_history;
+ANALYZE bill_info_cache;
+ANALYZE system_config;
+
+-- ============================================================================
+-- 10. 권한 설정 (필요 시 조정)
+-- ============================================================================
+-- 애플리케이션 사용자를 위한 권한 설정
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO bill_app_user;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO bill_app_user;
+
+-- 읽기 전용 사용자를 위한 권한 설정
+-- GRANT SELECT ON ALL TABLES IN SCHEMA public TO bill_readonly_user;
+
+-- ============================================================================
+-- 스키마 생성 완료
+-- ============================================================================
+SELECT 'Bill-Inquiry Service Database Schema Created Successfully' AS result;

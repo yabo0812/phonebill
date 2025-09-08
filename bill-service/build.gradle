@@ -1,0 +1,96 @@
+// bill-service 모듈  
+// 루트 build.gradle의 subprojects 블록에서 공통 설정 적용됨
+
+plugins {
+    id 'jacoco'
+}
+
+dependencies {
+    // Database (bill service specific)
+    runtimeOnly 'org.postgresql:postgresql'
+    implementation 'com.zaxxer:HikariCP:5.0.1'
+    
+    // Redis (bill service specific)
+    implementation 'redis.clients:jedis:4.4.6'
+    
+    // Circuit Breaker & Resilience
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.1.0'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.1.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.1.0'
+    implementation 'io.github.resilience4j:resilience4j-timelimiter:2.1.0'
+    
+    // Logging (bill service specific)
+    implementation 'org.slf4j:slf4j-api'
+    implementation 'ch.qos.logback:logback-classic'
+    
+    // HTTP Client
+    implementation 'org.springframework.boot:spring-boot-starter-webflux'
+    
+    // Common modules (로컬 의존성)
+    implementation project(':common')
+    
+    // Test Dependencies (bill service specific)
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'redis.embedded:embedded-redis:0.7.3'
+    testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.0'
+}
+
+tasks.named('test') {
+    finalizedBy jacocoTestReport
+}
+
+jacocoTestReport {
+    dependsOn test
+    reports {
+        xml.required = true
+        csv.required = false
+        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
+    }
+}
+
+jacoco {
+    toolVersion = "0.8.8"
+}
+
+jacocoTestCoverageVerification {
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80
+            }
+        }
+    }
+}
+
+springBoot {
+    buildInfo()
+}
+
+// 환경별 실행 프로필 설정
+task runDev(type: JavaExec, dependsOn: 'classes') {
+    group = 'application'
+    description = 'Run the application with dev profile'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.phonebill.bill.BillServiceApplication'
+    systemProperty 'spring.profiles.active', 'dev'
+}
+
+task runProd(type: JavaExec, dependsOn: 'classes') {
+    group = 'application'  
+    description = 'Run the application with prod profile'
+    classpath = sourceSets.main.runtimeClasspath
+    mainClass = 'com.phonebill.bill.BillServiceApplication'
+    systemProperty 'spring.profiles.active', 'prod'
+}
+
+// JAR 파일명 설정
+jar {
+    enabled = false
+    archiveBaseName = 'bill-service'
+}
+
+bootJar {
+    enabled = true
+    archiveBaseName = 'bill-service'
+    archiveClassifier = ''
+}

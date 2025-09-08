@@ -1,0 +1,402 @@
+-- ====================================================================
+-- Auth Service Database Schema Script
+-- Database: phonebill_auth
+-- DBMS: PostgreSQL 15+
+-- Created: 2025-01-08
+-- Description: Auth 서비스 전용 데이터베이스 스키마
+-- ====================================================================
+
+-- 데이터베이스 생성 (관리자 권한으로 별도 실행)
+-- CREATE DATABASE phonebill_auth
+--     WITH ENCODING 'UTF8'
+--     LC_COLLATE = 'ko_KR.UTF-8'
+--     LC_CTYPE = 'ko_KR.UTF-8'
+--     TIMEZONE = 'Asia/Seoul';
+
+-- 데이터베이스 연결
+\c phonebill_auth;
+
+-- Extensions 설치
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- ====================================================================
+-- 1. 테이블 생성
+-- ====================================================================
+
+-- 1.1 사용자 계정 테이블
+CREATE TABLE auth_users (
+    user_id VARCHAR(50) PRIMARY KEY,
+    password_hash VARCHAR(255) NOT NULL,
+    password_salt VARCHAR(100) NOT NULL,
+    customer_id VARCHAR(50) NOT NULL,
+    line_number VARCHAR(20),
+    account_status VARCHAR(20) DEFAULT 'ACTIVE',
+    failed_login_count INTEGER DEFAULT 0,
+    last_failed_login_at TIMESTAMP,
+    account_locked_until TIMESTAMP,
+    last_login_at TIMESTAMP,
+    last_password_changed_at TIMESTAMP,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(customer_id)
+);
+
+-- 사용자 계정 테이블 코멘트
+COMMENT ON TABLE auth_users IS '사용자 계정 정보';
+COMMENT ON COLUMN auth_users.user_id IS '사용자 ID (로그인 ID)';
+COMMENT ON COLUMN auth_users.password_hash IS '암호화된 비밀번호 (BCrypt)';
+COMMENT ON COLUMN auth_users.password_salt IS '비밀번호 솔트';
+COMMENT ON COLUMN auth_users.customer_id IS '고객 식별자 (외부 참조용)';
+COMMENT ON COLUMN auth_users.line_number IS '회선번호 (캐시에서 조회)';
+COMMENT ON COLUMN auth_users.account_status IS '계정 상태 (ACTIVE, LOCKED, SUSPENDED, INACTIVE)';
+COMMENT ON COLUMN auth_users.failed_login_count IS '로그인 실패 횟수';
+COMMENT ON COLUMN auth_users.last_failed_login_at IS '마지막 실패 시간';
+COMMENT ON COLUMN auth_users.account_locked_until IS '계정 잠금 해제 시간';
+COMMENT ON COLUMN auth_users.last_login_at IS '마지막 로그인 시간';
+COMMENT ON COLUMN auth_users.last_password_changed_at IS '비밀번호 마지막 변경 시간';
+
+-- 1.2 사용자 세션 테이블
+CREATE TABLE auth_user_sessions (
+    session_id VARCHAR(100) PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL,
+    session_token VARCHAR(500) NOT NULL,
+    refresh_token VARCHAR(500),
+    client_ip VARCHAR(45),
+    user_agent TEXT,
+    auto_login_enabled BOOLEAN DEFAULT FALSE,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE
+);
+
+-- 사용자 세션 테이블 코멘트
+COMMENT ON TABLE auth_user_sessions IS '사용자 세션 정보';
+COMMENT ON COLUMN auth_user_sessions.session_id IS '세션 ID (UUID)';
+COMMENT ON COLUMN auth_user_sessions.session_token IS 'JWT 토큰';
+COMMENT ON COLUMN auth_user_sessions.refresh_token IS '리프레시 토큰';
+COMMENT ON COLUMN auth_user_sessions.client_ip IS '클라이언트 IP (IPv6 지원)';
+COMMENT ON COLUMN auth_user_sessions.user_agent IS 'User-Agent 정보';
+COMMENT ON COLUMN auth_user_sessions.auto_login_enabled IS '자동 로그인 여부';
+COMMENT ON COLUMN auth_user_sessions.expires_at IS '세션 만료 시간';
+
+-- 1.3 서비스 정의 테이블
+CREATE TABLE auth_services (
+    service_code VARCHAR(30) PRIMARY KEY,
+    service_name VARCHAR(100) NOT NULL,
+    service_description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 서비스 정의 테이블 코멘트
+COMMENT ON TABLE auth_services IS '시스템 내 서비스 정의';
+COMMENT ON COLUMN auth_services.service_code IS '서비스 코드';
+COMMENT ON COLUMN auth_services.service_name IS '서비스 이름';
+COMMENT ON COLUMN auth_services.service_description IS '서비스 설명';
+COMMENT ON COLUMN auth_services.is_active IS '서비스 활성화 여부';
+
+-- 1.4 권한 정의 테이블
+CREATE TABLE auth_permissions (
+    permission_id SERIAL PRIMARY KEY,
+    service_code VARCHAR(30) NOT NULL,
+    permission_code VARCHAR(50) NOT NULL,
+    permission_name VARCHAR(100) NOT NULL,
+    permission_description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (service_code) REFERENCES auth_services(service_code),
+    UNIQUE(service_code, permission_code)
+);
+
+-- 권한 정의 테이블 코멘트
+COMMENT ON TABLE auth_permissions IS '권한 정의';
+COMMENT ON COLUMN auth_permissions.permission_id IS '권한 ID';
+COMMENT ON COLUMN auth_permissions.service_code IS '서비스 코드';
+COMMENT ON COLUMN auth_permissions.permission_code IS '권한 코드';
+COMMENT ON COLUMN auth_permissions.permission_name IS '권한 이름';
+COMMENT ON COLUMN auth_permissions.permission_description IS '권한 설명';
+COMMENT ON COLUMN auth_permissions.is_active IS '권한 활성화 여부';
+
+-- 1.5 사용자 권한 테이블
+CREATE TABLE auth_user_permissions (
+    user_permission_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL,
+    permission_id INTEGER NOT NULL,
+    granted_by VARCHAR(50),
+    granted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (permission_id) REFERENCES auth_permissions(permission_id),
+    UNIQUE(user_id, permission_id)
+);
+
+-- 사용자 권한 테이블 코멘트
+COMMENT ON TABLE auth_user_permissions IS '사용자별 권한 할당';
+COMMENT ON COLUMN auth_user_permissions.user_permission_id IS '사용자권한 ID';
+COMMENT ON COLUMN auth_user_permissions.user_id IS '사용자 ID';
+COMMENT ON COLUMN auth_user_permissions.permission_id IS '권한 ID';
+COMMENT ON COLUMN auth_user_permissions.granted_by IS '권한 부여자';
+COMMENT ON COLUMN auth_user_permissions.granted_at IS '권한 부여 시간';
+COMMENT ON COLUMN auth_user_permissions.expires_at IS '권한 만료일 (NULL = 무기한)';
+COMMENT ON COLUMN auth_user_permissions.is_active IS '권한 활성화 여부';
+
+-- 1.6 로그인 이력 테이블
+CREATE TABLE auth_login_history (
+    history_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(50),
+    login_type VARCHAR(20) NOT NULL,
+    login_status VARCHAR(20) NOT NULL,
+    client_ip VARCHAR(45),
+    user_agent TEXT,
+    failure_reason VARCHAR(100),
+    session_id VARCHAR(100),
+    attempted_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE SET NULL
+);
+
+-- 로그인 이력 테이블 코멘트
+COMMENT ON TABLE auth_login_history IS '로그인 시도 이력';
+COMMENT ON COLUMN auth_login_history.history_id IS '이력 ID';
+COMMENT ON COLUMN auth_login_history.user_id IS '사용자 ID (실패 시 NULL 가능)';
+COMMENT ON COLUMN auth_login_history.login_type IS '로그인 유형 (LOGIN, LOGOUT, AUTO_LOGIN)';
+COMMENT ON COLUMN auth_login_history.login_status IS '로그인 상태 (SUCCESS, FAILURE, LOCKED)';
+COMMENT ON COLUMN auth_login_history.client_ip IS '클라이언트 IP';
+COMMENT ON COLUMN auth_login_history.user_agent IS 'User-Agent 정보';
+COMMENT ON COLUMN auth_login_history.failure_reason IS '실패 사유';
+COMMENT ON COLUMN auth_login_history.session_id IS '세션 ID (성공 시)';
+COMMENT ON COLUMN auth_login_history.attempted_at IS '시도 시간';
+
+-- 1.7 권한 접근 로그 테이블
+CREATE TABLE auth_permission_access_log (
+    log_id SERIAL PRIMARY KEY,
+    user_id VARCHAR(50) NOT NULL,
+    service_code VARCHAR(30) NOT NULL,
+    permission_code VARCHAR(50) NOT NULL,
+    access_status VARCHAR(20) NOT NULL,
+    client_ip VARCHAR(45),
+    session_id VARCHAR(100),
+    requested_resource VARCHAR(200),
+    denial_reason VARCHAR(100),
+    accessed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (user_id) REFERENCES auth_users(user_id) ON DELETE CASCADE
+);
+
+-- 권한 접근 로그 테이블 코멘트
+COMMENT ON TABLE auth_permission_access_log IS '권한 기반 접근 로그';
+COMMENT ON COLUMN auth_permission_access_log.log_id IS '로그 ID';
+COMMENT ON COLUMN auth_permission_access_log.user_id IS '사용자 ID';
+COMMENT ON COLUMN auth_permission_access_log.service_code IS '접근한 서비스';
+COMMENT ON COLUMN auth_permission_access_log.permission_code IS '확인된 권한';
+COMMENT ON COLUMN auth_permission_access_log.access_status IS '접근 상태 (GRANTED, DENIED)';
+COMMENT ON COLUMN auth_permission_access_log.client_ip IS '클라이언트 IP';
+COMMENT ON COLUMN auth_permission_access_log.session_id IS '세션 ID';
+COMMENT ON COLUMN auth_permission_access_log.requested_resource IS '요청 리소스';
+COMMENT ON COLUMN auth_permission_access_log.denial_reason IS '거부 사유';
+COMMENT ON COLUMN auth_permission_access_log.accessed_at IS '접근 시간';
+
+-- ====================================================================
+-- 2. 인덱스 생성
+-- ====================================================================
+
+-- 2.1 성능 최적화 인덱스
+-- 사용자 조회 최적화
+CREATE INDEX idx_auth_users_customer_id ON auth_users(customer_id);
+CREATE INDEX idx_auth_users_account_status ON auth_users(account_status);
+CREATE INDEX idx_auth_users_last_login ON auth_users(last_login_at);
+
+-- 세션 관리 최적화
+CREATE INDEX idx_auth_sessions_user_id ON auth_user_sessions(user_id);
+CREATE INDEX idx_auth_sessions_expires_at ON auth_user_sessions(expires_at);
+CREATE INDEX idx_auth_sessions_token ON auth_user_sessions(session_token);
+
+-- 권한 조회 최적화
+CREATE INDEX idx_auth_user_permissions_user_id ON auth_user_permissions(user_id);
+CREATE INDEX idx_auth_user_permissions_active ON auth_user_permissions(user_id, is_active);
+CREATE INDEX idx_auth_permissions_service ON auth_permissions(service_code, is_active);
+
+-- 로그 조회 최적화
+CREATE INDEX idx_auth_login_history_user_id ON auth_login_history(user_id);
+CREATE INDEX idx_auth_login_history_attempted_at ON auth_login_history(attempted_at);
+CREATE INDEX idx_auth_permission_log_user_id ON auth_permission_access_log(user_id);
+CREATE INDEX idx_auth_permission_log_accessed_at ON auth_permission_access_log(accessed_at);
+
+-- 2.2 보안 관련 인덱스
+-- 계정 잠금 관련 조회 최적화
+CREATE INDEX idx_auth_users_failed_login ON auth_users(failed_login_count, last_failed_login_at);
+CREATE INDEX idx_auth_users_locked_until ON auth_users(account_locked_until) WHERE account_locked_until IS NOT NULL;
+
+-- IP 기반 보안 모니터링
+CREATE INDEX idx_auth_login_history_ip_status ON auth_login_history(client_ip, login_status, attempted_at);
+
+-- ====================================================================
+-- 3. 제약조건 생성
+-- ====================================================================
+
+-- 3.1 데이터 무결성 제약조건
+-- 계정 상태 체크 제약조건
+ALTER TABLE auth_users ADD CONSTRAINT chk_account_status 
+    CHECK (account_status IN ('ACTIVE', 'LOCKED', 'SUSPENDED', 'INACTIVE'));
+
+-- 로그인 상태 체크 제약조건
+ALTER TABLE auth_login_history ADD CONSTRAINT chk_login_status 
+    CHECK (login_status IN ('SUCCESS', 'FAILURE', 'LOCKED'));
+
+-- 로그인 타입 체크 제약조건
+ALTER TABLE auth_login_history ADD CONSTRAINT chk_login_type 
+    CHECK (login_type IN ('LOGIN', 'LOGOUT', 'AUTO_LOGIN'));
+
+-- 접근 상태 체크 제약조건
+ALTER TABLE auth_permission_access_log ADD CONSTRAINT chk_access_status 
+    CHECK (access_status IN ('GRANTED', 'DENIED'));
+
+-- ====================================================================
+-- 4. 함수 및 트리거 생성
+-- ====================================================================
+
+-- 4.1 updated_at 자동 갱신 함수
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- 4.2 각 테이블에 updated_at 트리거 적용
+CREATE TRIGGER update_auth_users_updated_at BEFORE UPDATE ON auth_users 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_auth_services_updated_at BEFORE UPDATE ON auth_services 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_auth_permissions_updated_at BEFORE UPDATE ON auth_permissions 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_auth_user_permissions_updated_at BEFORE UPDATE ON auth_user_permissions 
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- ====================================================================
+-- 5. 초기 데이터 삽입
+-- ====================================================================
+
+-- 5.1 서비스 정의 초기 데이터
+INSERT INTO auth_services (service_code, service_name, service_description) VALUES
+('BILL_INQUIRY', '요금조회 서비스', '통신요금 조회 및 이력 관리'),
+('PRODUCT_CHANGE', '상품변경 서비스', '요금제 변경 및 상품 관리'),
+('AUTH', '인증 서비스', '사용자 인증 및 인가 관리');
+
+-- 5.2 권한 정의 초기 데이터
+-- Auth 서비스 권한
+INSERT INTO auth_permissions (service_code, permission_code, permission_name, permission_description) VALUES
+('AUTH', 'LOGIN', '로그인 권한', '시스템 로그인 권한'),
+('AUTH', 'LOGOUT', '로그아웃 권한', '시스템 로그아웃 권한'),
+('AUTH', 'PROFILE_VIEW', '프로필 조회 권한', '사용자 프로필 조회 권한');
+
+-- Bill-Inquiry 서비스 권한
+INSERT INTO auth_permissions (service_code, permission_code, permission_name, permission_description) VALUES
+('BILL_INQUIRY', 'MENU_ACCESS', '메뉴 접근 권한', '요금조회 메뉴 접근 권한'),
+('BILL_INQUIRY', 'BILL_VIEW', '요금 조회 권한', '통신요금 조회 권한'),
+('BILL_INQUIRY', 'HISTORY_VIEW', '이력 조회 권한', '요금조회 이력 조회 권한');
+
+-- Product-Change 서비스 권한
+INSERT INTO auth_permissions (service_code, permission_code, permission_name, permission_description) VALUES
+('PRODUCT_CHANGE', 'MENU_ACCESS', '메뉴 접근 권한', '상품변경 메뉴 접근 권한'),
+('PRODUCT_CHANGE', 'PRODUCT_VIEW', '상품 조회 권한', '상품 정보 조회 권한'),
+('PRODUCT_CHANGE', 'PRODUCT_CHANGE', '상품 변경 권한', '상품 변경 요청 권한'),
+('PRODUCT_CHANGE', 'HISTORY_VIEW', '이력 조회 권한', '상품변경 이력 조회 권한');
+
+-- 5.3 샘플 사용자 데이터 (개발/테스트 용도)
+-- 비밀번호: 'test1234' (BCrypt 해시)
+INSERT INTO auth_users (user_id, password_hash, password_salt, customer_id, line_number, account_status) VALUES
+('testuser01', '$2a$10$N9qo8uLOickgx2ZMRZoMye8OfnlqQwX8LmbxcF7aXFT8K8K3BsNJy', 'randomsalt01', 'CUST001', '01012345678', 'ACTIVE'),
+('testuser02', '$2a$10$N9qo8uLOickgx2ZMRZoMye8OfnlqQwX8LmbxcF7aXFT8K8K3BsNJy', 'randomsalt02', 'CUST002', '01087654321', 'ACTIVE');
+
+-- 5.4 샘플 사용자 권한 할당
+-- testuser01: 모든 권한
+INSERT INTO auth_user_permissions (user_id, permission_id, granted_by) 
+SELECT 'testuser01', permission_id, 'system' FROM auth_permissions;
+
+-- testuser02: 요금조회만 가능
+INSERT INTO auth_user_permissions (user_id, permission_id, granted_by) 
+SELECT 'testuser02', permission_id, 'system' FROM auth_permissions 
+WHERE service_code IN ('AUTH', 'BILL_INQUIRY');
+
+-- ====================================================================
+-- 6. 뷰 생성 (편의성을 위한 조회 뷰)
+-- ====================================================================
+
+-- 6.1 사용자 권한 목록 뷰
+CREATE VIEW v_user_permissions AS
+SELECT 
+    up.user_id,
+    u.customer_id,
+    u.line_number,
+    u.account_status,
+    s.service_code,
+    s.service_name,
+    p.permission_code,
+    p.permission_name,
+    up.is_active as permission_active,
+    up.expires_at,
+    up.granted_at
+FROM auth_user_permissions up
+JOIN auth_users u ON up.user_id = u.user_id
+JOIN auth_permissions p ON up.permission_id = p.permission_id
+JOIN auth_services s ON p.service_code = s.service_code
+WHERE up.is_active = TRUE
+  AND (up.expires_at IS NULL OR up.expires_at > CURRENT_TIMESTAMP)
+  AND u.account_status = 'ACTIVE'
+  AND p.is_active = TRUE
+  AND s.is_active = TRUE;
+
+-- 6.2 활성 세션 뷰
+CREATE VIEW v_active_sessions AS
+SELECT 
+    s.session_id,
+    s.user_id,
+    u.customer_id,
+    u.line_number,
+    s.client_ip,
+    s.auto_login_enabled,
+    s.expires_at,
+    s.last_accessed_at,
+    (s.expires_at > CURRENT_TIMESTAMP) as is_valid
+FROM auth_user_sessions s
+JOIN auth_users u ON s.user_id = u.user_id
+WHERE s.expires_at > CURRENT_TIMESTAMP
+  AND u.account_status = 'ACTIVE';
+
+-- ====================================================================
+-- 7. 권한 설정
+-- ====================================================================
+
+-- 애플리케이션 사용자 생성 (별도 실행 필요)
+-- CREATE USER phonebill_auth_user WITH PASSWORD 'your_secure_password';
+-- GRANT CONNECT ON DATABASE phonebill_auth TO phonebill_auth_user;
+-- GRANT USAGE ON SCHEMA public TO phonebill_auth_user;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO phonebill_auth_user;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO phonebill_auth_user;
+
+-- ====================================================================
+-- 8. 완료 메시지
+-- ====================================================================
+
+SELECT 'Auth Service Database Schema 생성이 완료되었습니다.' as message,
+       'Tables: ' || count(*) || '개' as table_count
+FROM information_schema.tables 
+WHERE table_schema = 'public' AND table_name LIKE 'auth_%';
+
+-- 생성된 테이블 목록 확인
+SELECT table_name, 
+       (SELECT count(*) FROM information_schema.columns WHERE table_name = t.table_name) as column_count
+FROM information_schema.tables t
+WHERE table_schema = 'public' 
+  AND table_name LIKE 'auth_%'
+ORDER BY table_name;

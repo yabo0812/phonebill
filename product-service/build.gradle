@@ -1,0 +1,189 @@
+// product-service 모듈
+// 루트 build.gradle의 subprojects 블록에서 공통 설정 적용됨
+
+dependencies {
+    // Common module dependency
+    implementation project(':common')
+    
+    // Database (product service specific)
+    runtimeOnly 'org.postgresql:postgresql'
+    runtimeOnly 'com.h2database:h2' // for testing
+    
+    // Circuit Breaker & Resilience
+    implementation 'io.github.resilience4j:resilience4j-spring-boot3:2.1.0'
+    implementation 'io.github.resilience4j:resilience4j-circuitbreaker:2.1.0'
+    implementation 'io.github.resilience4j:resilience4j-retry:2.1.0'
+    implementation 'io.github.resilience4j:resilience4j-timelimiter:2.1.0'
+    
+    // HTTP Client
+    implementation 'org.springframework.boot:spring-boot-starter-webflux' // for WebClient
+    
+    // Logging (product service specific)
+    implementation 'net.logstash.logback:logstash-logback-encoder:7.4'
+    
+    // Utilities (product service specific)
+    implementation 'org.modelmapper:modelmapper:3.2.0'
+    
+    // Test Dependencies (product service specific)
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.0'
+    testImplementation 'io.github.resilience4j:resilience4j-test:2.1.0'
+}
+
+dependencyManagement {
+    imports {
+        mavenBom 'org.testcontainers:testcontainers-bom:1.19.1'
+    }
+}
+
+tasks.named('test') {
+    // Test 환경 설정
+    systemProperty 'spring.profiles.active', 'test'
+    
+    // 병렬 실행 설정
+    maxParallelForks = Runtime.runtime.availableProcessors()
+    
+    // 메모리 설정
+    minHeapSize = "512m"
+    maxHeapSize = "2048m"
+    
+    // Test 결과 리포트
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat = 'full'
+    }
+    
+    // Coverage 설정
+    finalizedBy jacocoTestReport
+}
+
+// Jacoco Test Coverage
+apply plugin: 'jacoco'
+
+jacoco {
+    toolVersion = "0.8.10"
+}
+
+jacocoTestReport {
+    dependsOn test
+    
+    reports {
+        xml.required = true
+        csv.required = false
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('jacocoHtml')
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/dto/**',
+                '**/config/**',
+                '**/exception/**',
+                '**/*Application.*'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    
+    violationRules {
+        rule {
+            limit {
+                minimum = 0.80 // 80% 커버리지 목표
+            }
+        }
+    }
+}
+
+// Spring Boot Plugin 설정
+springBoot {
+    buildInfo()
+}
+
+// JAR 설정
+jar {
+    enabled = false
+    archiveClassifier = ''
+}
+
+bootJar {
+    enabled = true
+    archiveClassifier = ''
+    archiveFileName = "${project.name}.jar"
+    
+    // Build 정보 포함
+    manifest {
+        attributes(
+            'Implementation-Title': project.name,
+            'Implementation-Version': project.version,
+            'Implementation-Vendor': 'MVNO Corp',
+            'Built-By': System.getProperty('user.name'),
+            'Build-Timestamp': new Date().format("yyyy-MM-dd'T'HH:mm:ss.SSSZ"),
+            'Created-By': "${System.getProperty('java.version')} (${System.getProperty('java.vendor')})",
+            'Build-Jdk': "${System.getProperty('java.version')}",
+            'Build-OS': "${System.getProperty('os.name')} ${System.getProperty('os.arch')} ${System.getProperty('os.version')}"
+        )
+    }
+}
+
+// 개발 환경 설정
+if (project.hasProperty('dev')) {
+    bootRun {
+        args = ['--spring.profiles.active=dev']
+        systemProperty 'spring.devtools.restart.enabled', 'true'
+        systemProperty 'spring.devtools.livereload.enabled', 'true'
+    }
+}
+
+// Production 빌드 설정
+if (project.hasProperty('prod')) {
+    bootJar {
+        archiveFileName = "${project.name}-${project.version}-prod.jar"
+    }
+}
+
+// Docker 빌드를 위한 태스크
+task copyJar(type: Copy, dependsOn: bootJar) {
+    from layout.buildDirectory.file("libs/${bootJar.archiveFileName.get()}")
+    into layout.buildDirectory.dir("docker")
+    rename { String fileName ->
+        fileName.replace(bootJar.archiveFileName.get(), "app.jar")
+    }
+}
+
+// 정적 분석 도구 설정 (추후 확장 가능)
+task checkstyle(type: Checkstyle) {
+    configFile = file("${rootDir}/config/checkstyle/checkstyle.xml")
+    source 'src/main/java'
+    include '**/*.java'
+    exclude '**/generated/**'
+    classpath = files()
+    ignoreFailures = true
+}
+
+// Clean 확장
+clean {
+    delete 'logs'
+    delete 'build/docker'
+}
+
+// 컴파일 옵션
+compileJava {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += [
+        '-Xlint:all',
+        '-Xlint:-processing',
+        '-Werror'
+    ]
+}
+
+compileTestJava {
+    options.encoding = 'UTF-8'
+    options.compilerArgs += [
+        '-Xlint:all',
+        '-Xlint:-processing'
+    ]
+}

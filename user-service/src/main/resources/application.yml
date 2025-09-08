@@ -1,0 +1,108 @@
+spring:
+  application:
+    name: user-service
+  
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+    
+  # JPA 공통 설정
+  jpa:
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        default_batch_fetch_size: 100
+    hibernate:
+      ddl-auto: ${DDL_AUTO:validate}
+    
+  # Jackson 설정
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: NON_NULL
+    time-zone: Asia/Seoul
+    
+  # Redis 캐시 설정
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1800000 # 30분
+      cache-null-values: false
+      
+# 서버 설정
+server:
+  port: ${SERVER_PORT:8081}
+  servlet:
+    context-path: /api/v1
+    
+# JWT 토큰 설정
+jwt:
+  secret: ${JWT_SECRET:Y2xhdWRlLWNvZGUtcGhvbmViaWxsLXNlY3JldC1rZXktZm9yLWF1dGgtc2VydmljZQ==}
+  access-token-validity: 1800000  # 30분 (milliseconds)
+  refresh-token-validity: 86400000 # 24시간 (milliseconds)
+  issuer: phonebill-auth-service
+  
+# 로깅 설정
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.phonebill: ${LOG_LEVEL_APP:DEBUG}
+    org.springframework.security: DEBUG
+    org.springframework.web: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+  file:
+    name: logs/user-service.log
+    
+# 액추에이터 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        
+# OpenAPI/Swagger 설정
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    display-request-duration: true
+    groups-order: DESC
+    operationsSorter: method
+    disable-swagger-default-url: true
+    use-root-path: true
+    
+# Auth Service 특화 설정
+auth:
+  login:
+    max-failed-attempts: 5
+    lockout-duration: 1800000  # 30분 (milliseconds)
+  session:
+    default-timeout: 1800000   # 30분 (milliseconds)  
+    auto-login-timeout: 86400000 # 24시간 (milliseconds)
+  password:
+    bcrypt-strength: 12
+    
+# 외부 서비스 연동 설정 (향후 확장용)
+external:
+  services:
+    bill-inquiry:
+      base-url: ${BILL_INQUIRY_URL:http://localhost:8082}
+      timeout: 5000
+    product-change:
+      base-url: ${PRODUCT_CHANGE_URL:http://localhost:8083}
+      timeout: 5000

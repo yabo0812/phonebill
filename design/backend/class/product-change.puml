@@ -1,0 +1,722 @@
+@startuml
+!theme mono
+
+title Product-Change Service - 상세 클래스 설계
+
+' ============= 패키지 정의 =============
+package "com.unicorn.phonebill.product" {
+
+  ' ============= Controller Layer =============
+  package "controller" {
+    class ProductController {
+      -productService: ProductService
+      -log: Logger
+      +getProductMenu(): ResponseEntity<ApiResponse<ProductMenuResponse>>
+      +getCustomerInfo(lineNumber: String): ResponseEntity<ApiResponse<CustomerInfoResponse>>
+      +getAvailableProducts(currentProductCode: String, operatorCode: String): ResponseEntity<ApiResponse<AvailableProductsResponse>>
+      +validateProductChange(request: ProductChangeValidationRequest): ResponseEntity<ApiResponse<ProductChangeValidationResponse>>
+      +requestProductChange(request: ProductChangeRequest): ResponseEntity<ApiResponse<ProductChangeResponse>>
+      +getProductChangeResult(requestId: String): ResponseEntity<ApiResponse<ProductChangeResultResponse>>
+      +getProductChangeHistory(lineNumber: String, startDate: LocalDate, endDate: LocalDate, page: int, size: int): ResponseEntity<ApiResponse<ProductChangeHistoryResponse>>
+      -extractUserIdFromToken(): String
+    }
+  }
+
+  ' ============= DTO Layer =============
+  package "dto" {
+    ' Request DTOs
+    class ProductChangeValidationRequest {
+      -lineNumber: String
+      -currentProductCode: String
+      -targetProductCode: String
+      +getLineNumber(): String
+      +getCurrentProductCode(): String
+      +getTargetProductCode(): String
+    }
+
+    class ProductChangeRequest {
+      -lineNumber: String
+      -currentProductCode: String
+      -targetProductCode: String
+      -requestDate: LocalDateTime
+      -changeEffectiveDate: LocalDate
+      +getLineNumber(): String
+      +getCurrentProductCode(): String
+      +getTargetProductCode(): String
+      +getRequestDate(): LocalDateTime
+      +getChangeEffectiveDate(): LocalDate
+    }
+
+    ' Response DTOs
+    class ProductMenuResponse {
+      -customerId: String
+      -lineNumber: String
+      -currentProduct: ProductInfo
+      -menuItems: List<MenuItem>
+      +getCustomerId(): String
+      +getLineNumber(): String
+      +getCurrentProduct(): ProductInfo
+      +getMenuItems(): List<MenuItem>
+    }
+
+    class CustomerInfoResponse {
+      -customerInfo: CustomerInfo
+      +getCustomerInfo(): CustomerInfo
+    }
+
+    class AvailableProductsResponse {
+      -products: List<ProductInfo>
+      -totalCount: int
+      +getProducts(): List<ProductInfo>
+      +getTotalCount(): int
+    }
+
+    class ProductChangeValidationResponse {
+      -validationResult: ValidationResult
+      -validationDetails: List<ValidationDetail>
+      -failureReason: String
+      +getValidationResult(): ValidationResult
+      +getValidationDetails(): List<ValidationDetail>
+      +getFailureReason(): String
+    }
+
+    class ProductChangeResponse {
+      -requestId: String
+      -processStatus: ProcessStatus
+      -resultCode: String
+      -resultMessage: String
+      -changedProduct: ProductInfo
+      -processedAt: LocalDateTime
+      +getRequestId(): String
+      +getProcessStatus(): ProcessStatus
+      +getResultCode(): String
+      +getResultMessage(): String
+      +getChangedProduct(): ProductInfo
+      +getProcessedAt(): LocalDateTime
+    }
+
+    class ProductChangeResultResponse {
+      -requestId: String
+      -lineNumber: String
+      -processStatus: ProcessStatus
+      -currentProductCode: String
+      -targetProductCode: String
+      -requestedAt: LocalDateTime
+      -processedAt: LocalDateTime
+      -resultCode: String
+      -resultMessage: String
+      -failureReason: String
+      +getRequestId(): String
+      +getLineNumber(): String
+      +getProcessStatus(): ProcessStatus
+      +getCurrentProductCode(): String
+      +getTargetProductCode(): String
+      +getRequestedAt(): LocalDateTime
+      +getProcessedAt(): LocalDateTime
+      +getResultCode(): String
+      +getResultMessage(): String
+      +getFailureReason(): String
+    }
+
+    class ProductChangeHistoryResponse {
+      -history: List<ProductChangeHistoryItem>
+      -pagination: PaginationInfo
+      +getHistory(): List<ProductChangeHistoryItem>
+      +getPagination(): PaginationInfo
+    }
+
+    ' Data DTOs
+    class ProductInfo {
+      -productCode: String
+      -productName: String
+      -monthlyFee: BigDecimal
+      -dataAllowance: String
+      -voiceAllowance: String
+      -smsAllowance: String
+      -isAvailable: boolean
+      -operatorCode: String
+      +getProductCode(): String
+      +getProductName(): String
+      +getMonthlyFee(): BigDecimal
+      +getDataAllowance(): String
+      +getVoiceAllowance(): String
+      +getSmsAllowance(): String
+      +isAvailable(): boolean
+      +getOperatorCode(): String
+    }
+
+    class CustomerInfo {
+      -customerId: String
+      -lineNumber: String
+      -customerName: String
+      -currentProduct: ProductInfo
+      -lineStatus: LineStatus
+      -contractInfo: ContractInfo
+      +getCustomerId(): String
+      +getLineNumber(): String
+      +getCustomerName(): String
+      +getCurrentProduct(): ProductInfo
+      +getLineStatus(): LineStatus
+      +getContractInfo(): ContractInfo
+    }
+
+    class ContractInfo {
+      -contractDate: LocalDate
+      -termEndDate: LocalDate
+      -earlyTerminationFee: BigDecimal
+      +getContractDate(): LocalDate
+      +getTermEndDate(): LocalDate
+      +getEarlyTerminationFee(): BigDecimal
+    }
+
+    class MenuItem {
+      -menuId: String
+      -menuName: String
+      -available: boolean
+      +getMenuId(): String
+      +getMenuName(): String
+      +isAvailable(): boolean
+    }
+
+    class ValidationDetail {
+      -checkType: CheckType
+      -result: CheckResult
+      -message: String
+      +getCheckType(): CheckType
+      +getResult(): CheckResult
+      +getMessage(): String
+    }
+
+    class ProductChangeHistoryItem {
+      -requestId: String
+      -lineNumber: String
+      -processStatus: ProcessStatus
+      -currentProductCode: String
+      -currentProductName: String
+      -targetProductCode: String
+      -targetProductName: String
+      -requestedAt: LocalDateTime
+      -processedAt: LocalDateTime
+      -resultMessage: String
+      +getRequestId(): String
+      +getLineNumber(): String
+      +getProcessStatus(): ProcessStatus
+      +getCurrentProductCode(): String
+      +getCurrentProductName(): String
+      +getTargetProductCode(): String
+      +getTargetProductName(): String
+      +getRequestedAt(): LocalDateTime
+      +getProcessedAt(): LocalDateTime
+      +getResultMessage(): String
+    }
+
+    class PaginationInfo {
+      -page: int
+      -size: int
+      -totalElements: long
+      -totalPages: int
+      -hasNext: boolean
+      -hasPrevious: boolean
+      +getPage(): int
+      +getSize(): int
+      +getTotalElements(): long
+      +getTotalPages(): int
+      +isHasNext(): boolean
+      +isHasPrevious(): boolean
+    }
+
+    ' Enum Classes
+    enum ValidationResult {
+      SUCCESS
+      FAILURE
+    }
+
+    enum ProcessStatus {
+      PENDING
+      PROCESSING
+      COMPLETED
+      FAILED
+    }
+
+    enum LineStatus {
+      ACTIVE
+      SUSPENDED
+      TERMINATED
+    }
+
+    enum CheckType {
+      PRODUCT_AVAILABLE
+      OPERATOR_MATCH
+      LINE_STATUS
+    }
+
+    enum CheckResult {
+      PASS
+      FAIL
+    }
+  }
+
+  ' ============= Service Layer =============
+  package "service" {
+    interface ProductService {
+      +getProductMenuData(userId: String): ProductMenuResponse
+      +getCustomerInfo(lineNumber: String): CustomerInfo
+      +getAvailableProducts(currentProductCode: String, operatorCode: String): List<ProductInfo>
+      +validateProductChange(request: ProductChangeValidationRequest): ProductChangeValidationResponse
+      +requestProductChange(request: ProductChangeRequest, userId: String): ProductChangeResponse
+      +getProductChangeResult(requestId: String): ProductChangeResultResponse
+      +getProductChangeHistory(lineNumber: String, startDate: LocalDate, endDate: LocalDate, pageable: Pageable): ProductChangeHistoryResponse
+    }
+
+    class ProductServiceImpl {
+      -kosClientService: KosClientService
+      -productValidationService: ProductValidationService
+      -productCacheService: ProductCacheService
+      -productChangeHistoryRepository: ProductChangeHistoryRepository
+      -log: Logger
+      +getProductMenuData(userId: String): ProductMenuResponse
+      +getCustomerInfo(lineNumber: String): CustomerInfo
+      +getAvailableProducts(currentProductCode: String, operatorCode: String): List<ProductInfo>
+      +validateProductChange(request: ProductChangeValidationRequest): ProductChangeValidationResponse
+      +requestProductChange(request: ProductChangeRequest, userId: String): ProductChangeResponse
+      +getProductChangeResult(requestId: String): ProductChangeResultResponse
+      +getProductChangeHistory(lineNumber: String, startDate: LocalDate, endDate: LocalDate, pageable: Pageable): ProductChangeHistoryResponse
+      -filterAvailableProducts(products: List<ProductInfo>, currentProductCode: String): List<ProductInfo>
+      -invalidateCustomerCache(userId: String): void
+    }
+
+    class ProductValidationService {
+      -productRepository: ProductRepository
+      -productCacheService: ProductCacheService
+      -kosClientService: KosClientService
+      -log: Logger
+      +validateProductChange(request: ProductChangeValidationRequest): ValidationResult
+      +validateProductAvailability(productCode: String): ValidationDetail
+      +validateOperatorMatch(customerOperatorCode: String, productCode: String): ValidationDetail
+      +validateLineStatus(lineNumber: String): ValidationDetail
+      -createValidationDetail(checkType: CheckType, result: CheckResult, message: String): ValidationDetail
+    }
+
+    class ProductCacheService {
+      -redisTemplate: RedisTemplate<String, Object>
+      -kosClientService: KosClientService
+      -log: Logger
+      +getCustomerProductInfo(userId: String): CustomerInfo
+      +getCurrentProductInfo(userId: String): ProductInfo
+      +getAvailableProducts(): List<ProductInfo>
+      +getProductStatus(productCode: String): ProductStatus
+      +getLineStatus(lineNumber: String): LineStatus
+      +invalidateCustomerCache(userId: String): void
+      +cacheCustomerProductInfo(userId: String, customerInfo: CustomerInfo): void
+      +cacheAvailableProducts(products: List<ProductInfo>): void
+      -getCacheKey(prefix: String, identifier: String): String
+      -getCacheTTL(cacheType: CacheType): Duration
+    }
+
+    class KosClientService {
+      -restTemplate: RestTemplate
+      -circuitBreakerService: CircuitBreakerService
+      -retryService: RetryService
+      -kosProperties: KosProperties
+      -log: Logger
+      +getCustomerInfo(userId: String): CustomerInfo
+      +getCurrentProduct(userId: String): ProductInfo
+      +getAvailableProducts(): List<ProductInfo>
+      +getLineStatus(lineNumber: String): LineStatus
+      +processProductChange(changeRequest: ProductChangeRequest): ProductChangeResult
+      -buildKosRequest(request: Object): KosRequest
+      -handleKosResponse(response: ResponseEntity<String>): KosResponse
+      -mapToCustomerInfo(kosResponse: KosResponse): CustomerInfo
+      -mapToProductInfo(kosResponse: KosResponse): ProductInfo
+    }
+
+    class CircuitBreakerService {
+      -circuitBreakerRegistry: CircuitBreakerRegistry
+      -log: Logger
+      +isCallAllowed(serviceName: String): boolean
+      +recordSuccess(serviceName: String): void
+      +recordFailure(serviceName: String): void
+      +getCircuitBreakerState(serviceName: String): CircuitBreaker.State
+      -configureCircuitBreaker(serviceName: String): CircuitBreaker
+    }
+
+    class RetryService {
+      -retryRegistry: RetryRegistry
+      -log: Logger
+      +<T> executeWithRetry(operation: Supplier<T>, serviceName: String): T
+      +<T> executeProductChangeWithRetry(operation: Supplier<T>): T
+      -configureRetry(serviceName: String): Retry
+      -isRetryableException(exception: Exception): boolean
+    }
+  }
+
+  ' ============= Domain Layer =============
+  package "domain" {
+    class Product {
+      -productCode: String
+      -productName: String
+      -monthlyFee: BigDecimal
+      -dataAllowance: String
+      -voiceAllowance: String
+      -smsAllowance: String
+      -status: ProductStatus
+      -operatorCode: String
+      -isAvailable: boolean
+      +getProductCode(): String
+      +getProductName(): String
+      +getMonthlyFee(): BigDecimal
+      +getDataAllowance(): String
+      +getVoiceAllowance(): String
+      +getSmsAllowance(): String
+      +getStatus(): ProductStatus
+      +getOperatorCode(): String
+      +isAvailable(): boolean
+      +canChangeTo(targetProduct: Product): boolean
+      +isSameOperator(operatorCode: String): boolean
+    }
+
+    class ProductChangeHistory {
+      -requestId: String
+      -userId: String
+      -lineNumber: String
+      -currentProductCode: String
+      -targetProductCode: String
+      -processStatus: ProcessStatus
+      -requestedAt: LocalDateTime
+      -processedAt: LocalDateTime
+      -resultCode: String
+      -resultMessage: String
+      -failureReason: String
+      +getRequestId(): String
+      +getUserId(): String
+      +getLineNumber(): String
+      +getCurrentProductCode(): String
+      +getTargetProductCode(): String
+      +getProcessStatus(): ProcessStatus
+      +getRequestedAt(): LocalDateTime
+      +getProcessedAt(): LocalDateTime
+      +getResultCode(): String
+      +getResultMessage(): String
+      +getFailureReason(): String
+      +isCompleted(): boolean
+      +isFailed(): boolean
+      +markAsCompleted(resultCode: String, resultMessage: String): void
+      +markAsFailed(failureReason: String): void
+    }
+
+    class ProductChangeResult {
+      -requestId: String
+      -success: boolean
+      -resultCode: String
+      -resultMessage: String
+      -newProduct: Product
+      -processedAt: LocalDateTime
+      +getRequestId(): String
+      +isSuccess(): boolean
+      +getResultCode(): String
+      +getResultMessage(): String
+      +getNewProduct(): Product
+      +getProcessedAt(): LocalDateTime
+      +createSuccessResult(requestId: String, newProduct: Product, message: String): ProductChangeResult
+      +createFailureResult(requestId: String, errorCode: String, errorMessage: String): ProductChangeResult
+    }
+
+    class ProductStatus {
+      -productCode: String
+      -status: String
+      -salesStatus: String
+      -operatorCode: String
+      +getProductCode(): String
+      +getStatus(): String
+      +getSalesStatus(): String
+      +getOperatorCode(): String
+      +isAvailableForSale(): boolean
+      +isActive(): boolean
+    }
+
+    ' Enum Classes
+    enum ProductStatus {
+      ACTIVE
+      INACTIVE
+      DISCONTINUED
+    }
+
+    enum CacheType {
+      CUSTOMER_PRODUCT(Duration.ofHours(4))
+      CURRENT_PRODUCT(Duration.ofHours(2))
+      AVAILABLE_PRODUCTS(Duration.ofHours(24))
+      PRODUCT_STATUS(Duration.ofHours(1))
+      LINE_STATUS(Duration.ofMinutes(30))
+
+      -ttl: Duration
+      +CacheType(ttl: Duration)
+      +getTtl(): Duration
+    }
+  }
+
+  ' ============= Repository Layer =============
+  package "repository" {
+    interface ProductRepository {
+      +getProductStatus(productCode: String): ProductStatus
+      +saveChangeRequest(changeRequest: ProductChangeHistory): ProductChangeHistory
+      +updateProductChangeStatus(requestId: String, status: ProcessStatus, resultCode: String, resultMessage: String): void
+      +findProductChangeHistory(lineNumber: String, startDate: LocalDate, endDate: LocalDate, pageable: Pageable): Page<ProductChangeHistory>
+    }
+
+    interface ProductChangeHistoryRepository {
+      +save(history: ProductChangeHistory): ProductChangeHistory
+      +findByRequestId(requestId: String): Optional<ProductChangeHistory>
+      +findByLineNumberAndRequestedAtBetween(lineNumber: String, startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<ProductChangeHistory>
+      +findByUserIdAndRequestedAtBetween(userId: String, startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<ProductChangeHistory>
+      +existsByRequestId(requestId: String): boolean
+    }
+
+    package "entity" {
+      class ProductChangeHistoryEntity {
+        -id: Long
+        -requestId: String
+        -userId: String
+        -lineNumber: String
+        -currentProductCode: String
+        -currentProductName: String
+        -targetProductCode: String
+        -targetProductName: String
+        -processStatus: ProcessStatus
+        -requestedAt: LocalDateTime
+        -processedAt: LocalDateTime
+        -resultCode: String
+        -resultMessage: String
+        -failureReason: String
+        -createdAt: LocalDateTime
+        -updatedAt: LocalDateTime
+        +getId(): Long
+        +getRequestId(): String
+        +getUserId(): String
+        +getLineNumber(): String
+        +getCurrentProductCode(): String
+        +getCurrentProductName(): String
+        +getTargetProductCode(): String
+        +getTargetProductName(): String
+        +getProcessStatus(): ProcessStatus
+        +getRequestedAt(): LocalDateTime
+        +getProcessedAt(): LocalDateTime
+        +getResultCode(): String
+        +getResultMessage(): String
+        +getFailureReason(): String
+        +getCreatedAt(): LocalDateTime
+        +getUpdatedAt(): LocalDateTime
+        +toDomain(): ProductChangeHistory
+        +fromDomain(history: ProductChangeHistory): ProductChangeHistoryEntity
+      }
+    }
+
+    package "jpa" {
+      interface ProductChangeHistoryJpaRepository {
+        +findByRequestId(requestId: String): Optional<ProductChangeHistoryEntity>
+        +findByLineNumberAndRequestedAtBetween(lineNumber: String, startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<ProductChangeHistoryEntity>
+        +findByUserIdAndRequestedAtBetween(userId: String, startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<ProductChangeHistoryEntity>
+        +existsByRequestId(requestId: String): boolean
+        +countByProcessStatus(status: ProcessStatus): long
+      }
+    }
+  }
+
+  ' ============= Config Layer =============
+  package "config" {
+    class RestTemplateConfig {
+      +restTemplate(): RestTemplate
+      +kosRestTemplate(): RestTemplate
+      +connectionPoolTaskExecutor(): ThreadPoolTaskExecutor
+      -createConnectionPoolManager(): PoolingHttpClientConnectionManager
+      -createRequestConfig(): RequestConfig
+    }
+
+    class CacheConfig {
+      +redisConnectionFactory(): LettuceConnectionFactory
+      +redisTemplate(): RedisTemplate<String, Object>
+      +cacheManager(): RedisCacheManager
+      +redisCacheConfiguration(): RedisCacheConfiguration
+      -createRedisConfiguration(): RedisStandaloneConfiguration
+    }
+
+    class CircuitBreakerConfig {
+      +circuitBreakerRegistry(): CircuitBreakerRegistry
+      +retryRegistry(): RetryRegistry
+      +kosCircuitBreaker(): CircuitBreaker
+      +kosRetry(): Retry
+      -createCircuitBreakerConfig(): CircuitBreakerConfig
+      -createRetryConfig(): RetryConfig
+    }
+
+    class KosProperties {
+      -baseUrl: String
+      -connectTimeout: Duration
+      -readTimeout: Duration
+      -maxRetries: int
+      -retryDelay: Duration
+      -circuitBreakerFailureRateThreshold: float
+      -circuitBreakerMinimumNumberOfCalls: int
+      -circuitBreakerWaitDurationInOpenState: Duration
+      +getBaseUrl(): String
+      +getConnectTimeout(): Duration
+      +getReadTimeout(): Duration
+      +getMaxRetries(): int
+      +getRetryDelay(): Duration
+      +getCircuitBreakerFailureRateThreshold(): float
+      +getCircuitBreakerMinimumNumberOfCalls(): int
+      +getCircuitBreakerWaitDurationInOpenState(): Duration
+    }
+  }
+
+  ' External Interface Classes (KOS 연동)
+  package "external" {
+    class KosRequest {
+      -transactionId: String
+      -lineNumber: String
+      -currentProductCode: String
+      -newProductCode: String
+      -changeReason: String
+      -effectiveDate: String
+      +getTransactionId(): String
+      +getLineNumber(): String
+      +getCurrentProductCode(): String
+      +getNewProductCode(): String
+      +getChangeReason(): String
+      +getEffectiveDate(): String
+    }
+
+    class KosResponse {
+      -resultCode: String
+      -resultMessage: String
+      -transactionId: String
+      -data: Object
+      +getResultCode(): String
+      +getResultMessage(): String
+      +getTransactionId(): String
+      +getData(): Object
+      +isSuccess(): boolean
+      +getErrorDetail(): String
+    }
+
+    class KosAdapterService {
+      -kosProperties: KosProperties
+      -restTemplate: RestTemplate
+      -objectMapper: ObjectMapper
+      -log: Logger
+      +callKosProductChange(changeRequest: ProductChangeRequest): ProductChangeResult
+      +getCustomerInfoFromKos(userId: String): CustomerInfo
+      +getAvailableProductsFromKos(): List<ProductInfo>
+      +getLineStatusFromKos(lineNumber: String): LineStatus
+      -buildKosUrl(endpoint: String): String
+      -createHttpHeaders(): HttpHeaders
+      -handleKosError(response: ResponseEntity<String>): void
+    }
+  }
+
+  ' Exception Classes
+  package "exception" {
+    class ProductChangeException {
+      -errorCode: String
+      -details: String
+      +ProductChangeException(message: String)
+      +ProductChangeException(errorCode: String, message: String, details: String)
+      +getErrorCode(): String
+      +getDetails(): String
+    }
+
+    class ProductValidationException {
+      -validationErrors: List<ValidationDetail>
+      +ProductValidationException(message: String, validationErrors: List<ValidationDetail>)
+      +getValidationErrors(): List<ValidationDetail>
+    }
+
+    class KosConnectionException {
+      -serviceName: String
+      +KosConnectionException(serviceName: String, message: String, cause: Throwable)
+      +getServiceName(): String
+    }
+
+    class CircuitBreakerException {
+      -serviceName: String
+      +CircuitBreakerException(serviceName: String, message: String)
+      +getServiceName(): String
+    }
+  }
+}
+
+' Import Common Classes
+class "com.unicorn.phonebill.common.dto.ApiResponse" as ApiResponse
+class "com.unicorn.phonebill.common.entity.BaseTimeEntity" as BaseTimeEntity
+class "com.unicorn.phonebill.common.exception.ErrorCode" as ErrorCode
+class "com.unicorn.phonebill.common.exception.BusinessException" as BusinessException
+
+' ============= 관계 설정 =============
+
+' Controller Layer Relationships
+ProductController --> ProductService : "uses"
+ProductController --> ApiResponse : "returns"
+
+' DTO Layer Relationships
+ProductMenuResponse --> ProductInfo : "contains"
+CustomerInfoResponse --> CustomerInfo : "contains"
+CustomerInfo --> ProductInfo : "contains"
+CustomerInfo --> ContractInfo : "contains"
+AvailableProductsResponse --> ProductInfo : "contains"
+ProductChangeValidationResponse --> ValidationDetail : "contains"
+ProductChangeResponse --> ProductInfo : "contains"
+ProductChangeHistoryResponse --> ProductChangeHistoryItem : "contains"
+ProductChangeHistoryResponse --> PaginationInfo : "contains"
+ValidationDetail --> CheckType : "uses"
+ValidationDetail --> CheckResult : "uses"
+
+' Service Layer Relationships
+ProductService <|.. ProductServiceImpl : "implements"
+ProductServiceImpl --> KosClientService : "uses"
+ProductServiceImpl --> ProductValidationService : "uses"
+ProductServiceImpl --> ProductCacheService : "uses"
+ProductServiceImpl --> ProductChangeHistoryRepository : "uses"
+
+ProductValidationService --> ProductRepository : "uses"
+ProductValidationService --> ProductCacheService : "uses"
+ProductValidationService --> KosClientService : "uses"
+
+ProductCacheService --> KosClientService : "uses"
+
+KosClientService --> CircuitBreakerService : "uses"
+KosClientService --> RetryService : "uses"
+KosClientService --> KosAdapterService : "uses"
+
+' Domain Layer Relationships  
+ProductChangeHistory --> ProcessStatus : "uses"
+Product --> ProductStatus : "uses"
+ProductChangeResult --> Product : "contains"
+ProductStatus --> ProductStatus : "uses"
+
+' Repository Layer Relationships
+ProductRepository <-- ProductServiceImpl : "uses"
+ProductChangeHistoryRepository <-- ProductServiceImpl : "uses"
+ProductChangeHistoryRepository --> ProductChangeHistoryJpaRepository : "uses"
+ProductChangeHistoryEntity --|> BaseTimeEntity : "extends"
+ProductChangeHistoryEntity --> ProcessStatus : "uses"
+
+' Config Layer Relationships
+RestTemplateConfig --> KosClientService : "configures"
+CacheConfig --> ProductCacheService : "configures"
+CircuitBreakerConfig --> CircuitBreakerService : "configures"
+KosProperties --> KosClientService : "configures"
+
+' External Interface Relationships
+KosAdapterService --> KosRequest : "creates"
+KosAdapterService --> KosResponse : "processes"
+KosClientService --> KosAdapterService : "uses"
+
+' Exception Relationships
+ProductChangeException --|> BusinessException : "extends"
+ProductValidationException --|> BusinessException : "extends"
+KosConnectionException --|> BusinessException : "extends"
+CircuitBreakerException --|> BusinessException : "extends"
+
+ProductValidationException --> ValidationDetail : "contains"
+ProductChangeException --> ErrorCode : "uses"
+
+@enduml

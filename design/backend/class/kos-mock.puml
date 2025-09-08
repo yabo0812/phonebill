@@ -1,0 +1,588 @@
+@startuml
+!theme mono
+
+title KOS-Mock Service 클래스 설계 (상세)
+
+package "com.unicorn.phonebill.kosmock" {
+  
+  package "controller" {
+    class KosMockController {
+      -kosMockService: KosMockService
+      +getBillInfo(lineNumber: String, inquiryMonth: String): ResponseEntity<ApiResponse<MockBillResponse>>
+      +processProductChange(changeRequest: KosProductChangeRequest): ResponseEntity<ApiResponse<MockProductChangeResponse>>
+      +getCustomerInfo(customerId: String): ResponseEntity<ApiResponse<KosCustomerResponse>>
+      +getAvailableProducts(): ResponseEntity<ApiResponse<List<KosProductResponse>>>
+      +getLineStatus(lineNumber: String): ResponseEntity<ApiResponse<KosLineStatusResponse>>
+      -validateBillRequest(lineNumber: String, inquiryMonth: String): void
+      -validateProductChangeRequest(request: KosProductChangeRequest): void
+    }
+  }
+  
+  package "service" {
+    class KosMockService {
+      -billDataService: BillDataService
+      -productDataService: ProductDataService
+      -mockScenarioService: MockScenarioService
+      +getBillInfo(lineNumber: String, inquiryMonth: String): MockBillResponse
+      +processProductChange(changeRequest: KosProductChangeRequest): MockProductChangeResponse
+      +getCustomerInfo(customerId: String): KosCustomerResponse
+      +getAvailableProducts(): List<KosProductResponse>
+      +getLineStatus(lineNumber: String): KosLineStatusResponse
+      -logMockRequest(requestType: String, requestData: Object): void
+      -updateMetrics(requestType: String, scenario: String, responseTime: long): void
+    }
+    
+    class BillDataService {
+      -mockDataRepository: MockDataRepository
+      +generateBillData(lineNumber: String, inquiryMonth: String): BillInfo
+      -calculateDynamicCharges(lineNumber: String, inquiryMonth: String): BillAmount
+      -generateUsageData(lineNumber: String, inquiryMonth: String): UsageInfo
+      -applyDiscounts(billAmount: BillAmount, lineNumber: String): List<DiscountInfo>
+    }
+    
+    class ProductDataService {
+      -mockDataRepository: MockDataRepository
+      -productValidationService: ProductValidationService
+      +executeProductChange(changeRequest: KosProductChangeRequest): ProductChangeResult
+      +getProductInfo(productCode: String): KosProduct
+      +getCustomerProducts(customerId: String): List<KosProduct>
+      -calculateNewMonthlyFee(newProductCode: String): Integer
+    }
+    
+    class ProductValidationService {
+      -mockDataRepository: MockDataRepository
+      +validateProductChange(changeRequest: KosProductChangeRequest): ValidationResult
+      +checkProductCompatibility(currentProduct: String, newProduct: String): Boolean
+      +checkCustomerEligibility(customerId: String, newProductCode: String): Boolean
+      -validateContractConstraints(customerId: String): Boolean
+      -validateBalance(customerId: String): Boolean
+    }
+    
+    class MockScenarioService {
+      -properties: MockProperties
+      +determineScenario(lineNumber: String, inquiryMonth: String): MockScenario
+      +determineProductChangeScenario(lineNumber: String, changeRequest: KosProductChangeRequest): MockScenario
+      +simulateDelay(scenario: MockScenario): void
+      -getScenarioByLineNumber(lineNumber: String): String
+      -getScenarioByProductCodes(currentCode: String, newCode: String): String
+    }
+  }
+  
+  package "dto.request" {
+    class KosBillRequest {
+      +lineNumber: String
+      +inquiryMonth: String
+      +validate(): void
+    }
+    
+    class KosProductChangeRequest {
+      +transactionId: String
+      +lineNumber: String
+      +currentProductCode: String
+      +newProductCode: String
+      +changeReason: String
+      +effectiveDate: String
+      +validate(): void
+    }
+  }
+  
+  package "dto.response" {
+    class MockBillResponse {
+      +resultCode: String
+      +resultMessage: String
+      +billInfo: BillInfo
+    }
+    
+    class MockProductChangeResponse {
+      +resultCode: String
+      +resultMessage: String
+      +transactionId: String
+      +changeInfo: ProductChangeResult
+    }
+    
+    class KosCustomerResponse {
+      +customerId: String
+      +phoneNumber: String
+      +customerName: String
+      +customerType: String
+      +status: String
+      +currentProduct: KosProduct
+    }
+    
+    class KosProductResponse {
+      +productCode: String
+      +productName: String
+      +monthlyFee: Integer
+      +dataLimit: Integer
+      +voiceLimit: Integer
+      +saleStatus: String
+    }
+    
+    class KosLineStatusResponse {
+      +lineNumber: String
+      +status: String
+      +activationDate: LocalDate
+      +contractInfo: ContractInfo
+    }
+  }
+  
+  package "dto.model" {
+    class BillInfo {
+      +phoneNumber: String
+      +billMonth: String
+      +productName: String
+      +contractInfo: ContractInfo
+      +billAmount: BillAmount
+      +discountInfo: List<DiscountInfo>
+      +usage: UsageInfo
+      +installment: InstallmentInfo
+      +terminationFee: TerminationFeeInfo
+      +billingPaymentInfo: BillingPaymentInfo
+    }
+    
+    class ProductChangeResult {
+      +lineNumber: String
+      +newProductCode: String
+      +newProductName: String
+      +changeDate: String
+      +effectiveDate: String
+      +monthlyFee: Integer
+      +processResult: String
+      +resultMessage: String
+    }
+    
+    class ContractInfo {
+      +contractType: String
+      +contractStartDate: LocalDate
+      +contractEndDate: LocalDate
+      +remainingMonths: Integer
+      +penaltyAmount: Integer
+    }
+    
+    class BillAmount {
+      +basicFee: Integer
+      +callFee: Integer
+      +dataFee: Integer
+      +smsFee: Integer
+      +additionalFee: Integer
+      +discountAmount: Integer
+      +totalAmount: Integer
+    }
+    
+    class UsageInfo {
+      +voiceUsage: Integer
+      +dataUsage: Integer
+      +smsUsage: Integer
+      +voiceLimit: Integer
+      +dataLimit: Integer
+      +smsLimit: Integer
+    }
+    
+    class DiscountInfo {
+      +discountType: String
+      +discountName: String
+      +discountAmount: Integer
+      +discountRate: BigDecimal
+    }
+    
+    class InstallmentInfo {
+      +deviceModel: String
+      +totalAmount: Integer
+      +monthlyAmount: Integer
+      +paidAmount: Integer
+      +remainingAmount: Integer
+      +remainingMonths: Integer
+    }
+    
+    class TerminationFeeInfo {
+      +contractPenalty: Integer
+      +installmentRemaining: Integer
+      +otherFees: Integer
+      +totalFee: Integer
+    }
+    
+    class BillingPaymentInfo {
+      +dueDate: LocalDate
+      +paymentDate: LocalDate
+      +paymentStatus: String
+    }
+    
+    class ValidationResult {
+      +valid: Boolean
+      +errorCode: String
+      +errorMessage: String
+      +errorDetails: String
+    }
+    
+    class MockScenario {
+      +type: String
+      +delay: Long
+      +errorCode: String
+      +errorMessage: String
+    }
+    
+    class KosProduct {
+      +productCode: String
+      +productName: String
+      +productType: String
+      +monthlyFee: Integer
+      +dataLimit: Integer
+      +voiceLimit: Integer
+      +smsLimit: Integer
+      +saleStatus: String
+    }
+  }
+  
+  package "repository" {
+    interface MockDataRepository {
+      +getMockBillTemplate(lineNumber: String): Optional<KosCustomerEntity>
+      +getProductInfo(productCode: String): Optional<KosProductEntity>
+      +getAvailableProducts(): List<KosProductEntity>
+      +getCustomerInfo(customerId: String): Optional<KosCustomerEntity>
+      +saveProductChangeResult(changeRequest: KosProductChangeRequest, result: ProductChangeResult): KosProductChangeHistoryEntity
+      +checkProductCompatibility(currentProductCode: String, newProductCode: String): Boolean
+      +getCustomerBalance(customerId: String): Integer
+      +getContractInfo(customerId: String): Optional<KosContractEntity>
+    }
+    
+    class MockDataRepositoryImpl {
+      -customerJpaRepository: KosCustomerJpaRepository
+      -productJpaRepository: KosProductJpaRepository
+      -billJpaRepository: KosBillJpaRepository
+      -usageJpaRepository: KosUsageJpaRepository
+      -discountJpaRepository: KosDiscountJpaRepository
+      -contractJpaRepository: KosContractJpaRepository
+      -installmentJpaRepository: KosInstallmentJpaRepository
+      -terminationFeeJpaRepository: KosTerminationFeeJpaRepository
+      -changeHistoryJpaRepository: KosProductChangeHistoryJpaRepository
+      +getMockBillTemplate(lineNumber: String): Optional<KosCustomerEntity>
+      +getProductInfo(productCode: String): Optional<KosProductEntity>
+      +getAvailableProducts(): List<KosProductEntity>
+      +getCustomerInfo(customerId: String): Optional<KosCustomerEntity>
+      +saveProductChangeResult(changeRequest: KosProductChangeRequest, result: ProductChangeResult): KosProductChangeHistoryEntity
+      +checkProductCompatibility(currentProductCode: String, newProductCode: String): Boolean
+      +getCustomerBalance(customerId: String): Integer
+      +getContractInfo(customerId: String): Optional<KosContractEntity>
+      -buildBillInfo(customer: KosCustomerEntity, inquiryMonth: String): BillInfo
+      -calculateUsage(customer: KosCustomerEntity, inquiryMonth: String): UsageInfo
+    }
+  }
+  
+  package "repository.entity" {
+    class KosCustomerEntity {
+      +customerId: String
+      +phoneNumber: String
+      +customerName: String
+      +customerType: String
+      +status: String
+      +regDate: LocalDate
+      +currentProductCode: String
+      +createdAt: LocalDateTime
+      +updatedAt: LocalDateTime
+    }
+    
+    class KosProductEntity {
+      +productCode: String
+      +productName: String
+      +productType: String
+      +monthlyFee: Integer
+      +dataLimit: Integer
+      +voiceLimit: Integer
+      +smsLimit: Integer
+      +saleStatus: String
+      +saleStartDate: LocalDate
+      +saleEndDate: LocalDate
+      +createdAt: LocalDateTime
+      +updatedAt: LocalDateTime
+    }
+    
+    class KosBillEntity {
+      +billId: Long
+      +customerId: String
+      +phoneNumber: String
+      +billMonth: String
+      +productCode: String
+      +productName: String
+      +basicFee: Integer
+      +callFee: Integer
+      +dataFee: Integer
+      +smsFee: Integer
+      +additionalFee: Integer
+      +discountAmount: Integer
+      +totalAmount: Integer
+      +paymentStatus: String
+      +dueDate: LocalDate
+      +paymentDate: LocalDate
+      +createdAt: LocalDateTime
+    }
+    
+    class KosUsageEntity {
+      +usageId: Long
+      +customerId: String
+      +phoneNumber: String
+      +usageMonth: String
+      +voiceUsage: Integer
+      +dataUsage: Integer
+      +smsUsage: Integer
+      +voiceLimit: Integer
+      +dataLimit: Integer
+      +smsLimit: Integer
+      +createdAt: LocalDateTime
+    }
+    
+    class KosDiscountEntity {
+      +discountId: Long
+      +customerId: String
+      +phoneNumber: String
+      +billMonth: String
+      +discountType: String
+      +discountName: String
+      +discountAmount: Integer
+      +discountRate: BigDecimal
+      +applyStartDate: LocalDate
+      +applyEndDate: LocalDate
+      +createdAt: LocalDateTime
+    }
+    
+    class KosContractEntity {
+      +contractId: Long
+      +customerId: String
+      +phoneNumber: String
+      +contractType: String
+      +contractStartDate: LocalDate
+      +contractEndDate: LocalDate
+      +contractStatus: String
+      +penaltyAmount: Integer
+      +remainingMonths: Integer
+      +createdAt: LocalDateTime
+    }
+    
+    class KosInstallmentEntity {
+      +installmentId: Long
+      +customerId: String
+      +phoneNumber: String
+      +deviceModel: String
+      +totalAmount: Integer
+      +monthlyAmount: Integer
+      +paidAmount: Integer
+      +remainingAmount: Integer
+      +installmentMonths: Integer
+      +remainingMonths: Integer
+      +startDate: LocalDate
+      +endDate: LocalDate
+      +status: String
+      +createdAt: LocalDateTime
+    }
+    
+    class KosTerminationFeeEntity {
+      +feeId: Long
+      +customerId: String
+      +phoneNumber: String
+      +contractPenalty: Integer
+      +installmentRemaining: Integer
+      +otherFees: Integer
+      +totalFee: Integer
+      +calculatedDate: LocalDate
+      +createdAt: LocalDateTime
+    }
+    
+    class KosProductChangeHistoryEntity {
+      +historyId: Long
+      +customerId: String
+      +phoneNumber: String
+      +requestId: String
+      +beforeProductCode: String
+      +afterProductCode: String
+      +changeStatus: String
+      +changeDate: LocalDate
+      +processResult: String
+      +resultMessage: String
+      +requestDatetime: LocalDateTime
+      +processDatetime: LocalDateTime
+      +createdAt: LocalDateTime
+    }
+  }
+  
+  package "repository.jpa" {
+    interface KosCustomerJpaRepository {
+      +findByPhoneNumber(phoneNumber: String): Optional<KosCustomerEntity>
+      +findByCustomerId(customerId: String): Optional<KosCustomerEntity>
+    }
+    
+    interface KosProductJpaRepository {
+      +findByProductCode(productCode: String): Optional<KosProductEntity>
+      +findBySaleStatus(saleStatus: String): List<KosProductEntity>
+    }
+    
+    interface KosBillJpaRepository {
+      +findByPhoneNumberAndBillMonth(phoneNumber: String, billMonth: String): Optional<KosBillEntity>
+      +findByCustomerIdAndBillMonth(customerId: String, billMonth: String): Optional<KosBillEntity>
+    }
+    
+    interface KosUsageJpaRepository {
+      +findByPhoneNumberAndUsageMonth(phoneNumber: String, usageMonth: String): Optional<KosUsageEntity>
+    }
+    
+    interface KosDiscountJpaRepository {
+      +findByPhoneNumberAndBillMonth(phoneNumber: String, billMonth: String): List<KosDiscountEntity>
+    }
+    
+    interface KosContractJpaRepository {
+      +findByCustomerId(customerId: String): Optional<KosContractEntity>
+      +findByPhoneNumber(phoneNumber: String): Optional<KosContractEntity>
+    }
+    
+    interface KosInstallmentJpaRepository {
+      +findByCustomerIdAndStatus(customerId: String, status: String): List<KosInstallmentEntity>
+    }
+    
+    interface KosTerminationFeeJpaRepository {
+      +findByCustomerId(customerId: String): Optional<KosTerminationFeeEntity>
+    }
+    
+    interface KosProductChangeHistoryJpaRepository {
+      +findByRequestId(requestId: String): Optional<KosProductChangeHistoryEntity>
+      +findByPhoneNumberOrderByRequestDatetimeDesc(phoneNumber: String): List<KosProductChangeHistoryEntity>
+    }
+  }
+  
+  package "config" {
+    class MockProperties {
+      +scenario: MockScenarioProperties
+      +delay: MockDelayProperties
+      +error: MockErrorProperties
+    }
+    
+    class MockScenarioProperties {
+      +successLineNumbers: List<String>
+      +noDataLineNumbers: List<String>
+      +systemErrorLineNumbers: List<String>
+      +timeoutLineNumbers: List<String>
+    }
+    
+    class MockDelayProperties {
+      +billInquiry: Long
+      +productChange: Long
+      +timeout: Long
+    }
+    
+    class MockErrorProperties {
+      +rate: Double
+      +enabled: Boolean
+    }
+    
+    class KosMockConfig {
+      +mockProperties(): MockProperties
+      +mockScenarioService(properties: MockProperties): MockScenarioService
+      +taskExecutor(): ThreadPoolTaskExecutor
+    }
+  }
+}
+
+package "Common Module" {
+  package "dto" {
+    class ApiResponse<T> {
+      -success: boolean
+      -message: String
+      -data: T
+      -timestamp: LocalDateTime
+    }
+    
+    class ErrorResponse {
+      -code: String
+      -message: String
+      -details: String
+      -timestamp: LocalDateTime
+    }
+  }
+  
+  package "entity" {
+    abstract class BaseTimeEntity {
+      #createdAt: LocalDateTime
+      #updatedAt: LocalDateTime
+    }
+  }
+  
+  package "exception" {
+    enum ErrorCode {
+      BILL002("KOS 연동 실패")
+      PROD001("상품변경 실패")
+      SYS002("외부 연동 실패")
+    }
+    
+    class BusinessException {
+      -errorCode: ErrorCode
+      -details: String
+    }
+  }
+}
+
+' 관계 설정
+KosMockController --> KosMockService : uses
+KosMockService --> BillDataService : uses
+KosMockService --> ProductDataService : uses
+KosMockService --> MockScenarioService : uses
+BillDataService --> MockDataRepository : uses
+ProductDataService --> MockDataRepository : uses
+ProductDataService --> ProductValidationService : uses
+ProductValidationService --> MockDataRepository : uses
+MockScenarioService --> MockProperties : uses
+
+MockDataRepositoryImpl ..|> MockDataRepository : implements
+MockDataRepositoryImpl --> KosCustomerJpaRepository : uses
+MockDataRepositoryImpl --> KosProductJpaRepository : uses
+MockDataRepositoryImpl --> KosBillJpaRepository : uses
+MockDataRepositoryImpl --> KosUsageJpaRepository : uses
+MockDataRepositoryImpl --> KosDiscountJpaRepository : uses
+MockDataRepositoryImpl --> KosContractJpaRepository : uses
+MockDataRepositoryImpl --> KosInstallmentJpaRepository : uses
+MockDataRepositoryImpl --> KosTerminationFeeJpaRepository : uses
+MockDataRepositoryImpl --> KosProductChangeHistoryJpaRepository : uses
+
+KosCustomerJpaRepository --> KosCustomerEntity : manages
+KosProductJpaRepository --> KosProductEntity : manages
+KosBillJpaRepository --> KosBillEntity : manages
+KosUsageJpaRepository --> KosUsageEntity : manages
+KosDiscountJpaRepository --> KosDiscountEntity : manages
+KosContractJpaRepository --> KosContractEntity : manages
+KosInstallmentJpaRepository --> KosInstallmentEntity : manages
+KosTerminationFeeJpaRepository --> KosTerminationFeeEntity : manages
+KosProductChangeHistoryJpaRepository --> KosProductChangeHistoryEntity : manages
+
+' BaseTimeEntity 상속
+KosCustomerEntity --|> BaseTimeEntity
+KosProductEntity --|> BaseTimeEntity
+KosBillEntity --|> BaseTimeEntity
+KosUsageEntity --|> BaseTimeEntity
+KosDiscountEntity --|> BaseTimeEntity
+KosContractEntity --|> BaseTimeEntity
+KosInstallmentEntity --|> BaseTimeEntity
+KosTerminationFeeEntity --|> BaseTimeEntity
+KosProductChangeHistoryEntity --|> BaseTimeEntity
+
+' DTO 관계
+KosMockController --> KosBillRequest : uses
+KosMockController --> KosProductChangeRequest : uses
+KosMockController --> MockBillResponse : creates
+KosMockController --> MockProductChangeResponse : creates
+KosMockController --> KosCustomerResponse : creates
+KosMockController --> KosProductResponse : creates
+KosMockController --> KosLineStatusResponse : creates
+
+MockBillResponse --> BillInfo : contains
+MockProductChangeResponse --> ProductChangeResult : contains
+BillInfo --> ContractInfo : contains
+BillInfo --> BillAmount : contains
+BillInfo --> UsageInfo : contains
+BillInfo --> InstallmentInfo : contains
+BillInfo --> TerminationFeeInfo : contains
+BillInfo --> BillingPaymentInfo : contains
+BillInfo --> DiscountInfo : contains
+
+' 공통 모듈 사용
+KosMockController --> ApiResponse : uses
+KosMockService --> BusinessException : throws
+ProductValidationService --> ValidationResult : creates
+MockScenarioService --> MockScenario : creates
+
+@enduml

@@ -1,0 +1,176 @@
+@startuml
+!theme mono
+
+title KOS-Mock Service 클래스 설계 (간단)
+
+package "com.unicorn.phonebill.kosmock" {
+  
+  package "controller" {
+    class KosMockController <<Controller>> {
+    }
+  }
+  
+  package "service" {
+    class KosMockService <<Service>> {
+    }
+    
+    class BillDataService <<Service>> {
+    }
+    
+    class ProductDataService <<Service>> {
+    }
+    
+    class ProductValidationService <<Service>> {
+    }
+    
+    class MockScenarioService <<Service>> {
+    }
+  }
+  
+  package "dto" {
+    class KosBillRequest <<DTO>> {
+    }
+    
+    class KosProductChangeRequest <<DTO>> {
+    }
+    
+    class MockBillResponse <<DTO>> {
+    }
+    
+    class MockProductChangeResponse <<DTO>> {
+    }
+    
+    class KosCustomerResponse <<DTO>> {
+    }
+    
+    class KosProductResponse <<DTO>> {
+    }
+    
+    class BillInfo <<Model>> {
+    }
+    
+    class ProductChangeResult <<Model>> {
+    }
+  }
+  
+  package "repository" {
+    interface MockDataRepository <<Repository>> {
+    }
+    
+    class MockDataRepositoryImpl <<Repository>> {
+    }
+  }
+  
+  package "repository.entity" {
+    class KosCustomerEntity <<Entity>> {
+    }
+    
+    class KosProductEntity <<Entity>> {
+    }
+    
+    class KosBillEntity <<Entity>> {
+    }
+    
+    class KosUsageEntity <<Entity>> {
+    }
+    
+    class KosContractEntity <<Entity>> {
+    }
+    
+    class KosInstallmentEntity <<Entity>> {
+    }
+    
+    class KosProductChangeHistoryEntity <<Entity>> {
+    }
+  }
+  
+  package "repository.jpa" {
+    interface KosCustomerJpaRepository <<JPA Repository>> {
+    }
+    
+    interface KosProductJpaRepository <<JPA Repository>> {
+    }
+    
+    interface KosBillJpaRepository <<JPA Repository>> {
+    }
+    
+    interface KosUsageJpaRepository <<JPA Repository>> {
+    }
+    
+    interface KosContractJpaRepository <<JPA Repository>> {
+    }
+    
+    interface KosInstallmentJpaRepository <<JPA Repository>> {
+    }
+    
+    interface KosProductChangeHistoryJpaRepository <<JPA Repository>> {
+    }
+  }
+  
+  package "config" {
+    class MockProperties <<Configuration>> {
+    }
+    
+    class KosMockConfig <<Configuration>> {
+    }
+  }
+}
+
+package "Common Module" {
+  class ApiResponse<T> <<DTO>> {
+  }
+  
+  class BaseTimeEntity <<Entity>> {
+  }
+  
+  class BusinessException <<Exception>> {
+  }
+}
+
+' 관계 설정
+KosMockController --> KosMockService
+KosMockService --> BillDataService
+KosMockService --> ProductDataService
+KosMockService --> MockScenarioService
+BillDataService --> MockDataRepository
+ProductDataService --> MockDataRepository
+ProductDataService --> ProductValidationService
+ProductValidationService --> MockDataRepository
+MockScenarioService --> MockProperties
+
+MockDataRepositoryImpl ..|> MockDataRepository
+MockDataRepositoryImpl --> KosCustomerJpaRepository
+MockDataRepositoryImpl --> KosProductJpaRepository
+MockDataRepositoryImpl --> KosBillJpaRepository
+MockDataRepositoryImpl --> KosUsageJpaRepository
+MockDataRepositoryImpl --> KosContractJpaRepository
+MockDataRepositoryImpl --> KosInstallmentJpaRepository
+MockDataRepositoryImpl --> KosProductChangeHistoryJpaRepository
+
+KosCustomerJpaRepository --> KosCustomerEntity
+KosProductJpaRepository --> KosProductEntity
+KosBillJpaRepository --> KosBillEntity
+KosUsageJpaRepository --> KosUsageEntity
+KosContractJpaRepository --> KosContractEntity
+KosInstallmentJpaRepository --> KosInstallmentEntity
+KosProductChangeHistoryJpaRepository --> KosProductChangeHistoryEntity
+
+KosCustomerEntity --|> BaseTimeEntity
+KosProductEntity --|> BaseTimeEntity
+KosBillEntity --|> BaseTimeEntity
+KosUsageEntity --|> BaseTimeEntity
+KosContractEntity --|> BaseTimeEntity
+KosInstallmentEntity --|> BaseTimeEntity
+KosProductChangeHistoryEntity --|> BaseTimeEntity
+
+KosMockController --> ApiResponse
+
+note top of KosMockController : **API 매핑표**\n\nPOST /kos/bill/inquiry\n- getBillInfo()\n- 요금조회 시뮬레이션\n\nPOST /kos/product/change\n- processProductChange()\n- 상품변경 시뮬레이션\n\nGET /kos/customer/{customerId}\n- getCustomerInfo()\n- 고객정보 조회\n\nGET /kos/products/available\n- getAvailableProducts()\n- 변경가능 상품목록\n\nGET /kos/line/{lineNumber}/status\n- getLineStatus()\n- 회선상태 조회
+
+note right of MockScenarioService : **Mock 시나리오 규칙**\n\n요금조회:\n- 01012345678: 정상응답\n- 01012345679: 데이터없음\n- 01012345680: 시스템오류\n- 01012345681: 타임아웃\n\n상품변경:\n- 01012345678: 정상변경\n- 01012345679: 변경불가\n- 01012345680: 시스템오류\n- 01012345681: 잔액부족\n- PROD001→PROD999: 호환불가
+
+note right of MockDataRepository : **데이터 접근 인터페이스**\n\n주요 메소드:\n- getMockBillTemplate()\n- getProductInfo()\n- getCustomerInfo()\n- saveProductChangeResult()\n- checkProductCompatibility()\n- getCustomerBalance()\n- getContractInfo()
+
+note bottom of KosMockConfig : **Mock 설정**\n\n환경별 시나리오 설정:\n- mock.scenario.success.delay=500ms\n- mock.scenario.error.rate=5%\n- mock.scenario.timeout.enabled=true\n\n스레드풀 설정:\n- 비동기 로깅 및 메트릭 처리
+
+@enduml

@@ -1,0 +1,116 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000'}}}%%
+
+graph TB
+    %% 사용자 및 외부 시스템
+    subgraph "External Systems"
+        User[👤 MVNO 사용자<br/>Peak 1,000 동시사용자]
+        KOS[🏢 KOS-Order System<br/>통신사 백엔드<br/>On-premises]
+    end
+    
+    %% Azure Front Door
+    subgraph "Azure Edge"
+        AFD[🌐 Azure Front Door<br/>+ CDN<br/>Global Load Balancer<br/>DDoS Protection]
+    end
+    
+    %% Azure Virtual Network
+    subgraph "Azure Virtual Network (10.0.0.0/16)"
+        
+        %% Application Gateway Subnet
+        subgraph "Gateway Subnet (10.0.4.0/24)"
+            AppGW[🛡️ Application Gateway<br/>Standard_v2<br/>Multi-Zone<br/>+ WAF (OWASP)]
+        end
+        
+        %% AKS Cluster
+        subgraph "Application Subnet (10.0.1.0/24)"
+            subgraph "AKS Premium Cluster"
+                subgraph "System Node Pool"
+                    SysNodes[⚙️ System Nodes<br/>D2s_v3 × 3-5<br/>Multi-Zone]
+                end
+                
+                subgraph "Application Node Pool"
+                    AppNodes[🖥️ App Nodes<br/>D4s_v3 × 3-10<br/>Multi-Zone<br/>Auto-scaling]
+                    
+                    subgraph "Microservices Pods"
+                        AuthPod[🔐 Auth Service<br/>Replicas: 3-10<br/>200m CPU, 512Mi RAM]
+                        BillPod[📊 Bill-Inquiry Service<br/>Replicas: 3-15<br/>500m CPU, 1Gi RAM]
+                        ProductPod[🔄 Product-Change Service<br/>Replicas: 2-8<br/>300m CPU, 768Mi RAM]
+                        KOSMockPod[🔧 KOS-Mock Service<br/>Replicas: 2-4<br/>200m CPU, 512Mi RAM]
+                    end
+                end
+            end
+            
+        end
+        
+        %% Database Subnet
+        subgraph "Database Subnet (10.0.2.0/24)"
+            PG[🗃️ Azure PostgreSQL<br/>Flexible Server<br/>GeneralPurpose D4s_v3<br/>Zone Redundant HA<br/>256GB Premium SSD<br/>35일 백업]
+            
+            ReadReplica[📚 Read Replicas<br/>D2s_v3<br/>Korea South + Central<br/>읽기 부하 분산]
+        end
+        
+        %% Cache Subnet
+        subgraph "Cache Subnet (10.0.3.0/24)"
+            Redis[⚡ Azure Redis Cache<br/>Premium P2 (6GB)<br/>클러스터링 + 복제<br/>Zone Redundant<br/>Private Endpoint]
+        end
+    end
+    
+    %% Azure 관리형 서비스
+    subgraph "Azure Managed Services"
+        KeyVault[🔑 Azure Key Vault<br/>Premium HSM<br/>암호화키 관리<br/>Private Endpoint]
+        
+        Monitor[📊 Azure Monitor<br/>Log Analytics<br/>Application Insights<br/>Container Insights]
+        
+        ACR[📦 Container Registry<br/>Premium Tier<br/>Geo-replication<br/>보안 스캔]
+    end
+    
+    %% 트래픽 흐름
+    User --> AFD
+    AFD --> AppGW
+    AppGW --> AuthPod
+    AppGW --> BillPod
+    AppGW --> ProductPod
+    AppGW --> KOSMockPod
+    
+    %% 서비스 간 통신
+    AuthPod --> PG
+    BillPod --> PG
+    ProductPod --> PG
+    KOSMockPod --> PG
+    
+    AuthPod --> Redis
+    BillPod --> Redis
+    ProductPod --> Redis
+    
+    %% KOS-Mock 연동 (외부 KOS 시스템 대체)
+    BillPod --> KOSMockPod
+    ProductPod --> KOSMockPod
+    
+    %% 데이터베이스 복제
+    PG --> ReadReplica
+    
+    %% 보안 및 키 관리
+    AuthPod --> KeyVault
+    BillPod --> KeyVault
+    ProductPod --> KeyVault
+    KOSMockPod --> KeyVault
+    
+    %% 모니터링
+    AppNodes --> Monitor
+    PG --> Monitor
+    Redis --> Monitor
+    
+    %% 컨테이너 이미지
+    AppNodes --> ACR
+    
+    %% 스타일링
+    classDef userClass fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef azureClass fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef appClass fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef dataClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef securityClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    
+    class User,KOS userClass
+    class AFD,AppGW,SysNodes,AppNodes azureClass
+    class AuthPod,BillPod,ProductPod,KOSMockPod appClass
+    class PG,Redis,ReadReplica dataClass
+    class KeyVault,Monitor,ACR securityClass

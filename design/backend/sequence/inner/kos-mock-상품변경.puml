@@ -1,0 +1,170 @@
+@startuml
+!theme mono
+title KOS-Mock Service - 상품변경 내부 시퀀스
+
+participant "Product-Change Service<<E>>" as ProductService
+participant "KosMockController" as Controller
+participant "KosMockService" as Service
+participant "ProductDataService" as ProductDataService
+participant "ProductValidationService" as ValidationService
+participant "MockScenarioService" as ScenarioService
+participant "MockDataRepository" as MockRepo
+participant "Mock Data Store<<E>>" as MockDB
+
+== KOS-Mock 상품변경 시뮬레이션 ==
+
+ProductService -> Controller: POST /kos/product/change\nContent-Type: application/json\n{\n  "transactionId": "TXN20241201001",\n  "lineNumber": "01012345678",\n  "currentProductCode": "PROD001",\n  "newProductCode": "PROD002",\n  "changeReason": "고객 요청",\n  "effectiveDate": "20241201"\n}
+activate Controller
+
+Controller -> Controller: 요청 데이터 유효성 검사\n- transactionId: 필수, 중복 체크\n- lineNumber: 11자리 숫자 형식\n- productCode: 상품코드 형식\n- effectiveDate: YYYYMMDD 형식
+
+alt 입력값 오류
+    Controller --> ProductService: 400 Bad Request\n{\n  "resultCode": "E400",\n  "resultMessage": "요청 데이터가 올바르지 않습니다"\n}
+else 입력값 정상
+    Controller -> Service: processProductChange(changeRequest)
+    activate Service
+    
+    == Mock 시나리오 결정 ==
+    
+    Service -> ScenarioService: determineProductChangeScenario(lineNumber, changeRequest)
+    activate ScenarioService
+    
+    ScenarioService -> ScenarioService: 회선번호 및 상품코드 기반 시나리오 결정
+    note right: Mock 상품변경 시나리오\n- 01012345678: 정상 변경\n- 01012345679: 변경 불가\n- 01012345680: 시스템 오류\n- 01012345681: 잔액 부족\n- PROD001→PROD999: 호환 불가\n- 기타: 정상 처리
+    
+    alt 정상 변경 케이스
+        ScenarioService -> ScenarioService: 상품 호환성 확인
+        alt 호환 가능한 상품 변경
+            ScenarioService --> Service: MockScenario{type: "SUCCESS", delay: 2000ms}
+        else 호환 불가능한 상품 변경 (PROD001→PROD999)
+            ScenarioService --> Service: MockScenario{type: "INCOMPATIBLE", delay: 1000ms}
+        end
+        
+    else 변경 불가 케이스 (01012345679)
+        ScenarioService --> Service: MockScenario{type: "NOT_ALLOWED", delay: 1500ms}
+        
+    else 잔액 부족 케이스 (01012345681)
+        ScenarioService --> Service: MockScenario{type: "INSUFFICIENT_BALANCE", delay: 1200ms}
+        
+    else 시스템 오류 케이스 (01012345680)
+        ScenarioService --> Service: MockScenario{type: "SYSTEM_ERROR", delay: 3000ms}
+    end
+    
+    deactivate ScenarioService
+    
+    Service -> Service: 시나리오별 처리 지연\n(실제 KOS 상품변경 처리 시간 모사)
+    note right: 상품변경은 복잡한 처리\n실제보다 긴 응답 시간
+    
+    alt SUCCESS 시나리오
+        Service -> ValidationService: validateProductChange(changeRequest)
+        activate ValidationService
+        
+        ValidationService -> MockRepo: getProductInfo(newProductCode)
+        activate MockRepo
+        
+        MockRepo -> MockDB: SELECT product_name, price, features\nFROM mock_products\nWHERE product_code = ?
+        activate MockDB
+        MockDB --> MockRepo: 상품 정보
+        deactivate MockDB
+        
+        MockRepo --> ValidationService: ProductInfo
+        deactivate MockRepo
+        
+        ValidationService -> ValidationService: 상품변경 가능 여부 확인\n- 현재 상품에서 변경 가능한지\n- 고객 자격 조건 만족하는지\n- 계약 조건 확인
+        
+        ValidationService --> Service: ValidationResult{valid: true}
+        deactivate ValidationService
+        
+        Service -> ProductDataService: executeProductChange(changeRequest)
+        activate ProductDataService
+        
+        ProductDataService -> MockRepo: saveProductChangeResult(changeRequest)
+        activate MockRepo
+        
+        MockRepo -> MockDB: INSERT INTO mock_product_change_history\n(transaction_id, line_number, \n current_product_code, new_product_code,\n change_date, process_result)
+        activate MockDB
+        MockDB --> MockRepo: 변경 이력 저장 완료
+        deactivate MockDB
+        
+        MockRepo --> ProductDataService: 저장 완료
+        deactivate MockRepo
+        
+        ProductDataService -> ProductDataService: 상품변경 완료 정보 생성\n- 새로운 상품 정보\n- 변경 적용일\n- 변경 후 요금 정보
+        
+        ProductDataService --> Service: ProductChangeResult\n{\n  lineNumber: "01012345678",\n  newProductCode: "PROD002",\n  newProductName: "5G 프리미엄",\n  changeDate: "20241201",\n  effectiveDate: "20241201",\n  monthlyFee: 75000,\n  processResult: "정상"\n}
+        deactivate ProductDataService
+        
+        Service --> Controller: MockProductChangeResponse\n{\n  "resultCode": "0000",\n  "resultMessage": "상품변경 완료",\n  "transactionId": "TXN20241201001",\n  "data": productChangeResult\n}
+        deactivate Service
+        
+        Controller --> ProductService: 200 OK\n상품변경 성공 응답
+        deactivate Controller
+        
+    else NOT_ALLOWED 시나리오
+        Service -> Service: 변경 불가 응답 구성
+        Service --> Controller: MockErrorResponse\n{\n  "resultCode": "E101",\n  "resultMessage": "현재 상품에서 요청한 상품으로 변경할 수 없습니다",\n  "transactionId": "TXN20241201001",\n  "errorDetail": "약정 기간 내 상품변경 제한"\n}
+        Controller --> ProductService: 400 Bad Request
+        
+    else INCOMPATIBLE 시나리오
+        Service -> Service: 호환 불가 응답 구성
+        Service --> Controller: MockErrorResponse\n{\n  "resultCode": "E102",\n  "resultMessage": "호환되지 않는 상품입니다",\n  "transactionId": "TXN20241201001",\n  "errorDetail": "선택한 상품은 현재 단말기와 호환되지 않습니다"\n}
+        Controller --> ProductService: 400 Bad Request
+        
+    else INSUFFICIENT_BALANCE 시나리오
+        Service -> Service: 잔액 부족 응답 구성
+        Service --> Controller: MockErrorResponse\n{\n  "resultCode": "E103",\n  "resultMessage": "잔액이 부족하여 상품변경을 할 수 없습니다",\n  "transactionId": "TXN20241201001",\n  "errorDetail": "미납금 정리 후 상품변경 가능"\n}
+        Controller --> ProductService: 400 Bad Request
+        
+    else SYSTEM_ERROR 시나리오
+        Service -> Service: 시스템 오류 응답 구성
+        Service --> Controller: MockErrorResponse\n{\n  "resultCode": "E999",\n  "resultMessage": "시스템 일시 장애로 상품변경 처리를 할 수 없습니다",\n  "transactionId": "TXN20241201001"\n}
+        Controller --> ProductService: 500 Internal Server Error
+    end
+end
+
+== Mock 상품 데이터 관리 ==
+
+note over MockRepo, MockDB
+Mock 상품변경 데이터:
+1. mock_products: 상품 정보 및 요금
+2. mock_product_compatibility: 상품 간 변경 가능 매트릭스
+3. mock_customer_eligibility: 고객별 상품 변경 자격
+4. mock_product_change_history: 변경 이력 추적
+
+상품 변경 규칙:
+- 기본 상품 → 프리미엄: 가능
+- 프리미엄 → 기본: 약정 조건 확인 필요
+- 5G → 4G: 단말기 호환성 확인
+- 데이터 무제한 → 제한: 즉시 가능
+end note
+
+== Mock 비즈니스 로직 시뮬레이션 ==
+
+Service -> Service: 추가 비즈니스 로직 처리 (비동기)
+note right: Mock 비즈니스 시나리오\n1. 고객 알림 발송 시뮬레이션\n2. 정산 시스템 연동 시뮬레이션\n3. 단말기 설정 변경 시뮬레이션\n4. 부가서비스 자동 해지/가입
+
+== 상품변경 고객 정보 조회 (UFR-PROD-020 지원) ==
+
+note over Controller, MockDB
+Mock 서비스는 상품변경 화면을 위한
+고객 정보 및 상품 정보도 제공:
+
+GET /kos/customer/{customerId}
+- 고객 정보, 현재 상품 정보
+
+GET /kos/products/available  
+- 변경 가능한 상품 목록
+
+GET /kos/line/{lineNumber}/status
+- 회선 상태 정보
+end note
+
+== Mock 상품변경 트랜잭션 추적 ==
+
+Service -> Service: 트랜잭션 상태 추적 (비동기)
+note right: Mock 트랜잭션 관리\n- 트랜잭션 ID별 상태 추적\n- 중복 요청 방지\n- 롤백 시나리오 시뮬레이션\n- 분산 트랜잭션 패턴 테스트
+
+Service -> Service: Mock 메트릭 업데이트 (비동기)  
+note right: Mock 서비스 지표\n- 상품변경 성공/실패율\n- 시나리오별 처리 통계\n- 응답 시간 분포\n- 오류 패턴 분석
+
+@enduml

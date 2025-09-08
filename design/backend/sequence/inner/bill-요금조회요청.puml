@@ -1,0 +1,166 @@
+@startuml
+!theme mono
+title Bill-Inquiry Service - 요금조회 요청 내부 시퀀스
+
+participant "API Gateway" as Gateway
+participant "BillController" as Controller
+participant "BillInquiryService" as Service
+participant "BillCacheService" as CacheService
+participant "BillRepository" as BillRepo
+participant "KosClientService" as KosClient
+participant "Redis Cache<<E>>" as Redis
+participant "Bill DB<<E>>" as BillDB
+participant "MVNO AP Server<<E>>" as MVNO
+
+== UFR-BILL-010: 요금조회 메뉴 접근 ==
+
+Gateway -> Controller: GET /api/bill/menu\nAuthorization: Bearer {accessToken}
+activate Controller
+
+Controller -> Controller: 토큰에서 userId, 회선번호 추출
+
+Controller -> Service: getBillMenuData(userId)
+activate Service
+
+Service -> CacheService: getCustomerInfo(userId)
+activate CacheService
+
+CacheService -> Redis: GET customer_info:{userId}
+activate Redis
+
+alt 고객 정보 캐시 Hit
+    Redis --> CacheService: 고객 정보 반환\n{lineNumber, customerName, serviceStatus}
+    deactivate Redis
+    note right: 캐시 히트\n- TTL: 4시간\n- 빠른 응답
+else 고객 정보 캐시 Miss
+    Redis --> CacheService: null
+    deactivate Redis
+    
+    CacheService -> BillRepo: getCustomerInfo(userId)
+    activate BillRepo
+    BillRepo -> BillDB: SELECT line_number, customer_name, service_status\nFROM customer_info\nWHERE user_id = ?
+    activate BillDB
+    BillDB --> BillRepo: 고객 정보
+    deactivate BillDB
+    BillRepo --> CacheService: CustomerInfo
+    deactivate BillRepo
+    
+    CacheService -> Redis: SET customer_info:{userId}\nValue: customerInfo\nTTL: 4시간
+    activate Redis
+    Redis --> CacheService: 캐싱 완료
+    deactivate Redis
+end
+
+CacheService --> Service: CustomerInfo{lineNumber, customerName}
+deactivate CacheService
+
+Service -> Service: 요금조회 메뉴 데이터 구성\n- 회선번호 표시\n- 조회월 선택 옵션 (최근 12개월)\n- 기본값: 당월
+
+Service --> Controller: BillMenuResponse\n{lineNumber, availableMonths, currentMonth}
+deactivate Service
+
+Controller --> Gateway: 200 OK\n요금조회 메뉴 데이터
+deactivate Controller
+
+== UFR-BILL-020: 요금조회 신청 처리 ==
+
+Gateway -> Controller: POST /api/bill/inquiry\n{lineNumber, inquiryMonth?}\nAuthorization: Bearer {accessToken}
+activate Controller
+
+Controller -> Controller: 입력값 검증\n- lineNumber: 필수, 11자리 숫자\n- inquiryMonth: 선택, YYYYMM 형식
+
+alt 입력값 오류
+    Controller --> Gateway: 400 Bad Request\n"입력값을 확인해주세요"
+else 입력값 정상
+    Controller -> Service: inquireBill(lineNumber, inquiryMonth, userId)
+    activate Service
+    
+    Service -> Service: 조회월 처리\ninquiryMonth가 null이면 현재월로 설정
+    
+    == Cache-Aside 패턴으로 요금 정보 조회 ==
+    
+    Service -> CacheService: getCachedBillInfo(lineNumber, inquiryMonth)
+    activate CacheService
+    
+    CacheService -> Redis: GET bill_info:{lineNumber}:{inquiryMonth}
+    activate Redis
+    
+    alt 요금 정보 캐시 Hit (1시간 TTL 내)
+        Redis --> CacheService: 캐시된 요금 정보\n{productName, billingMonth, charge, discount, usage...}
+        deactivate Redis
+        CacheService --> Service: BillInfo (캐시된 데이터)
+        deactivate CacheService
+        note right: 캐시 히트\n- KOS 호출 없이 즉시 응답\n- 응답 시간 < 100ms
+        
+        Service -> Service: 캐시 데이터 유효성 확인\n(생성 시간, 데이터 완전성 체크)
+        
+    else 요금 정보 캐시 Miss
+        Redis --> CacheService: null
+        deactivate Redis
+        CacheService --> Service: null (캐시 데이터 없음)
+        deactivate CacheService
+        
+        == KOS 연동을 통한 요금 정보 조회 ==
+        
+        Service -> KosClient: getBillInfo(lineNumber, inquiryMonth)
+        activate KosClient
+        note right: 다음 단계에서 상세 처리\n(bill-KOS연동.puml 참조)
+        KosClient --> Service: BillInfo 또는 Exception
+        deactivate KosClient
+        
+        alt KOS 연동 성공
+            Service -> CacheService: cacheBillInfo(lineNumber, inquiryMonth, billInfo)
+            activate CacheService
+            CacheService -> Redis: SET bill_info:{lineNumber}:{inquiryMonth}\nValue: billInfo\nTTL: 1시간
+            activate Redis
+            Redis --> CacheService: 캐싱 완료
+            deactivate Redis
+            deactivate CacheService
+            
+        else KOS 연동 실패
+            Service -> Service: 오류 로그 기록
+            Service --> Controller: BillInquiryException\n"요금 조회에 실패하였습니다"
+            Controller --> Gateway: 500 Internal Server Error
+            Gateway --> "Client": 오류 메시지 표시
+        end
+    end
+    
+    alt 요금 정보 획득 성공
+        == 요금조회 결과 전송 (UFR-BILL-040) ==
+        
+        Service -> MVNO: sendBillResult(billInfo)
+        activate MVNO
+        MVNO --> Service: 전송 완료 확인
+        deactivate MVNO
+        
+        Service -> Service: 요금조회 이력 저장 준비\n{userId, lineNumber, inquiryMonth, resultStatus}
+        
+        Service -> BillRepo: saveBillInquiryHistory(historyData)
+        activate BillRepo
+        note right: 비동기 처리\n응답 성능에 영향 없음
+        BillRepo -> BillDB: INSERT INTO bill_inquiry_history\n(user_id, line_number, inquiry_month, \n inquiry_time, result_status)
+        activate BillDB
+        BillDB --> BillRepo: 이력 저장 완료
+        deactivate BillDB
+        deactivate BillRepo
+        
+        Service --> Controller: BillInquiryResult\n{productName, billingMonth, charge, discount, usage, \n estimatedCancellationFee, deviceInstallment, billingInfo}
+        deactivate Service
+        
+        Controller --> Gateway: 200 OK\n요금조회 결과 데이터
+        deactivate Controller
+    end
+end
+
+== 오류 처리 및 로깅 ==
+
+note over Controller, BillDB
+각 단계별 오류 처리:
+1. 입력값 검증 오류 → 400 Bad Request
+2. 권한 없음 → 403 Forbidden  
+3. KOS 연동 오류 → Circuit Breaker 적용
+4. 캐시 장애 → KOS 직접 호출로 우회
+5. DB 오류 → 트랜잭션 롤백 후 재시도
+end note
+
+@enduml

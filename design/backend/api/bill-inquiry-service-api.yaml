@@ -1,0 +1,847 @@
+openapi: 3.0.3
+info:
+  title: Bill-Inquiry Service API
+  description: |
+    통신요금 조회 서비스 API
+    
+    ## 주요 기능
+    - 요금조회 메뉴 조회
+    - 요금 조회 요청 처리
+    - 요금 조회 결과 확인
+    - 요금조회 이력 조회
+    
+    ## 외부 시스템 연동
+    - KOS-Order: 실제 요금 데이터 조회
+    - Redis Cache: 성능 최적화를 위한 캐싱
+    - MVNO AP Server: 결과 전송
+    
+    ## 설계 원칙
+    - Circuit Breaker 패턴: KOS 시스템 연동 시 장애 격리
+    - Cache-Aside 패턴: 1시간 TTL 캐싱으로 성능 최적화
+    - 비동기 이력 저장: 응답 성능에 영향 없는 이력 관리
+  version: 1.0.0
+  contact:
+    name: 이개발/백엔더
+    email: backend@mvno.com
+  license:
+    name: MIT
+servers:
+  - url: https://api-dev.mvno.com
+    description: Development server
+  - url: https://api.mvno.com
+    description: Production server
+
+paths:
+  /bills/menu:
+    get:
+      summary: 요금조회 메뉴 조회
+      description: |
+        UFR-BILL-010: 요금조회 메뉴 접근
+        - 고객 회선번호 표시
+        - 조회월 선택 옵션 제공
+        - 요금 조회 신청 버튼 활성화
+      tags:
+        - Bill Inquiry
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: 요금조회 메뉴 정보
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillMenuResponse'
+              example:
+                success: true
+                data:
+                  customerInfo:
+                    customerId: "CUST001"
+                    lineNumber: "010-1234-5678"
+                  availableMonths:
+                    - "2024-01"
+                    - "2024-02"
+                    - "2024-03"
+                  currentMonth: "2024-03"
+                message: "요금조회 메뉴를 성공적으로 조회했습니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bills/inquiry:
+    post:
+      summary: 요금 조회 요청
+      description: |
+        UFR-BILL-020: 요금조회 신청
+        - 시나리오 1: 조회월 미선택 (당월 청구요금 조회)
+        - 시나리오 2: 조회월 선택 (특정월 청구요금 조회)
+        
+        ## 처리 과정
+        1. Cache-Aside 패턴으로 캐시 확인 (1시간 TTL)
+        2. 캐시 Miss 시 KOS-Order 시스템 연동
+        3. Circuit Breaker 패턴으로 장애 격리
+        4. 결과를 MVNO AP Server로 전송
+        5. 비동기 이력 저장
+      tags:
+        - Bill Inquiry
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BillInquiryRequest'
+            examples:
+              currentMonth:
+                summary: 당월 요금 조회
+                value:
+                  lineNumber: "010-1234-5678"
+              specificMonth:
+                summary: 특정월 요금 조회
+                value:
+                  lineNumber: "010-1234-5678"
+                  inquiryMonth: "2024-02"
+      responses:
+        '200':
+          description: 요금조회 요청 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiryResponse'
+              example:
+                success: true
+                data:
+                  requestId: "REQ_20240308_001"
+                  status: "COMPLETED"
+                  billInfo:
+                    productName: "5G 프리미엄 플랜"
+                    contractInfo: "24개월 약정"
+                    billingMonth: "2024-03"
+                    totalAmount: 89000
+                    discountInfo:
+                      - name: "가족할인"
+                        amount: 10000
+                      - name: "온라인할인"
+                        amount: 5000
+                    usage:
+                      voice: "300분"
+                      sms: "무제한"
+                      data: "100GB"
+                    terminationFee: 150000
+                    deviceInstallment: 45000
+                    paymentInfo:
+                      billingDate: "2024-03-25"
+                      paymentStatus: "PAID"
+                      paymentMethod: "자동이체"
+                message: "요금조회가 완료되었습니다"
+        '202':
+          description: 요금조회 요청 접수 (비동기 처리 중)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiryAsyncResponse'
+              example:
+                success: true
+                data:
+                  requestId: "REQ_20240308_002"
+                  status: "PROCESSING"
+                  estimatedTime: "30초"
+                message: "요금조회 요청이 접수되었습니다"
+        '400':
+          $ref: '#/components/responses/BadRequestError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+        '503':
+          description: KOS 시스템 장애 (Circuit Breaker Open)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                success: false
+                error:
+                  code: "SERVICE_UNAVAILABLE"
+                  message: "일시적으로 서비스 이용이 어렵습니다"
+                  detail: "외부 시스템 연동 장애로 인한 서비스 제한"
+
+  /bills/inquiry/{requestId}:
+    get:
+      summary: 요금 조회 결과 확인
+      description: |
+        비동기로 처리된 요금조회 결과를 확인합니다.
+        requestId를 통해 조회 상태와 결과를 반환합니다.
+      tags:
+        - Bill Inquiry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: requestId
+          in: path
+          required: true
+          description: 요금조회 요청 ID
+          schema:
+            type: string
+            example: "REQ_20240308_001"
+      responses:
+        '200':
+          description: 요금조회 결과 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillInquiryStatusResponse'
+              examples:
+                completed:
+                  summary: 조회 완료
+                  value:
+                    success: true
+                    data:
+                      requestId: "REQ_20240308_001"
+                      status: "COMPLETED"
+                      billInfo:
+                        productName: "5G 프리미엄 플랜"
+                        contractInfo: "24개월 약정"
+                        billingMonth: "2024-03"
+                        totalAmount: 89000
+                        discountInfo:
+                          - name: "가족할인"
+                            amount: 10000
+                        usage:
+                          voice: "300분"
+                          sms: "무제한"
+                          data: "100GB"
+                        terminationFee: 150000
+                        deviceInstallment: 45000
+                        paymentInfo:
+                          billingDate: "2024-03-25"
+                          paymentStatus: "PAID"
+                          paymentMethod: "자동이체"
+                    message: "요금조회 결과를 조회했습니다"
+                processing:
+                  summary: 처리 중
+                  value:
+                    success: true
+                    data:
+                      requestId: "REQ_20240308_002"
+                      status: "PROCESSING"
+                      progress: 75
+                    message: "요금조회를 처리중입니다"
+                failed:
+                  summary: 조회 실패
+                  value:
+                    success: false
+                    data:
+                      requestId: "REQ_20240308_003"
+                      status: "FAILED"
+                      errorMessage: "KOS 시스템 연동 실패"
+                    message: "요금조회에 실패했습니다"
+        '404':
+          $ref: '#/components/responses/NotFoundError'
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /bills/history:
+    get:
+      summary: 요금조회 이력 조회
+      description: |
+        UFR-BILL-040: 요금조회 결과 전송 및 이력 관리
+        - 요금 조회 요청 이력: MVNO → MP
+        - 요금 조회 처리 이력: MP → KOS
+      tags:
+        - Bill Inquiry
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: lineNumber
+          in: query
+          description: 회선번호 (미입력시 인증된 사용자의 모든 회선)
+          schema:
+            type: string
+            example: "010-1234-5678"
+        - name: startDate
+          in: query
+          description: 조회 시작일 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2024-01-01"
+        - name: endDate
+          in: query
+          description: 조회 종료일 (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+            example: "2024-03-31"
+        - name: page
+          in: query
+          description: 페이지 번호 (1부터 시작)
+          schema:
+            type: integer
+            default: 1
+            example: 1
+        - name: size
+          in: query
+          description: 페이지 크기
+          schema:
+            type: integer
+            default: 20
+            maximum: 100
+            example: 20
+        - name: status
+          in: query
+          description: 처리 상태 필터
+          schema:
+            type: string
+            enum: [COMPLETED, PROCESSING, FAILED]
+            example: "COMPLETED"
+      responses:
+        '200':
+          description: 요금조회 이력 조회 성공
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BillHistoryResponse'
+              example:
+                success: true
+                data:
+                  items:
+                    - requestId: "REQ_20240308_001"
+                      lineNumber: "010-1234-5678"
+                      inquiryMonth: "2024-03"
+                      requestTime: "2024-03-08T10:30:00Z"
+                      processTime: "2024-03-08T10:30:15Z"
+                      status: "COMPLETED"
+                      resultSummary: "5G 프리미엄 플랜, 89,000원"
+                    - requestId: "REQ_20240307_045"
+                      lineNumber: "010-1234-5678"
+                      inquiryMonth: "2024-02"
+                      requestTime: "2024-03-07T15:20:00Z"
+                      processTime: "2024-03-07T15:20:12Z"
+                      status: "COMPLETED"
+                      resultSummary: "5G 프리미엄 플랜, 87,500원"
+                  pagination:
+                    currentPage: 1
+                    totalPages: 3
+                    totalItems: 45
+                    pageSize: 20
+                    hasNext: true
+                    hasPrevious: false
+                message: "요금조회 이력을 조회했습니다"
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Auth Service에서 발급된 JWT 토큰
+
+  schemas:
+    BillMenuResponse:
+      type: object
+      required:
+        - success
+        - data
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BillMenuData'
+        message:
+          type: string
+          example: "요금조회 메뉴를 성공적으로 조회했습니다"
+
+    BillMenuData:
+      type: object
+      required:
+        - customerInfo
+        - availableMonths
+        - currentMonth
+      properties:
+        customerInfo:
+          $ref: '#/components/schemas/CustomerInfo'
+        availableMonths:
+          type: array
+          items:
+            type: string
+            format: date
+            description: 조회 가능한 월 (YYYY-MM 형식)
+          example: ["2024-01", "2024-02", "2024-03"]
+        currentMonth:
+          type: string
+          format: date
+          description: 현재 월 (기본 조회 대상)
+          example: "2024-03"
+
+    CustomerInfo:
+      type: object
+      required:
+        - customerId
+        - lineNumber
+      properties:
+        customerId:
+          type: string
+          description: 고객 ID
+          example: "CUST001"
+        lineNumber:
+          type: string
+          pattern: '^010-\d{4}-\d{4}$'
+          description: 고객 회선번호
+          example: "010-1234-5678"
+
+    BillInquiryRequest:
+      type: object
+      required:
+        - lineNumber
+      properties:
+        lineNumber:
+          type: string
+          pattern: '^010-\d{4}-\d{4}$'
+          description: 조회할 회선번호
+          example: "010-1234-5678"
+        inquiryMonth:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+          description: 조회월 (YYYY-MM 형식, 미입력시 당월 조회)
+          example: "2024-02"
+
+    BillInquiryResponse:
+      type: object
+      required:
+        - success
+        - data
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BillInquiryData'
+        message:
+          type: string
+          example: "요금조회가 완료되었습니다"
+
+    BillInquiryData:
+      type: object
+      required:
+        - requestId
+        - status
+      properties:
+        requestId:
+          type: string
+          description: 요금조회 요청 ID
+          example: "REQ_20240308_001"
+        status:
+          type: string
+          enum: [COMPLETED, PROCESSING, FAILED]
+          description: 처리 상태
+          example: "COMPLETED"
+        billInfo:
+          $ref: '#/components/schemas/BillInfo'
+
+    BillInquiryAsyncResponse:
+      type: object
+      required:
+        - success
+        - data
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+          required:
+            - requestId
+            - status
+          properties:
+            requestId:
+              type: string
+              description: 요금조회 요청 ID
+              example: "REQ_20240308_002"
+            status:
+              type: string
+              enum: [PROCESSING]
+              description: 처리 상태
+              example: "PROCESSING"
+            estimatedTime:
+              type: string
+              description: 예상 처리 시간
+              example: "30초"
+        message:
+          type: string
+          example: "요금조회 요청이 접수되었습니다"
+
+    BillInfo:
+      type: object
+      description: KOS-Order 시스템에서 조회된 요금 정보
+      required:
+        - productName
+        - billingMonth
+        - totalAmount
+      properties:
+        productName:
+          type: string
+          description: 현재 이용 중인 요금제
+          example: "5G 프리미엄 플랜"
+        contractInfo:
+          type: string
+          description: 계약 약정 조건
+          example: "24개월 약정"
+        billingMonth:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+          description: 요금 청구 월
+          example: "2024-03"
+        totalAmount:
+          type: integer
+          description: 청구 요금 금액 (원)
+          example: 89000
+        discountInfo:
+          type: array
+          items:
+            $ref: '#/components/schemas/DiscountInfo'
+          description: 적용된 할인 내역
+        usage:
+          $ref: '#/components/schemas/UsageInfo'
+        terminationFee:
+          type: integer
+          description: 중도 해지 시 비용 (원)
+          example: 150000
+        deviceInstallment:
+          type: integer
+          description: 단말기 할부 잔액 (원)
+          example: 45000
+        paymentInfo:
+          $ref: '#/components/schemas/PaymentInfo'
+
+    DiscountInfo:
+      type: object
+      required:
+        - name
+        - amount
+      properties:
+        name:
+          type: string
+          description: 할인 명칭
+          example: "가족할인"
+        amount:
+          type: integer
+          description: 할인 금액 (원)
+          example: 10000
+
+    UsageInfo:
+      type: object
+      required:
+        - voice
+        - sms
+        - data
+      properties:
+        voice:
+          type: string
+          description: 통화 사용량
+          example: "300분"
+        sms:
+          type: string
+          description: SMS 사용량
+          example: "무제한"
+        data:
+          type: string
+          description: 데이터 사용량
+          example: "100GB"
+
+    PaymentInfo:
+      type: object
+      required:
+        - billingDate
+        - paymentStatus
+        - paymentMethod
+      properties:
+        billingDate:
+          type: string
+          format: date
+          description: 요금 청구일
+          example: "2024-03-25"
+        paymentStatus:
+          type: string
+          enum: [PAID, UNPAID, OVERDUE]
+          description: 납부 상태
+          example: "PAID"
+        paymentMethod:
+          type: string
+          description: 납부 방법
+          example: "자동이체"
+
+    BillInquiryStatusResponse:
+      type: object
+      required:
+        - success
+        - data
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BillInquiryStatusData'
+        message:
+          type: string
+          example: "요금조회 결과를 조회했습니다"
+
+    BillInquiryStatusData:
+      type: object
+      required:
+        - requestId
+        - status
+      properties:
+        requestId:
+          type: string
+          description: 요금조회 요청 ID
+          example: "REQ_20240308_001"
+        status:
+          type: string
+          enum: [COMPLETED, PROCESSING, FAILED]
+          description: 처리 상태
+          example: "COMPLETED"
+        progress:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: 처리 진행률 (PROCESSING 상태일 때)
+          example: 75
+        billInfo:
+          $ref: '#/components/schemas/BillInfo'
+        errorMessage:
+          type: string
+          description: 오류 메시지 (FAILED 상태일 때)
+          example: "KOS 시스템 연동 실패"
+
+    BillHistoryResponse:
+      type: object
+      required:
+        - success
+        - data
+        - message
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          $ref: '#/components/schemas/BillHistoryData'
+        message:
+          type: string
+          example: "요금조회 이력을 조회했습니다"
+
+    BillHistoryData:
+      type: object
+      required:
+        - items
+        - pagination
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/BillHistoryItem'
+        pagination:
+          $ref: '#/components/schemas/PaginationInfo'
+
+    BillHistoryItem:
+      type: object
+      required:
+        - requestId
+        - lineNumber
+        - requestTime
+        - status
+      properties:
+        requestId:
+          type: string
+          description: 요금조회 요청 ID
+          example: "REQ_20240308_001"
+        lineNumber:
+          type: string
+          description: 회선번호
+          example: "010-1234-5678"
+        inquiryMonth:
+          type: string
+          pattern: '^\d{4}-\d{2}$'
+          description: 조회월
+          example: "2024-03"
+        requestTime:
+          type: string
+          format: date-time
+          description: 요청일시
+          example: "2024-03-08T10:30:00Z"
+        processTime:
+          type: string
+          format: date-time
+          description: 처리일시
+          example: "2024-03-08T10:30:15Z"
+        status:
+          type: string
+          enum: [COMPLETED, PROCESSING, FAILED]
+          description: 처리 결과
+          example: "COMPLETED"
+        resultSummary:
+          type: string
+          description: 결과 요약
+          example: "5G 프리미엄 플랜, 89,000원"
+
+    PaginationInfo:
+      type: object
+      required:
+        - currentPage
+        - totalPages
+        - totalItems
+        - pageSize
+        - hasNext
+        - hasPrevious
+      properties:
+        currentPage:
+          type: integer
+          description: 현재 페이지
+          example: 1
+        totalPages:
+          type: integer
+          description: 전체 페이지 수
+          example: 3
+        totalItems:
+          type: integer
+          description: 전체 항목 수
+          example: 45
+        pageSize:
+          type: integer
+          description: 페이지 크기
+          example: 20
+        hasNext:
+          type: boolean
+          description: 다음 페이지 존재 여부
+          example: true
+        hasPrevious:
+          type: boolean
+          description: 이전 페이지 존재 여부
+          example: false
+
+    ErrorResponse:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          $ref: '#/components/schemas/ErrorDetail'
+
+    ErrorDetail:
+      type: object
+      required:
+        - code
+        - message
+      properties:
+        code:
+          type: string
+          description: 오류 코드
+          example: "VALIDATION_ERROR"
+        message:
+          type: string
+          description: 오류 메시지
+          example: "요청 데이터가 올바르지 않습니다"
+        detail:
+          type: string
+          description: 상세 오류 정보
+          example: "lineNumber 필드는 필수입니다"
+        timestamp:
+          type: string
+          format: date-time
+          description: 오류 발생 시간
+          example: "2024-03-08T10:30:00Z"
+
+  responses:
+    BadRequestError:
+      description: 잘못된 요청
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "VALIDATION_ERROR"
+              message: "요청 데이터가 올바르지 않습니다"
+              detail: "lineNumber 필드는 필수입니다"
+
+    UnauthorizedError:
+      description: 인증 실패
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "UNAUTHORIZED"
+              message: "인증이 필요합니다"
+              detail: "유효한 JWT 토큰을 제공해주세요"
+
+    ForbiddenError:
+      description: 권한 부족
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "FORBIDDEN"
+              message: "서비스 이용 권한이 없습니다"
+              detail: "요금조회 서비스에 대한 접근 권한이 필요합니다"
+
+    NotFoundError:
+      description: 리소스를 찾을 수 없음
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "NOT_FOUND"
+              message: "요청한 데이터를 찾을 수 없습니다"
+              detail: "해당 requestId에 대한 조회 결과가 없습니다"
+
+    InternalServerError:
+      description: 서버 내부 오류
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error:
+              code: "INTERNAL_SERVER_ERROR"
+              message: "서버 내부 오류가 발생했습니다"
+              detail: "잠시 후 다시 시도해주세요"
+
+tags:
+  - name: Bill Inquiry
+    description: 요금조회 관련 API
+    externalDocs:
+      description: 외부시퀀스설계서 - 요금조회플로우
+      url: "design/backend/sequence/outer/요금조회플로우.puml"
+
+externalDocs:
+  description: 통신요금 관리 서비스 유저스토리
+  url: "design/userstory.md"

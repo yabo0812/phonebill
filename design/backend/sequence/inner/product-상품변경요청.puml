@@ -1,0 +1,246 @@
+@startuml
+!theme mono
+title Product-Change Service - 상품변경 요청 내부 시퀀스
+
+participant "API Gateway" as Gateway
+participant "ProductController" as Controller
+participant "ProductChangeService" as Service
+participant "ProductCacheService" as CacheService
+participant "ProductValidationService" as ValidationService
+participant "ProductRepository" as ProductRepo
+participant "KosClientService" as KosClient
+participant "Redis Cache<<E>>" as Redis
+participant "Product DB<<E>>" as ProductDB
+participant "MVNO AP Server<<E>>" as MVNO
+
+== UFR-PROD-010: 상품변경 메뉴 접근 ==
+
+Gateway -> Controller: GET /product/menu\nAuthorization: Bearer {accessToken}
+activate Controller
+
+Controller -> Controller: JWT 토큰에서 userId 추출
+
+Controller -> Service: getProductMenuData(userId)
+activate Service
+
+Service -> CacheService: getCustomerProductInfo(userId)
+activate CacheService
+
+CacheService -> Redis: GET customer_product:{userId}
+activate Redis
+
+alt 고객 상품 정보 캐시 Hit
+    Redis --> CacheService: 고객 상품 정보 반환\n{lineNumber, customerId, currentProductCode, productName}
+    deactivate Redis
+    note right: 캐시 히트\n- TTL: 4시간\n- 빠른 응답
+
+else 고객 상품 정보 캐시 Miss
+    Redis --> CacheService: null
+    deactivate Redis
+    
+    CacheService -> KosClient: getCustomerInfo(userId)
+    activate KosClient
+    note right: KOS-Mock에서 고객 정보 조회\n(kos-mock-상품변경.puml 참조)
+    KosClient --> CacheService: CustomerProductInfo
+    deactivate KosClient
+    
+    CacheService -> Redis: SET customer_product:{userId}\nValue: customerProductInfo\nTTL: 4시간
+    activate Redis
+    Redis --> CacheService: 캐싱 완료
+    deactivate Redis
+end
+
+CacheService --> Service: CustomerProductInfo
+deactivate CacheService
+
+Service --> Controller: ProductMenuResponse\n{lineNumber, customerId, currentProduct}
+deactivate Service
+
+Controller --> Gateway: 200 OK\n상품변경 메뉴 데이터
+deactivate Controller
+
+== UFR-PROD-020: 상품변경 화면 접근 ==
+
+Gateway -> Controller: GET /product/change\nAuthorization: Bearer {accessToken}
+activate Controller
+
+Controller -> Service: getProductChangeScreen(userId)
+activate Service
+
+== 현재 상품 정보 및 변경 가능 상품 목록 조회 ==
+
+Service -> CacheService: getCurrentProductInfo(userId)
+activate CacheService
+CacheService -> Redis: GET current_product:{userId}
+activate Redis
+
+alt 현재 상품 정보 캐시 Miss
+    Redis --> CacheService: null
+    deactivate Redis
+    
+    CacheService -> KosClient: getCurrentProduct(userId)
+    activate KosClient
+    KosClient --> CacheService: CurrentProductInfo
+    deactivate KosClient
+    
+    CacheService -> Redis: SET current_product:{userId}\nTTL: 2시간
+    activate Redis
+    Redis --> CacheService: 캐싱 완료
+    deactivate Redis
+else 현재 상품 정보 캐시 Hit
+    Redis --> CacheService: CurrentProductInfo
+    deactivate Redis
+end
+
+CacheService --> Service: CurrentProductInfo
+deactivate CacheService
+
+Service -> CacheService: getAvailableProducts()
+activate CacheService
+
+CacheService -> Redis: GET available_products:all
+activate Redis
+
+alt 상품 목록 캐시 Miss
+    Redis --> CacheService: null
+    deactivate Redis
+    
+    CacheService -> KosClient: getAvailableProducts()
+    activate KosClient
+    KosClient --> CacheService: List<AvailableProduct>
+    deactivate KosClient
+    
+    CacheService -> Redis: SET available_products:all\nTTL: 24시간
+    activate Redis
+    Redis --> CacheService: 캐싱 완료
+    deactivate Redis
+else 상품 목록 캐시 Hit
+    Redis --> CacheService: List<AvailableProduct>
+    deactivate Redis
+end
+
+CacheService --> Service: List<AvailableProduct>
+deactivate CacheService
+
+Service -> Service: 변경 가능한 상품 필터링\n- 현재 상품과 다른 상품\n- 판매중인 상품\n- 사업자 일치 상품
+
+Service --> Controller: ProductChangeScreenResponse\n{currentProduct, availableProducts}
+deactivate Service
+
+Controller --> Gateway: 200 OK\n상품변경 화면 데이터
+deactivate Controller
+
+== UFR-PROD-030: 상품변경 요청 및 사전체크 ==
+
+Gateway -> Controller: POST /product/request\n{\n  "lineNumber": "01012345678",\n  "currentProductCode": "PROD001",\n  "newProductCode": "PROD002"\n}\nAuthorization: Bearer {accessToken}
+activate Controller
+
+Controller -> Controller: 입력값 검증\n- lineNumber: 11자리 숫자\n- productCode: 필수값, 형식 확인
+
+alt 입력값 오류
+    Controller --> Gateway: 400 Bad Request\n"입력값을 확인해주세요"
+else 입력값 정상
+    Controller -> Service: requestProductChange(changeRequest, userId)
+    activate Service
+    
+    == 상품변경 사전체크 수행 ==
+    
+    Service -> ValidationService: validateProductChange(changeRequest)
+    activate ValidationService
+    
+    ValidationService -> ValidationService: 1. 판매중인 상품 확인
+    ValidationService -> CacheService: getProductStatus(newProductCode)
+    activate CacheService
+    CacheService -> Redis: GET product_status:{newProductCode}
+    
+    alt 상품 상태 캐시 Miss
+        Redis --> CacheService: null
+        CacheService -> ProductRepo: getProductStatus(newProductCode)
+        activate ProductRepo
+        ProductRepo -> ProductDB: SELECT status, sales_status\nFROM products\nWHERE product_code = ?
+        activate ProductDB
+        ProductDB --> ProductRepo: 상품 상태 정보
+        deactivate ProductDB
+        ProductRepo --> CacheService: ProductStatus
+        deactivate ProductRepo
+        
+        CacheService -> Redis: SET product_status:{newProductCode}\nTTL: 1시간
+    else 상품 상태 캐시 Hit
+        Redis --> CacheService: ProductStatus
+    end
+    
+    deactivate Redis
+    CacheService --> ValidationService: ProductStatus
+    deactivate CacheService
+    
+    alt 신규 상품이 판매 중이 아님
+        ValidationService --> Service: ValidationException\n"현재 판매중인 상품이 아닙니다"
+    else 신규 상품 판매 중
+        ValidationService -> ValidationService: 2. 사업자 일치 확인
+        ValidationService -> ValidationService: 고객 사업자와 상품 사업자 비교
+        
+        alt 사업자 불일치
+            ValidationService --> Service: ValidationException\n"변경 요청한 사업자에서 판매중인 상품이 아닙니다"
+        else 사업자 일치
+            ValidationService -> ValidationService: 3. 회선 사용상태 확인
+            ValidationService -> CacheService: getLineStatus(lineNumber)
+            activate CacheService
+            
+            CacheService -> Redis: GET line_status:{lineNumber}
+            activate Redis
+            alt 회선 상태 캐시 Miss
+                Redis --> CacheService: null
+                deactivate Redis
+                CacheService -> KosClient: getLineStatus(lineNumber)
+                activate KosClient
+                KosClient --> CacheService: LineStatus
+                deactivate KosClient
+                CacheService -> Redis: SET line_status:{lineNumber}\nTTL: 30분
+                activate Redis
+                Redis --> CacheService: 캐싱 완료
+                deactivate Redis
+            else 회선 상태 캐시 Hit
+                Redis --> CacheService: LineStatus
+                deactivate Redis
+            end
+            
+            CacheService --> ValidationService: LineStatus
+            deactivate CacheService
+            
+            alt 회선이 사용 중이 아님 (정지 상태)
+                ValidationService --> Service: ValidationException\n"변경 요청 회선은 사용 중인 상태가 아닙니다"
+            else 회선 사용 중 (정상)
+                ValidationService --> Service: ValidationResult{success: true}
+                deactivate ValidationService
+                
+                Service -> ProductRepo: saveChangeRequest(changeRequest, "PRE_CHECK_PASSED")
+                activate ProductRepo
+                ProductRepo -> ProductDB: INSERT INTO product_change_request\n(user_id, line_number, current_product_code, \n new_product_code, request_time, status)
+                activate ProductDB
+                ProductDB --> ProductRepo: 요청 저장 완료
+                deactivate ProductDB
+                deactivate ProductRepo
+                
+                Service --> Controller: PreCheckResult{success: true, message: "상품 변경이 진행되었다"}
+                deactivate Service
+                
+                Controller --> Gateway: 200 OK\n{status: "PRE_CHECK_PASSED", message: "상품 사전 체크에 성공하였다"}
+                deactivate Controller
+            end
+        end
+    end
+end
+
+== 사전체크 실패 처리 ==
+
+alt 사전체크 실패
+    Service -> ProductRepo: saveChangeRequest(changeRequest, "PRE_CHECK_FAILED")
+    activate ProductRepo
+    ProductRepo -> ProductDB: INSERT INTO product_change_request\n(..., status, failure_reason)
+    deactivate ProductRepo
+    
+    Service --> Controller: PreCheckException{reason: failureReason}
+    Controller --> Gateway: 400 Bad Request\n{status: "PRE_CHECK_FAILED", message: "상품 사전 체크에 실패하였다"}
+end
+
+@enduml

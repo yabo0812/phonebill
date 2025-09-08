@@ -1,0 +1,139 @@
+@startuml
+!theme mono
+title KOS-Mock Service - 요금조회 내부 시퀀스
+
+participant "Bill-Inquiry Service<<E>>" as BillService
+participant "KosMockController" as Controller
+participant "KosMockService" as Service
+participant "BillDataService" as BillDataService
+participant "MockScenarioService" as ScenarioService
+participant "MockDataRepository" as MockRepo
+participant "Mock Data Store<<E>>" as MockDB
+
+== KOS-Mock 요금조회 시뮬레이션 ==
+
+BillService -> Controller: POST /kos/bill/inquiry\nContent-Type: application/json\n{\n  "lineNumber": "01012345678",\n  "inquiryMonth": "202412"\n}
+activate Controller
+
+Controller -> Controller: 요청 데이터 유효성 검사\n- lineNumber: 11자리 숫자 형식\n- inquiryMonth: YYYYMM 형식\n- 필수값 확인
+
+alt 입력값 오류
+    Controller --> BillService: 400 Bad Request\n{\n  "resultCode": "E400",\n  "resultMessage": "입력값이 올바르지 않습니다"\n}
+else 입력값 정상
+    Controller -> Service: getBillInfo(lineNumber, inquiryMonth)
+    activate Service
+    
+    == Mock 시나리오 결정 ==
+    
+    Service -> ScenarioService: determineScenario(lineNumber, inquiryMonth)
+    activate ScenarioService
+    
+    ScenarioService -> ScenarioService: 회선번호 기반 시나리오 결정
+    note right: Mock 시나리오 규칙\n- 01012345678: 정상 케이스\n- 01012345679: 데이터 없음\n- 01012345680: 시스템 오류\n- 01012345681: 타임아웃 시뮬레이션\n- 기타: 정상 케이스로 처리
+    
+    alt 정상 케이스 (01012345678 또는 기타)
+        ScenarioService --> Service: MockScenario{type: "SUCCESS", delay: 500ms}
+    else 데이터 없음 케이스 (01012345679)
+        ScenarioService --> Service: MockScenario{type: "NO_DATA", delay: 300ms}
+    else 시스템 오류 케이스 (01012345680)
+        ScenarioService --> Service: MockScenario{type: "SYSTEM_ERROR", delay: 1000ms}
+    else 타임아웃 시뮬레이션 (01012345681)
+        ScenarioService --> Service: MockScenario{type: "TIMEOUT", delay: 5000ms}
+    end
+    
+    deactivate ScenarioService
+    
+    Service -> Service: 시나리오별 지연 처리\n(실제 KOS 응답 시간 시뮬레이션)
+    note right: Thread.sleep(scenario.delay)\n실제 KOS 응답 시간 모사
+    
+    alt SUCCESS 시나리오
+        Service -> BillDataService: generateBillData(lineNumber, inquiryMonth)
+        activate BillDataService
+        
+        BillDataService -> MockRepo: getMockBillTemplate(lineNumber)
+        activate MockRepo
+        
+        MockRepo -> MockDB: SELECT * FROM mock_bill_templates\nWHERE line_number = ? OR is_default = true
+        activate MockDB
+        MockDB --> MockRepo: Mock 데이터 템플릿
+        deactivate MockDB
+        
+        MockRepo --> BillDataService: BillTemplate
+        deactivate MockRepo
+        
+        BillDataService -> BillDataService: 동적 데이터 생성\n- 조회월 기반 요금 계산\n- 사용량 랜덤 생성\n- 할인정보 적용
+        
+        BillDataService --> Service: BillInfo\n{\n  productName: "5G 프리미엄",\n  contractInfo: "24개월 약정",\n  billingMonth: "202412",\n  charge: 75000,\n  discountInfo: "가족할인 10000원",\n  usage: {voice: "250분", data: "20GB"},\n  estimatedCancellationFee: 120000,\n  deviceInstallment: 35000,\n  billingPaymentInfo: {\n    billingDate: "2024-12-25",\n    paymentStatus: "완료"\n  }\n}
+        deactivate BillDataService
+        
+        Service -> Service: 응답 데이터 구성
+        Service --> Controller: MockBillResponse\n{\n  "resultCode": "0000",\n  "resultMessage": "성공",\n  "data": billInfo\n}
+        deactivate Service
+        
+        Controller --> BillService: 200 OK\n정상 요금조회 응답
+        deactivate Controller
+        
+    else NO_DATA 시나리오
+        Service -> Service: 데이터 없음 응답 구성
+        Service --> Controller: MockErrorResponse\n{\n  "resultCode": "E002",\n  "resultMessage": "해당 월의 요금 데이터가 존재하지 않습니다",\n  "data": null\n}
+        Controller --> BillService: 200 OK\n(비즈니스 오류는 200으로 응답)
+        
+    else SYSTEM_ERROR 시나리오
+        Service -> Service: 시스템 오류 응답 구성
+        Service --> Controller: MockErrorResponse\n{\n  "resultCode": "E999",\n  "resultMessage": "시스템 일시 장애가 발생했습니다",\n  "data": null\n}
+        Controller --> BillService: 500 Internal Server Error
+        
+    else TIMEOUT 시나리오
+        Service -> Service: 타임아웃 시뮬레이션\n(5초 대기 후 응답)
+        note right: KOS 타임아웃 시나리오\nCircuit Breaker 테스트용
+        
+        alt 클라이언트가 타임아웃 전에 대기
+            Service --> Controller: 지연된 정상 응답
+            Controller --> BillService: 200 OK (지연 응답)
+        else 클라이언트 타임아웃 (3초)
+            note right: 클라이언트에서 타임아웃으로\n연결 종료됨
+        end
+    end
+end
+
+== Mock 데이터 관리 ==
+
+note over MockRepo, MockDB
+Mock 데이터베이스 구조:
+1. mock_bill_templates: 요금 템플릿 데이터
+2. mock_scenarios: 시나리오별 설정
+3. mock_usage_patterns: 사용량 패턴 데이터
+4. mock_products: 상품 정보 데이터
+
+동적 데이터 생성:
+- 회선번호별 고유 패턴
+- 월별 사용량 변화
+- 계절별 요금 변동
+- 할인 정책 적용
+end note
+
+== Mock 시나리오 설정 ==
+
+note over ScenarioService
+Mock 시나리오 관리:
+1. 환경변수로 시나리오 설정 가능
+2. 회선번호 패턴 기반 동작 결정  
+3. 응답 지연 시간 조절
+4. 오류율 시뮬레이션
+5. 부하 테스트 지원
+
+설정 예시:
+- mock.scenario.success.delay=500ms
+- mock.scenario.error.rate=5%
+- mock.scenario.timeout.enabled=true
+end note
+
+== 로깅 및 모니터링 ==
+
+Service -> Service: Mock 요청/응답 로깅 (비동기)
+note right: Mock 서비스 모니터링\n- 요청 통계\n- 시나리오별 호출 현황\n- 응답 시간 분석\n- 오류 패턴 추적
+
+Service -> Service: 메트릭 업데이트 (비동기)
+note right: Mock 서비스 지표\n- 총 호출 횟수\n- 시나리오별 분포\n- 평균 응답 시간\n- 성공/실패 비율
+
+@enduml

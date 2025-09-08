@@ -1,0 +1,40 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="api-gateway" type="GradleRunConfiguration" factoryName="Gradle">
+    <ExternalSystemSettings>
+      <option name="env">
+        <map>
+          <entry key="SPRING_PROFILES_ACTIVE" value="dev" />
+          <entry key="SERVER_PORT" value="8080" />
+          <entry key="JWT_SECRET" value="phonebill-jwt-secret-key-2025-dev" />
+          <entry key="AUTH_SERVICE_URL" value="http://localhost:8081" />
+          <entry key="BILL_SERVICE_URL" value="http://localhost:8082" />
+          <entry key="PRODUCT_SERVICE_URL" value="http://localhost:8083" />
+          <entry key="KOS_MOCK_SERVICE_URL" value="http://localhost:8084" />
+          <entry key="LOG_FILE" value="logs/api-gateway.log" />
+          <entry key="LOG_LEVEL_GATEWAY" value="DEBUG" />
+          <entry key="LOG_LEVEL_SPRING_CLOUD_GATEWAY" value="DEBUG" />
+          <entry key="LOG_LEVEL_REACTOR_NETTY" value="INFO" />
+          <entry key="LOG_LEVEL_ROOT" value="INFO" />
+        </map>
+      </option>
+      <option name="executionName" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <option name="scriptParameters" value="" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value="api-gateway:bootRun" />
+        </list>
+      </option>
+      <option name="vmOptions" value="" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>true</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <RunAsTest>false</RunAsTest>
+    <method v="2" />
+  </configuration>
+</component>

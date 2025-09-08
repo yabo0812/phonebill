@@ -1,0 +1,676 @@
+@startuml
+!theme mono
+title Bill-Inquiry Service - 상세 클래스 설계
+
+' 패키지별 클래스 구조
+package "com.unicorn.phonebill.bill" {
+  
+  package "controller" {
+    class BillController {
+      -billService: BillService
+      -jwtTokenUtil: JwtTokenUtil
+      +getBillMenu(authorization: String): ResponseEntity<ApiResponse<BillMenuData>>
+      +inquireBill(request: BillInquiryRequest, authorization: String): ResponseEntity<ApiResponse<BillInquiryData>>
+      +getBillInquiryStatus(requestId: String, authorization: String): ResponseEntity<ApiResponse<BillInquiryStatusData>>
+      +getBillHistory(lineNumber: String, startDate: String, endDate: String, page: int, size: int, status: String, authorization: String): ResponseEntity<ApiResponse<BillHistoryData>>
+      -extractUserInfoFromToken(authorization: String): JwtTokenVerifyDTO
+      -validateRequestParameters(request: Object): void
+    }
+  }
+  
+  package "dto" {
+    ' API Request/Response DTOs
+    class BillMenuData {
+      -customerInfo: CustomerInfo
+      -availableMonths: List<String>
+      -currentMonth: String
+      +BillMenuData(customerInfo: CustomerInfo, availableMonths: List<String>, currentMonth: String)
+      +getCustomerInfo(): CustomerInfo
+      +getAvailableMonths(): List<String>
+      +getCurrentMonth(): String
+    }
+    
+    class CustomerInfo {
+      -customerId: String
+      -lineNumber: String
+      +CustomerInfo(customerId: String, lineNumber: String)
+      +getCustomerId(): String
+      +getLineNumber(): String
+    }
+    
+    class BillInquiryRequest {
+      -lineNumber: String
+      -inquiryMonth: String
+      +BillInquiryRequest()
+      +getLineNumber(): String
+      +setLineNumber(lineNumber: String): void
+      +getInquiryMonth(): String
+      +setInquiryMonth(inquiryMonth: String): void
+      +isValid(): boolean
+    }
+    
+    class BillInquiryData {
+      -requestId: String
+      -status: String
+      -billInfo: BillInfo
+      +BillInquiryData(requestId: String, status: String)
+      +BillInquiryData(requestId: String, status: String, billInfo: BillInfo)
+      +getRequestId(): String
+      +getStatus(): String
+      +getBillInfo(): BillInfo
+      +setBillInfo(billInfo: BillInfo): void
+    }
+    
+    class BillInquiryAsyncData {
+      -requestId: String
+      -status: String
+      -estimatedTime: String
+      +BillInquiryAsyncData(requestId: String, status: String, estimatedTime: String)
+      +getRequestId(): String
+      +getStatus(): String
+      +getEstimatedTime(): String
+    }
+    
+    class BillInquiryStatusData {
+      -requestId: String
+      -status: String
+      -progress: Integer
+      -billInfo: BillInfo
+      -errorMessage: String
+      +BillInquiryStatusData(requestId: String, status: String)
+      +getRequestId(): String
+      +getStatus(): String
+      +getProgress(): Integer
+      +setProgress(progress: Integer): void
+      +getBillInfo(): BillInfo
+      +setBillInfo(billInfo: BillInfo): void
+      +getErrorMessage(): String
+      +setErrorMessage(errorMessage: String): void
+    }
+    
+    class BillHistoryData {
+      -items: List<BillHistoryItem>
+      -pagination: PaginationInfo
+      +BillHistoryData(items: List<BillHistoryItem>, pagination: PaginationInfo)
+      +getItems(): List<BillHistoryItem>
+      +getPagination(): PaginationInfo
+    }
+    
+    class BillHistoryItem {
+      -requestId: String
+      -lineNumber: String
+      -inquiryMonth: String
+      -requestTime: LocalDateTime
+      -processTime: LocalDateTime
+      -status: String
+      -resultSummary: String
+      +BillHistoryItem()
+      +getRequestId(): String
+      +setRequestId(requestId: String): void
+      +getLineNumber(): String
+      +setLineNumber(lineNumber: String): void
+      +getInquiryMonth(): String
+      +setInquiryMonth(inquiryMonth: String): void
+      +getRequestTime(): LocalDateTime
+      +setRequestTime(requestTime: LocalDateTime): void
+      +getProcessTime(): LocalDateTime
+      +setProcessTime(processTime: LocalDateTime): void
+      +getStatus(): String
+      +setStatus(status: String): void
+      +getResultSummary(): String
+      +setResultSummary(resultSummary: String): void
+    }
+    
+    class PaginationInfo {
+      -currentPage: int
+      -totalPages: int
+      -totalItems: long
+      -pageSize: int
+      -hasNext: boolean
+      -hasPrevious: boolean
+      +PaginationInfo(currentPage: int, totalPages: int, totalItems: long, pageSize: int)
+      +getCurrentPage(): int
+      +getTotalPages(): int
+      +getTotalItems(): long
+      +getPageSize(): int
+      +isHasNext(): boolean
+      +isHasPrevious(): boolean
+    }
+  }
+  
+  package "service" {
+    interface BillService {
+      +getBillMenuData(userId: String, lineNumber: String): BillMenuData
+      +inquireBill(lineNumber: String, inquiryMonth: String, userId: String): BillInquiryData
+      +getBillInquiryStatus(requestId: String, userId: String): BillInquiryStatusData
+      +getBillHistory(lineNumber: String, startDate: String, endDate: String, page: int, size: int, status: String, userId: String): BillHistoryData
+    }
+    
+    class BillServiceImpl {
+      -billCacheService: BillCacheService
+      -kosClientService: KosClientService
+      -billRepository: BillHistoryRepository
+      -mvnoApiClient: MvnoApiClient
+      +getBillMenuData(userId: String, lineNumber: String): BillMenuData
+      +inquireBill(lineNumber: String, inquiryMonth: String, userId: String): BillInquiryData
+      +getBillInquiryStatus(requestId: String, userId: String): BillInquiryStatusData
+      +getBillHistory(lineNumber: String, startDate: String, endDate: String, page: int, size: int, status: String, userId: String): BillHistoryData
+      -generateRequestId(): String
+      -getCurrentMonth(): String
+      -getAvailableMonths(): List<String>
+      -processCurrentMonthInquiry(lineNumber: String, userId: String): BillInquiryData
+      -processSpecificMonthInquiry(lineNumber: String, inquiryMonth: String, userId: String): BillInquiryData
+      -saveBillInquiryHistoryAsync(userId: String, lineNumber: String, inquiryMonth: String, requestId: String, status: String): void
+      -sendResultToMvnoAsync(billInfo: BillInfo): void
+    }
+    
+    interface KosClientService {
+      +getBillInfo(lineNumber: String, inquiryMonth: String): BillInfo
+      +isServiceAvailable(): boolean
+    }
+    
+    class KosClientServiceImpl {
+      -kosAdapterService: KosAdapterService
+      -circuitBreakerService: CircuitBreakerService
+      -retryService: RetryService
+      -billRepository: KosInquiryHistoryRepository
+      +getBillInfo(lineNumber: String, inquiryMonth: String): BillInfo
+      +isServiceAvailable(): boolean
+      -executeWithCircuitBreaker(lineNumber: String, inquiryMonth: String): BillInfo
+      -executeWithRetry(lineNumber: String, inquiryMonth: String): BillInfo
+      -saveKosInquiryHistory(lineNumber: String, inquiryMonth: String, status: String, errorMessage: String): void
+    }
+    
+    interface BillCacheService {
+      +getCachedBillInfo(lineNumber: String, inquiryMonth: String): BillInfo
+      +cacheBillInfo(lineNumber: String, inquiryMonth: String, billInfo: BillInfo): void
+      +getCustomerInfo(userId: String): CustomerInfo
+      +cacheCustomerInfo(userId: String, customerInfo: CustomerInfo): void
+      +evictBillInfoCache(lineNumber: String, inquiryMonth: String): void
+    }
+    
+    class BillCacheServiceImpl {
+      -redisTemplate: RedisTemplate<String, Object>
+      -billRepository: BillHistoryRepository
+      +getCachedBillInfo(lineNumber: String, inquiryMonth: String): BillInfo
+      +cacheBillInfo(lineNumber: String, inquiryMonth: String, billInfo: BillInfo): void
+      +getCustomerInfo(userId: String): CustomerInfo
+      +cacheCustomerInfo(userId: String, customerInfo: CustomerInfo): void
+      +evictBillInfoCache(lineNumber: String, inquiryMonth: String): void
+      -buildBillInfoCacheKey(lineNumber: String, inquiryMonth: String): String
+      -buildCustomerInfoCacheKey(userId: String): String
+      -isValidCachedData(cachedData: Object): boolean
+    }
+    
+    interface KosAdapterService {
+      +callKosBillInquiry(lineNumber: String, inquiryMonth: String): KosResponse
+    }
+    
+    class KosAdapterServiceImpl {
+      -restTemplate: RestTemplate
+      -kosConfig: KosConfig
+      +callKosBillInquiry(lineNumber: String, inquiryMonth: String): KosResponse
+      -buildKosRequest(lineNumber: String, inquiryMonth: String): KosRequest
+      -convertToKosResponse(responseEntity: ResponseEntity<String>): KosResponse
+      -handleKosError(statusCode: HttpStatus, responseBody: String): void
+    }
+    
+    interface CircuitBreakerService {
+      +isCallAllowed(): boolean
+      +recordSuccess(): void
+      +recordFailure(): void
+      +getCircuitState(): CircuitState
+    }
+    
+    class CircuitBreakerServiceImpl {
+      -failureThreshold: int
+      -recoveryTimeout: long
+      -successThreshold: int
+      -failureCount: AtomicInteger
+      -successCount: AtomicInteger
+      -lastFailureTime: AtomicLong
+      -circuitState: CircuitState
+      +isCallAllowed(): boolean
+      +recordSuccess(): void
+      +recordFailure(): void
+      +getCircuitState(): CircuitState
+      -transitionToOpen(): void
+      -transitionToHalfOpen(): void
+      -transitionToClosed(): void
+    }
+    
+    interface RetryService {
+      +executeWithRetry(operation: Supplier<T>): T
+    }
+    
+    class RetryServiceImpl {
+      -maxRetries: int
+      -retryDelayMs: long
+      +executeWithRetry(operation: Supplier<T>): T
+      -shouldRetry(exception: Exception, attemptCount: int): boolean
+      -calculateDelay(attemptCount: int): long
+    }
+    
+    interface MvnoApiClient {
+      +sendBillResult(billInfo: BillInfo): void
+    }
+    
+    class MvnoApiClientImpl {
+      -restTemplate: RestTemplate
+      -mvnoConfig: MvnoConfig
+      +sendBillResult(billInfo: BillInfo): void
+      -buildMvnoRequest(billInfo: BillInfo): MvnoRequest
+    }
+  }
+  
+  package "domain" {
+    class BillInfo {
+      -productName: String
+      -contractInfo: String
+      -billingMonth: String
+      -totalAmount: Integer
+      -discountInfo: List<DiscountInfo>
+      -usage: UsageInfo
+      -terminationFee: Integer
+      -deviceInstallment: Integer
+      -paymentInfo: PaymentInfo
+      +BillInfo()
+      +getProductName(): String
+      +setProductName(productName: String): void
+      +getContractInfo(): String
+      +setContractInfo(contractInfo: String): void
+      +getBillingMonth(): String
+      +setBillingMonth(billingMonth: String): void
+      +getTotalAmount(): Integer
+      +setTotalAmount(totalAmount: Integer): void
+      +getDiscountInfo(): List<DiscountInfo>
+      +setDiscountInfo(discountInfo: List<DiscountInfo>): void
+      +getUsage(): UsageInfo
+      +setUsage(usage: UsageInfo): void
+      +getTerminationFee(): Integer
+      +setTerminationFee(terminationFee: Integer): void
+      +getDeviceInstallment(): Integer
+      +setDeviceInstallment(deviceInstallment: Integer): void
+      +getPaymentInfo(): PaymentInfo
+      +setPaymentInfo(paymentInfo: PaymentInfo): void
+      +isComplete(): boolean
+    }
+    
+    class DiscountInfo {
+      -name: String
+      -amount: Integer
+      +DiscountInfo()
+      +DiscountInfo(name: String, amount: Integer)
+      +getName(): String
+      +setName(name: String): void
+      +getAmount(): Integer
+      +setAmount(amount: Integer): void
+    }
+    
+    class UsageInfo {
+      -voice: String
+      -sms: String
+      -data: String
+      +UsageInfo()
+      +UsageInfo(voice: String, sms: String, data: String)
+      +getVoice(): String
+      +setVoice(voice: String): void
+      +getSms(): String
+      +setSms(sms: String): void
+      +getData(): String
+      +setData(data: String): void
+    }
+    
+    class PaymentInfo {
+      -billingDate: String
+      -paymentStatus: String
+      -paymentMethod: String
+      +PaymentInfo()
+      +PaymentInfo(billingDate: String, paymentStatus: String, paymentMethod: String)
+      +getBillingDate(): String
+      +setBillingDate(billingDate: String): void
+      +getPaymentStatus(): String
+      +setPaymentStatus(paymentStatus: String): void
+      +getPaymentMethod(): String
+      +setPaymentMethod(paymentMethod: String): void
+    }
+    
+    ' KOS 연동 도메인 모델
+    class KosRequest {
+      -lineNumber: String
+      -inquiryMonth: String
+      -requestTime: LocalDateTime
+      +KosRequest(lineNumber: String, inquiryMonth: String)
+      +getLineNumber(): String
+      +getInquiryMonth(): String
+      +getRequestTime(): LocalDateTime
+      +toKosFormat(): Map<String, Object>
+    }
+    
+    class KosResponse {
+      -resultCode: String
+      -resultMessage: String
+      -data: KosData
+      -responseTime: LocalDateTime
+      +KosResponse()
+      +getResultCode(): String
+      +setResultCode(resultCode: String): void
+      +getResultMessage(): String
+      +setResultMessage(resultMessage: String): void
+      +getData(): KosData
+      +setData(data: KosData): void
+      +getResponseTime(): LocalDateTime
+      +setResponseTime(responseTime: LocalDateTime): void
+      +isSuccess(): boolean
+      +toBillInfo(): BillInfo
+    }
+    
+    class KosData {
+      -productName: String
+      -contractInfo: String
+      -billingMonth: String
+      -charge: Integer
+      -discountInfo: String
+      -usage: KosUsage
+      -estimatedCancellationFee: Integer
+      -deviceInstallment: Integer
+      -billingPaymentInfo: KosPaymentInfo
+      +KosData()
+      +getProductName(): String
+      +setProductName(productName: String): void
+      +getContractInfo(): String
+      +setContractInfo(contractInfo: String): void
+      +getBillingMonth(): String
+      +setBillingMonth(billingMonth: String): void
+      +getCharge(): Integer
+      +setCharge(charge: Integer): void
+      +getDiscountInfo(): String
+      +setDiscountInfo(discountInfo: String): void
+      +getUsage(): KosUsage
+      +setUsage(usage: KosUsage): void
+      +getEstimatedCancellationFee(): Integer
+      +setEstimatedCancellationFee(estimatedCancellationFee: Integer): void
+      +getDeviceInstallment(): Integer
+      +setDeviceInstallment(deviceInstallment: Integer): void
+      +getBillingPaymentInfo(): KosPaymentInfo
+      +setBillingPaymentInfo(billingPaymentInfo: KosPaymentInfo): void
+    }
+    
+    class KosUsage {
+      -voice: String
+      -data: String
+      +KosUsage()
+      +getVoice(): String
+      +setVoice(voice: String): void
+      +getData(): String
+      +setData(data: String): void
+      +toUsageInfo(): UsageInfo
+    }
+    
+    class KosPaymentInfo {
+      -billingDate: String
+      -paymentStatus: String
+      +KosPaymentInfo()
+      +getBillingDate(): String
+      +setBillingDate(billingDate: String): void
+      +getPaymentStatus(): String
+      +setPaymentStatus(paymentStatus: String): void
+      +toPaymentInfo(): PaymentInfo
+    }
+    
+    ' MVNO 연동 도메인 모델
+    class MvnoRequest {
+      -billInfo: BillInfo
+      -timestamp: LocalDateTime
+      +MvnoRequest(billInfo: BillInfo)
+      +getBillInfo(): BillInfo
+      +getTimestamp(): LocalDateTime
+      +toRequestBody(): Map<String, Object>
+    }
+    
+    enum CircuitState {
+      CLOSED
+      OPEN
+      HALF_OPEN
+      +valueOf(name: String): CircuitState
+      +values(): CircuitState[]
+    }
+    
+    enum BillInquiryStatus {
+      PROCESSING("처리중")
+      COMPLETED("완료")
+      FAILED("실패")
+      
+      -description: String
+      +BillInquiryStatus(description: String)
+      +getDescription(): String
+    }
+  }
+  
+  package "repository" {
+    interface BillHistoryRepository {
+      +findByUserIdAndLineNumberOrderByRequestTimeDesc(userId: String, lineNumber: String, pageable: Pageable): Page<BillHistoryEntity>
+      +findByUserIdAndRequestTimeBetweenOrderByRequestTimeDesc(userId: String, startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<BillHistoryEntity>
+      +findByUserIdAndLineNumberAndStatusOrderByRequestTimeDesc(userId: String, lineNumber: String, status: String, pageable: Pageable): Page<BillHistoryEntity>
+      +save(entity: BillHistoryEntity): BillHistoryEntity
+      +getCustomerInfo(userId: String): CustomerInfo
+    }
+    
+    interface KosInquiryHistoryRepository {
+      +save(entity: KosInquiryHistoryEntity): KosInquiryHistoryEntity
+      +findByLineNumberAndInquiryMonthOrderByRequestTimeDesc(lineNumber: String, inquiryMonth: String): List<KosInquiryHistoryEntity>
+    }
+    
+    package "entity" {
+      class BillHistoryEntity {
+        -id: Long
+        -userId: String
+        -lineNumber: String
+        -inquiryMonth: String
+        -requestId: String
+        -requestTime: LocalDateTime
+        -processTime: LocalDateTime
+        -status: String
+        -resultSummary: String
+        -billInfoJson: String
+        +BillHistoryEntity()
+        +getId(): Long
+        +setId(id: Long): void
+        +getUserId(): String
+        +setUserId(userId: String): void
+        +getLineNumber(): String
+        +setLineNumber(lineNumber: String): void
+        +getInquiryMonth(): String
+        +setInquiryMonth(inquiryMonth: String): void
+        +getRequestId(): String
+        +setRequestId(requestId: String): void
+        +getRequestTime(): LocalDateTime
+        +setRequestTime(requestTime: LocalDateTime): void
+        +getProcessTime(): LocalDateTime
+        +setProcessTime(processTime: LocalDateTime): void
+        +getStatus(): String
+        +setStatus(status: String): void
+        +getResultSummary(): String
+        +setResultSummary(resultSummary: String): void
+        +getBillInfoJson(): String
+        +setBillInfoJson(billInfoJson: String): void
+        +toBillHistoryItem(): BillHistoryItem
+        +fromBillInfo(billInfo: BillInfo): void
+      }
+      
+      class KosInquiryHistoryEntity {
+        -id: Long
+        -lineNumber: String
+        -inquiryMonth: String
+        -requestTime: LocalDateTime
+        -responseTime: LocalDateTime
+        -resultCode: String
+        -resultMessage: String
+        -errorDetail: String
+        +KosInquiryHistoryEntity()
+        +getId(): Long
+        +setId(id: Long): void
+        +getLineNumber(): String
+        +setLineNumber(lineNumber: String): void
+        +getInquiryMonth(): String
+        +setInquiryMonth(inquiryMonth: String): void
+        +getRequestTime(): LocalDateTime
+        +setRequestTime(requestTime: LocalDateTime): void
+        +getResponseTime(): LocalDateTime
+        +setResponseTime(responseTime: LocalDateTime): void
+        +getResultCode(): String
+        +setResultCode(resultCode: String): void
+        +getResultMessage(): String
+        +setResultMessage(resultMessage: String): void
+        +getErrorDetail(): String
+        +setErrorDetail(errorDetail: String): void
+      }
+    }
+    
+    package "jpa" {
+      interface BillHistoryJpaRepository {
+        +findByUserIdAndLineNumberOrderByRequestTimeDesc(userId: String, lineNumber: String, pageable: Pageable): Page<BillHistoryEntity>
+        +findByUserIdAndRequestTimeBetweenOrderByRequestTimeDesc(userId: String, startDate: LocalDateTime, endDate: LocalDateTime, pageable: Pageable): Page<BillHistoryEntity>
+        +findByUserIdAndLineNumberAndStatusOrderByRequestTimeDesc(userId: String, lineNumber: String, status: String, pageable: Pageable): Page<BillHistoryEntity>
+        +countByUserIdAndLineNumber(userId: String, lineNumber: String): long
+      }
+      
+      interface KosInquiryHistoryJpaRepository {
+        +findByLineNumberAndInquiryMonthOrderByRequestTimeDesc(lineNumber: String, inquiryMonth: String): List<KosInquiryHistoryEntity>
+        +countByResultCode(resultCode: String): long
+      }
+    }
+  }
+  
+  package "config" {
+    class RestTemplateConfig {
+      +kosRestTemplate(): RestTemplate
+      +mvnoRestTemplate(): RestTemplate
+      +kosHttpMessageConverters(): List<HttpMessageConverter<?>>
+      +kosRequestInterceptors(): List<ClientHttpRequestInterceptor>
+      +kosConnectionPoolConfig(): HttpComponentsClientHttpRequestFactory
+    }
+    
+    class BillCacheConfig {
+      +billInfoCacheConfiguration(): RedisCacheConfiguration
+      +customerInfoCacheConfiguration(): RedisCacheConfiguration
+      +billCacheKeyGenerator(): KeyGenerator
+      +cacheErrorHandler(): CacheErrorHandler
+    }
+    
+    class KosConfig {
+      -baseUrl: String
+      -connectTimeout: int
+      -readTimeout: int
+      -maxRetries: int
+      -retryDelay: long
+      +getBaseUrl(): String
+      +setBaseUrl(baseUrl: String): void
+      +getConnectTimeout(): int
+      +setConnectTimeout(connectTimeout: int): void
+      +getReadTimeout(): int
+      +setReadTimeout(readTimeout: int): void
+      +getMaxRetries(): int
+      +setMaxRetries(maxRetries: int): void
+      +getRetryDelay(): long
+      +setRetryDelay(retryDelay: long): void
+      +getBillInquiryEndpoint(): String
+    }
+    
+    class MvnoConfig {
+      -baseUrl: String
+      -connectTimeout: int
+      -readTimeout: int
+      +getBaseUrl(): String
+      +setBaseUrl(baseUrl: String): void
+      +getConnectTimeout(): int
+      +setConnectTimeout(connectTimeout: int): void
+      +getReadTimeout(): int
+      +setReadTimeout(readTimeout: int): void
+      +getSendResultEndpoint(): String
+    }
+    
+    class CircuitBreakerConfig {
+      -failureThreshold: int
+      -recoveryTimeoutMs: long
+      -successThreshold: int
+      +getFailureThreshold(): int
+      +setFailureThreshold(failureThreshold: int): void
+      +getRecoveryTimeoutMs(): long
+      +setRecoveryTimeoutMs(recoveryTimeoutMs: long): void
+      +getSuccessThreshold(): int
+      +setSuccessThreshold(successThreshold: int): void
+    }
+    
+    class AsyncConfig {
+      +billTaskExecutor(): TaskExecutor
+      +kosTaskExecutor(): TaskExecutor
+      +asyncExceptionHandler(): AsyncUncaughtExceptionHandler
+    }
+    
+    class JwtTokenUtil {
+      -secretKey: String
+      -tokenExpiration: long
+      +extractUserId(token: String): String
+      +extractLineNumber(token: String): String
+      +extractPermissions(token: String): List<String>
+      +validateToken(token: String): boolean
+      +isTokenExpired(token: String): boolean
+      +parseToken(token: String): Claims
+    }
+  }
+}
+
+' 관계 설정
+' Controller Layer
+BillController --> BillService : "uses"
+BillController --> JwtTokenUtil : "uses"
+
+' Service Layer Relationships
+BillServiceImpl ..|> BillService : "implements"
+BillServiceImpl --> BillCacheService : "uses"
+BillServiceImpl --> KosClientService : "uses"
+BillServiceImpl --> BillHistoryRepository : "uses"
+BillServiceImpl --> MvnoApiClient : "uses"
+
+KosClientServiceImpl ..|> KosClientService : "implements"
+KosClientServiceImpl --> KosAdapterService : "uses"
+KosClientServiceImpl --> CircuitBreakerService : "uses"
+KosClientServiceImpl --> RetryService : "uses"
+KosClientServiceImpl --> KosInquiryHistoryRepository : "uses"
+
+BillCacheServiceImpl ..|> BillCacheService : "uses"
+BillCacheServiceImpl --> BillHistoryRepository : "uses"
+
+KosAdapterServiceImpl ..|> KosAdapterService : "implements"
+KosAdapterServiceImpl --> KosConfig : "uses"
+
+CircuitBreakerServiceImpl ..|> CircuitBreakerService : "implements"
+RetryServiceImpl ..|> RetryService : "implements"
+MvnoApiClientImpl ..|> MvnoApiClient : "implements"
+
+' Domain Relationships
+BillInfo --> DiscountInfo : "contains"
+BillInfo --> UsageInfo : "contains" 
+BillInfo --> PaymentInfo : "uses"
+KosResponse --> KosData : "contains"
+KosData --> KosUsage : "contains"
+KosData --> KosPaymentInfo : "contains"
+MvnoRequest --> BillInfo : "contains"
+
+' Repository Relationships
+BillHistoryRepository --> BillHistoryJpaRepository : "uses"
+KosInquiryHistoryRepository --> KosInquiryHistoryJpaRepository : "uses"
+
+' Entity Relationships
+BillHistoryEntity --|> BaseTimeEntity : "extends"
+KosInquiryHistoryEntity --|> BaseTimeEntity : "extends"
+
+' DTO Relationships
+BillMenuData --> CustomerInfo : "contains"
+BillInquiryData --> BillInfo : "contains"
+BillInquiryStatusData --> BillInfo : "contains"
+BillHistoryData --> BillHistoryItem : "contains"
+BillHistoryData --> PaginationInfo : "contains"
+
+@enduml

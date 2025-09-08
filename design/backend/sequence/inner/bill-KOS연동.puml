@@ -1,0 +1,150 @@
+@startuml
+!theme mono
+title Bill-Inquiry Service - KOS 연동 내부 시퀀스
+
+participant "BillInquiryService" as Service
+participant "KosClientService" as KosClient
+participant "CircuitBreakerService" as CircuitBreaker
+participant "RetryService" as RetryService
+participant "KosAdapterService" as KosAdapter
+participant "BillRepository" as BillRepo
+participant "Bill DB<<E>>" as BillDB
+participant "KOS-Mock Service<<E>>" as KOSMock
+
+== UFR-BILL-030: KOS 요금조회 서비스 연동 ==
+
+Service -> KosClient: getBillInfo(lineNumber, inquiryMonth)
+activate KosClient
+
+KosClient -> CircuitBreaker: isCallAllowed()
+activate CircuitBreaker
+
+alt Circuit Breaker - OPEN 상태 (장애 감지)
+    CircuitBreaker --> KosClient: Circuit Open\n"서비스 일시 장애"
+    deactivate CircuitBreaker
+    
+    KosClient -> KosClient: Fallback 처리\n- 최근 캐시 데이터 확인\n- 기본 응답 준비
+    KosClient --> Service: FallbackException\n"일시적으로 서비스 이용이 어렵습니다"
+    note right: Circuit Breaker Open\n- 빠른 실패로 시스템 보호\n- 장애 전파 방지
+
+else Circuit Breaker - CLOSED/HALF_OPEN 상태
+    CircuitBreaker --> KosClient: Call Allowed
+    deactivate CircuitBreaker
+    
+    KosClient -> RetryService: executeWithRetry(kosCall)
+    activate RetryService
+    
+    == Retry 패턴 적용 ==
+    
+    loop 최대 3회 재시도
+        RetryService -> KosAdapter: callKosBillInquiry(lineNumber, inquiryMonth)
+        activate KosAdapter
+        
+        KosAdapter -> KosAdapter: 요청 데이터 변환\n- lineNumber 포맷 검증\n- inquiryMonth 형식 변환\n- 인증 헤더 설정
+        
+        == KOS-Mock Service 호출 ==
+        
+        KosAdapter -> KOSMock: POST /kos/bill/inquiry\nContent-Type: application/json\n{\n  "lineNumber": "01012345678",\n  "inquiryMonth": "202412"\n}
+        activate KOSMock
+        note right: KOS-Mock 서비스\n- 실제 KOS 시스템 대신 Mock 응답\n- 타임아웃: 3초\n- 다양한 시나리오 시뮬레이션
+        
+        alt KOS-Mock 정상 응답
+            KOSMock --> KosAdapter: 200 OK\n{\n  "resultCode": "0000",\n  "resultMessage": "성공",\n  "data": {\n    "productName": "5G 프리미엄",\n    "contractInfo": "24개월 약정",\n    "billingMonth": "202412",\n    "charge": 75000,\n    "discountInfo": "가족할인 10000원",\n    "usage": {\n      "voice": "250분",\n      "data": "20GB"\n    },\n    "estimatedCancellationFee": 120000,\n    "deviceInstallment": 35000,\n    "billingPaymentInfo": {\n      "billingDate": "2024-12-25",\n      "paymentStatus": "완료"\n    }\n  }\n}
+            deactivate KOSMock
+            
+            KosAdapter -> KosAdapter: 응답 데이터 변환\n- KOS 응답 → 내부 BillInfo 모델\n- 데이터 유효성 검증\n- Null 안전 처리
+            
+            KosAdapter --> RetryService: BillInfo 객체
+            deactivate KosAdapter
+            break 성공 시 재시도 중단
+            
+        else KOS-Mock 오류 응답 (4xx, 5xx)
+            KOSMock --> KosAdapter: 오류 응답\n{\n  "resultCode": "E001",\n  "resultMessage": "회선번호가 존재하지 않습니다"\n}
+            deactivate KOSMock
+            
+            KosAdapter -> KosAdapter: 오류 코드별 예외 매핑\n- E001: InvalidLineNumberException\n- E002: DataNotFoundException\n- E999: SystemErrorException
+            
+            KosAdapter --> RetryService: KosServiceException
+            deactivate KosAdapter
+            
+        else 네트워크 오류 (타임아웃, 연결 실패)
+            KOSMock --> KosAdapter: IOException/TimeoutException
+            deactivate KOSMock
+            
+            KosAdapter --> RetryService: NetworkException
+            deactivate KosAdapter
+            
+        end
+        
+        alt 재시도 가능한 오류 (네트워크, 일시적 오류)
+            RetryService -> RetryService: 재시도 대기\n- 1차: 1초 대기\n- 2차: 2초 대기\n- 3차: 3초 대기
+            note right: Exponential Backoff\n재시도 간격 증가
+        else 재시도 불가능한 오류 (비즈니스 로직 오류)
+            break 재시도 중단
+        end
+    end
+    
+    alt 재시도 성공
+        RetryService --> KosClient: BillInfo
+        deactivate RetryService
+        
+        KosClient -> CircuitBreaker: recordSuccess()
+        activate CircuitBreaker
+        CircuitBreaker -> CircuitBreaker: 성공 카운트 증가\nCircuit 상태 유지 또는 CLOSED로 변경
+        deactivate CircuitBreaker
+        
+        == 연동 이력 저장 ==
+        
+        KosClient -> BillRepo: saveKosInquiryHistory(lineNumber, inquiryMonth, "SUCCESS")
+        activate BillRepo
+        BillRepo -> BillDB: INSERT INTO kos_inquiry_history\n(line_number, inquiry_month, request_time, \n response_time, result_code, result_message)
+        activate BillDB
+        note right: 비동기 처리\n- 성능 최적화\n- 연동 추적
+        BillDB --> BillRepo: 이력 저장 완료
+        deactivate BillDB
+        deactivate BillRepo
+        
+        KosClient --> Service: BillInfo 반환
+        deactivate KosClient
+        
+    else 모든 재시도 실패
+        RetryService --> KosClient: MaxRetryExceededException
+        deactivate RetryService
+        
+        KosClient -> CircuitBreaker: recordFailure()
+        activate CircuitBreaker
+        CircuitBreaker -> CircuitBreaker: 실패 카운트 증가\n임계값 초과 시 Circuit OPEN
+        deactivate CircuitBreaker
+        
+        KosClient -> BillRepo: saveKosInquiryHistory(lineNumber, inquiryMonth, "FAILURE")
+        activate BillRepo
+        BillRepo -> BillDB: INSERT INTO kos_inquiry_history\n(line_number, inquiry_month, request_time, \n response_time, result_code, result_message, error_detail)
+        deactivate BillRepo
+        
+        KosClient --> Service: KosConnectionException\n"KOS 시스템 연동 실패"
+        deactivate KosClient
+    end
+end
+
+== Circuit Breaker 상태 관리 ==
+
+note over CircuitBreaker
+Circuit Breaker 설정:
+- 실패 임계값: 5회 연속 실패
+- 타임아웃: 3초
+- 반열림 대기시간: 30초
+- 성공 임계값: 3회 연속 성공 시 복구
+end note
+
+== KOS-Mock 서비스 시나리오 ==
+
+note over KOSMock
+Mock 응답 시나리오:
+1. 정상 케이스: 완전한 요금 정보 반환
+2. 데이터 없음: 해당월 데이터 없음 (E002)
+3. 잘못된 회선: 존재하지 않는 회선번호 (E001)
+4. 시스템 오류: 일시적 장애 시뮬레이션 (E999)
+5. 타임아웃: 응답 지연 시뮬레이션
+end note
+
+@enduml

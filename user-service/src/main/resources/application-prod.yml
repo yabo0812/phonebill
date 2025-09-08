@@ -1,0 +1,128 @@
+spring:
+  # 운영환경 데이터소스 설정
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:phonebill_auth}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 50
+      minimum-idle: 10
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 0  # 운영환경에서는 비활성화
+      
+  # 운영환경 JPA 설정
+  jpa:
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        generate_statistics: false
+        jdbc:
+          batch_size: 50
+          order_inserts: true
+          order_updates: true
+    hibernate:
+      ddl-auto: validate  # 운영환경에서는 스키마 변경 금지
+      
+  # 운영환경 Redis 설정 (클러스터 구성)
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD}
+      ssl: true  # 운영환경에서는 SSL 활성화
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 10
+          min-idle: 5
+          max-wait: -1ms
+        cluster:
+          refresh:
+            adaptive: true
+            period: 30s
+      database: 0
+      
+# 운영환경 로깅 설정 (최소 로그)
+logging:
+  level:
+    com.phonebill: INFO
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+    org.springframework.web: WARN
+    org.springframework.data: WARN
+    org.springframework.cache: WARN
+    org.springframework.transaction: WARN
+    org.springframework.boot.actuate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] [%X{traceId:-},%X{spanId:-}] - %msg%n"
+  file:
+    name: /var/log/phonebill/user-service.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+    
+# 운영환경 액추에이터 설정 (보안 강화)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+  security:
+    enabled: true
+    
+# 운영환경 JWT 토큰 설정
+jwt:
+  secret: ${JWT_SECRET}  # 환경변수에서 필수로 받아옴
+  access-token-validity: 1800000   # 30분
+  refresh-token-validity: 86400000 # 24시간
+  
+# 운영환경 보안 설정 (엄격)
+auth:
+  login:
+    max-failed-attempts: 3  # 운영환경에서는 더 엄격
+    lockout-duration: 3600000  # 1시간
+  password:
+    bcrypt-strength: 12
+    
+# 운영환경 성능 튜닝 설정
+server:
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+    max-connections: 8192
+    accept-count: 100
+    connection-timeout: 30000
+    max-http-post-size: 2MB
+    
+# 운영환경 외부 서비스 연동 설정
+external:
+  services:
+    bill-inquiry:
+      base-url: ${BILL_INQUIRY_URL}
+      timeout: 3000  # 운영환경에서는 더 짧은 타임아웃
+    product-change:
+      base-url: ${PRODUCT_CHANGE_URL}  
+      timeout: 3000
+      
+# 운영환경 모니터링 설정
+metrics:
+  export:
+    prometheus:
+      enabled: true
+      step: 60s
+  distribution:
+    percentiles-histogram:
+      http.server.requests: true
+    percentiles:
+      http.server.requests: 0.5, 0.9, 0.95, 0.99

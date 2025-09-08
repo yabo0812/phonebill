@@ -1,0 +1,149 @@
+%%{init: {'theme':'base', 'themeVariables': { 'primaryColor': '#ffffff', 'primaryTextColor': '#000000', 'primaryBorderColor': '#000000', 'lineColor': '#000000'}}}%%
+
+graph TB
+    %% 인터넷 및 외부
+    subgraph "Internet & External"
+        Internet[🌐 Internet<br/>HTTPS Traffic]
+        KOS[🏢 KOS-Order System<br/>On-premises<br/>Private Connection]
+    end
+    
+    %% Azure Edge Services
+    subgraph "Azure Edge (Global)"
+        AFD[☁️ Azure Front Door<br/>Entry Point: *.phonebill.com<br/>DDoS Protection Standard<br/>CDN + WAF Policy]
+    end
+    
+    %% Azure Virtual Network
+    subgraph "Azure VNet (10.0.0.0/16) - Korea Central"
+        
+        %% Gateway Subnet
+        subgraph "Gateway Subnet (10.0.4.0/24)"
+            AppGW[🛡️ Application Gateway<br/>Public IP: 20.194.xxx.xxx<br/>Private IP: 10.0.4.10<br/>Standard_v2 + WAF<br/>SSL Termination]
+            
+            subgraph "WAF Configuration"
+                WAF[🔒 Web Application Firewall<br/>• OWASP CRS 3.2<br/>• Rate Limiting: 100/min<br/>• Prevention Mode<br/>• Custom Rules]
+            end
+        end
+        
+        %% Application Subnet
+        subgraph "Application Subnet (10.0.1.0/24)"
+            subgraph "AKS Cluster Network"
+                LB[⚖️ Internal Load Balancer<br/>ClusterIP: 10.0.1.100<br/>Service Distribution]
+                
+                subgraph "Pod Network (CNI)"
+                    AuthSvc[🔐 Auth Service<br/>ClusterIP: 10.0.1.10<br/>Port: 8080<br/>Replicas: 3-10]
+                    
+                    BillSvc[📊 Bill-Inquiry Service<br/>ClusterIP: 10.0.1.20<br/>Port: 8080<br/>Replicas: 3-15]
+                    
+                    ProductSvc[🔄 Product-Change Service<br/>ClusterIP: 10.0.1.30<br/>Port: 8080<br/>Replicas: 2-8]
+                end
+            end
+            
+            subgraph "Service Bus Private Endpoint"
+                SBEndpoint[📨 Service Bus PE<br/>10.0.1.200<br/>sb-phonebill-prod.servicebus.windows.net]
+            end
+            
+            subgraph "Key Vault Private Endpoint"  
+                KVEndpoint[🔑 Key Vault PE<br/>10.0.1.210<br/>kv-phonebill-prod.vault.azure.net]
+            end
+        end
+        
+        %% Database Subnet  
+        subgraph "Database Subnet (10.0.2.0/24)"
+            subgraph "PostgreSQL Private Endpoint"
+                PGEndpoint[🗃️ PostgreSQL PE<br/>10.0.2.10<br/>phonebill-prod.postgres.database.azure.com<br/>Port: 5432 (SSL required)]
+            end
+            
+            subgraph "Read Replica Endpoints"
+                PGReplica[📚 Read Replica PE<br/>10.0.2.20<br/>phonebill-replica.postgres.database.azure.com<br/>Read-only Access]
+            end
+        end
+        
+        %% Cache Subnet
+        subgraph "Cache Subnet (10.0.3.0/24)" 
+            subgraph "Redis Private Endpoint"
+                RedisEndpoint[⚡ Redis Cache PE<br/>10.0.3.10<br/>phonebill-prod.redis.cache.windows.net<br/>Port: 6380 (SSL)<br/>Premium P2 Cluster]
+            end
+        end
+    end
+    
+    %% Network Security Groups
+    subgraph "Network Security (NSG Rules)"
+        subgraph "Gateway NSG"
+            GatewayNSG[🔒 App Gateway NSG<br/>• Allow HTTPS (443) from Internet<br/>• Allow HTTP (80) from Internet<br/>• Allow GatewayManager<br/>• Deny All Other]
+        end
+        
+        subgraph "Application NSG"
+            AppNSG[🔒 AKS NSG<br/>• Allow 80,443 from Gateway Subnet<br/>• Allow 5432 to Database Subnet<br/>• Allow 6380 to Cache Subnet<br/>• Allow 443 to Internet (KOS)<br/>• Allow Azure Services]
+        end
+        
+        subgraph "Database NSG"
+            DBNSG[🔒 Database NSG<br/>• Allow 5432 from App Subnet<br/>• Deny All Other<br/>• Management from Azure]
+        end
+    end
+    
+    %% Traffic Flow - Inbound
+    Internet ==> AFD
+    AFD ==> AppGW
+    AppGW ==> LB
+    LB ==> AuthSvc
+    LB ==> BillSvc  
+    LB ==> ProductSvc
+    
+    %% Service to Data Flow
+    AuthSvc --> PGEndpoint
+    BillSvc --> PGEndpoint
+    ProductSvc --> PGEndpoint
+    
+    %% Read Replica Access
+    BillSvc -.-> PGReplica
+    
+    %% Cache Access
+    AuthSvc --> RedisEndpoint
+    BillSvc --> RedisEndpoint
+    ProductSvc --> RedisEndpoint
+    
+    %% Message Queue Access
+    BillSvc --> SBEndpoint
+    ProductSvc --> SBEndpoint
+    
+    %% Security Access
+    AuthSvc --> KVEndpoint
+    BillSvc --> KVEndpoint
+    ProductSvc --> KVEndpoint
+    
+    %% External System Access
+    BillSvc -.-> KOS
+    ProductSvc -.-> KOS
+    
+    %% DNS Resolution
+    subgraph "Private DNS Zones"
+        DNS1[🌐 privatelink.postgres.database.azure.com<br/>PostgreSQL DNS Resolution]
+        DNS2[🌐 privatelink.redis.cache.windows.net<br/>Redis DNS Resolution]
+        DNS3[🌐 privatelink.servicebus.windows.net<br/>Service Bus DNS Resolution]
+        DNS4[🌐 privatelink.vaultcore.azure.net<br/>Key Vault DNS Resolution]
+    end
+    
+    %% Network Policies
+    subgraph "Kubernetes Network Policies"
+        NetPol[📜 Network Policies<br/>• Default Deny All<br/>• Allow Ingress from App Gateway<br/>• Allow Egress to Data Services<br/>• Allow Egress to External (KOS)<br/>• Inter-service Communication Rules]
+    end
+    
+    %% Monitoring & Logging
+    subgraph "Network Monitoring"
+        NetMon[📊 Network Monitoring<br/>• NSG Flow Logs<br/>• Application Gateway Logs<br/>• VNet Flow Logs<br/>• Connection Monitor]
+    end
+    
+    %% 스타일링
+    classDef internetClass fill:#e3f2fd,stroke:#0277bd,stroke-width:2px
+    classDef azureEdgeClass fill:#e8f5e8,stroke:#388e3c,stroke-width:2px
+    classDef networkClass fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef appClass fill:#fce4ec,stroke:#c2185b,stroke-width:2px
+    classDef dataClass fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    classDef securityClass fill:#ffebee,stroke:#d32f2f,stroke-width:2px
+    
+    class Internet,KOS internetClass
+    class AFD azureEdgeClass
+    class AppGW,LB,NetMon networkClass
+    class AuthSvc,BillSvc,ProductSvc,SBEndpoint appClass
+    class PGEndpoint,RedisEndpoint,PGReplica dataClass
+    class GatewayNSG,AppNSG,DBNSG,WAF,KVEndpoint,NetPol securityClass

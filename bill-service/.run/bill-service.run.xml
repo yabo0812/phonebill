@@ -1,0 +1,86 @@
+<component name="ProjectRunConfigurationManager">
+  <configuration default="false" name="bill-service" type="GradleRunConfiguration" factoryName="Gradle">
+    <ExternalSystemSettings>
+      <option name="env">
+        <map>
+          <!-- Database Connection -->
+          <entry key="DB_HOST" value="20.249.175.46" />
+          <entry key="DB_PORT" value="5432" />
+          <entry key="DB_NAME" value="bill_inquiry_db" />
+          <entry key="DB_USERNAME" value="bill_inquiry_user" />
+          <entry key="DB_PASSWORD" value="BillUser2025!" />
+          <entry key="DB_KIND" value="postgresql" />
+          
+          <!-- Redis Connection -->
+          <entry key="REDIS_HOST" value="20.249.193.103" />
+          <entry key="REDIS_PORT" value="6379" />
+          <entry key="REDIS_PASSWORD" value="Redis2025Dev!" />
+          <entry key="REDIS_DATABASE" value="1" />
+          
+          <!-- Server Configuration -->
+          <entry key="SERVER_PORT" value="8082" />
+          <entry key="SPRING_PROFILES_ACTIVE" value="dev" />
+          
+          <!-- JWT Configuration -->
+          <entry key="JWT_SECRET" value="phonebill-jwt-secret-key-2025-dev" />
+          
+          <!-- JPA Configuration -->
+          <entry key="JPA_DDL_AUTO" value="update" />
+          <entry key="SHOW_SQL" value="true" />
+          
+          <!-- Logging Configuration -->
+          <entry key="LOG_FILE_NAME" value="logs/bill-service.log" />
+          <entry key="LOG_LEVEL_APP" value="DEBUG" />
+          
+          <!-- KOS Mock URL -->
+          <entry key="KOS_BASE_URL" value="http://localhost:8084" />
+          
+          <!-- Development optimized settings -->
+          <entry key="JPA_SHOW_SQL" value="true" />
+          <entry key="JPA_FORMAT_SQL" value="true" />
+          <entry key="JPA_SQL_COMMENTS" value="true" />
+          <entry key="LOG_LEVEL_ROOT" value="INFO" />
+          <entry key="LOG_LEVEL_SERVICE" value="DEBUG" />
+          <entry key="LOG_LEVEL_REPOSITORY" value="DEBUG" />
+          <entry key="LOG_LEVEL_SQL" value="DEBUG" />
+          <entry key="LOG_LEVEL_WEB" value="DEBUG" />
+          <entry key="LOG_LEVEL_CACHE" value="DEBUG" />
+          <entry key="LOG_LEVEL_SECURITY" value="DEBUG" />
+          
+          <!-- Connection Pool Settings -->
+          <entry key="DB_MIN_IDLE" value="5" />
+          <entry key="DB_MAX_POOL" value="20" />
+          <entry key="DB_CONNECTION_TIMEOUT" value="30000" />
+          <entry key="DB_IDLE_TIMEOUT" value="600000" />
+          <entry key="DB_MAX_LIFETIME" value="1800000" />
+          <entry key="DB_LEAK_DETECTION" value="60000" />
+          
+          <!-- Redis Pool Settings -->
+          <entry key="REDIS_MAX_ACTIVE" value="8" />
+          <entry key="REDIS_MAX_IDLE" value="8" />
+          <entry key="REDIS_MIN_IDLE" value="0" />
+          <entry key="REDIS_MAX_WAIT" value="-1" />
+          <entry key="REDIS_TIMEOUT" value="2000" />
+        </map>
+      </option>
+      <option name="executionName" />
+      <option name="externalProjectPath" value="$PROJECT_DIR$" />
+      <option name="externalSystemIdString" value="GRADLE" />
+      <option name="scriptParameters" value="" />
+      <option name="taskDescriptions">
+        <list />
+      </option>
+      <option name="taskNames">
+        <list>
+          <option value="bill-service:bootRun" />
+        </list>
+      </option>
+      <option name="vmOptions" value="-Dspring.profiles.active=dev -Dfile.encoding=UTF-8 -Duser.timezone=Asia/Seoul" />
+    </ExternalSystemSettings>
+    <ExternalSystemDebugServerProcess>false</ExternalSystemDebugServerProcess>
+    <ExternalSystemReattachDebugProcess>true</ExternalSystemReattachDebugProcess>
+    <DebugAllEnabled>false</DebugAllEnabled>
+    <ForceTestExec>false</ForceTestExec>
+    <method v="2" />
+  </configuration>
+</component>

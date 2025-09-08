@@ -1,0 +1,133 @@
+@startuml
+!theme mono
+title Auth Service - 권한 확인 내부 시퀀스
+
+participant "API Gateway" as Gateway
+participant "AuthController" as Controller
+participant "AuthService" as Service
+participant "PermissionService" as PermService
+participant "Redis Cache<<E>>" as Redis
+participant "UserRepository" as UserRepo
+participant "Auth DB<<E>>" as AuthDB
+
+== UFR-AUTH-020: 서비스별 접근 권한 확인 ==
+
+Gateway -> Controller: GET /check-permission/{serviceType}\nAuthorization: Bearer {accessToken}\nPath: serviceType = "BILL_INQUIRY" | "PRODUCT_CHANGE"
+activate Controller
+
+Controller -> Controller: JWT 토큰에서 userId 추출\n(이미 Gateway에서 1차 검증 완료)
+
+Controller -> Service: checkServicePermission(userId, serviceType)
+activate Service
+
+== Cache-First 패턴으로 권한 정보 조회 ==
+
+Service -> Redis: getUserPermissions(userId)\nKey: user_permissions:{userId}
+activate Redis
+
+alt 권한 캐시 Hit
+    Redis --> Service: 권한 정보 반환\n{permissions: [BILL_INQUIRY, PRODUCT_CHANGE, ...]}
+    deactivate Redis
+    note right: 권한 캐시 히트\n- TTL: 4시간\n- 빠른 응답 < 10ms
+    
+else 권한 캐시 Miss
+    Redis --> Service: null (권한 캐시 없음)
+    deactivate Redis
+    
+    Service -> UserRepo: getUserPermissions(userId)
+    activate UserRepo
+    
+    UserRepo -> AuthDB: SELECT p.permission_code\nFROM user_permissions up\nJOIN permissions p ON up.permission_id = p.id\nWHERE up.user_id = ? AND up.status = 'ACTIVE'
+    activate AuthDB
+    AuthDB --> UserRepo: 권한 목록 반환
+    deactivate AuthDB
+    
+    UserRepo --> Service: List<Permission>
+    deactivate UserRepo
+    
+    Service -> Redis: cacheUserPermissions\nKey: user_permissions:{userId}\nValue: {permissions}\nTTL: 4시간
+    activate Redis
+    Redis --> Service: 권한 캐싱 완료
+    deactivate Redis
+end
+
+Service -> PermService: validateServiceAccess(permissions, serviceType)
+activate PermService
+
+PermService -> PermService: 서비스별 권한 매핑 확인
+note right: 권한 매핑 규칙\n- BILL_INQUIRY: 요금조회 권한\n- PRODUCT_CHANGE: 상품변경 권한\n- 관리자는 모든 권한 보유
+
+alt 요금조회 서비스 (BILL_INQUIRY)
+    PermService -> PermService: 권한 목록에서\n"BILL_INQUIRY" 또는 "ADMIN" 권한 확인
+    
+    alt 권한 있음
+        PermService --> Service: PermissionResult{granted: true, serviceType: "BILL_INQUIRY"}
+    else 권한 없음
+        PermService --> Service: PermissionResult{granted: false, reason: "요금조회 권한이 없습니다"}
+    end
+
+else 상품변경 서비스 (PRODUCT_CHANGE)
+    PermService -> PermService: 권한 목록에서\n"PRODUCT_CHANGE" 또는 "ADMIN" 권한 확인
+    
+    alt 권한 있음
+        PermService --> Service: PermissionResult{granted: true, serviceType: "PRODUCT_CHANGE"}
+    else 권한 없음
+        PermService --> Service: PermissionResult{granted: false, reason: "상품변경 권한이 없습니다"}
+    end
+
+else 잘못된 서비스 타입
+    PermService --> Service: PermissionResult{granted: false, reason: "올바르지 않은 서비스 타입입니다"}
+end
+
+deactivate PermService
+
+== 권한 확인 결과 처리 ==
+
+alt 접근 권한 있음
+    Service -> Service: 접근 로그 기록 (비동기)
+    note right: 접근 로그\n- userId, serviceType\n- 접근 시간, IP 주소
+    
+    Service --> Controller: PermissionGranted{permission: "granted"}
+    deactivate Service
+    
+    Controller --> Gateway: 200 OK\n{permission: "granted", serviceType: serviceType}
+    deactivate Controller
+
+else 접근 권한 없음
+    Service -> Service: 권한 거부 로그 기록 (비동기)
+    note right: 권한 거부 로그\n- userId, serviceType\n- 거부 사유, 시간
+    
+    Service --> Controller: PermissionDenied{reason: "서비스 이용 권한이 없습니다"}
+    deactivate Service
+    
+    Controller --> Gateway: 403 Forbidden\n{permission: "denied", reason: "서비스 이용 권한이 없습니다"}
+    deactivate Controller
+end
+
+== 권한 캐시 무효화 처리 ==
+
+note over Service, Redis
+권한 변경 시 캐시 무효화
+- 사용자 권한 변경
+- 권한 정책 변경  
+- 관리자에 의한 권한 갱신
+end note
+
+Controller -> Service: invalidateUserPermissions(userId)
+activate Service
+
+Service -> Redis: deleteUserPermissions\nKey: user_permissions:{userId}
+activate Redis
+Redis --> Service: 캐시 삭제 완료
+deactivate Redis
+
+Service -> Redis: deleteUserSession\nKey: user_session:{userId}
+activate Redis
+Redis --> Service: 세션 삭제 완료
+deactivate Redis
+note right: 권한 변경 시\n세션도 함께 무효화
+
+Service --> Controller: 권한 캐시 무효화 완료
+deactivate Service
+
+@enduml

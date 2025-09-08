@@ -492,3 +492,22 @@ QA Engineer
 - "@develop-help": "개발실행프롬프트 내용을 터미널에 출력"
 - "@deploy-help": "배포실행프롬프트 내용을 터미널에 출력"
 ```
+
+# Lessons Learned 
+
+## 개발 워크플로우 
+- **❗ 핵심 원칙**: 코드 수정 → 컴파일 → 사람에게 서버 시작 요청 → 테스트
+- **소스 수정**: Spring Boot는 코드 변경 후 반드시 컴파일 + 재시작 필요
+- **컴파일**: 최상위 루트에서 `./gradlew {service-name}:compileJava` 명령 사용
+- **서버 시작**: AI가 직접 서버를 시작하지 말고 반드시 사람에게 요청할것
+
+## 실행 프로파일 작성 경험
+- **Gradle 실행 프로파일**: Spring Boot가 아닌 Gradle 실행 프로파일 사용 필수
+- **환경변수 매핑**: `<entry key="..." value="..." />` 형태로 환경변수 설정
+- **컴포넌트 스캔 이슈**: common 모듈의 @Component가 인식되지 않는 경우 발생
+- **의존성 주입 오류**: JwtTokenProvider 빈을 찾을 수 없는 오류 확인됨
+
+## 백킹서비스 연결 정보
+- **LoadBalancer External IP**: kubectl 명령으로 실제 IP 확인 후 환경변수 설정
+- **DB 연결정보**: 각 서비스별 별도 DB 사용 (auth, bill_inquiry, product_change)
+- **Redis 공유**: 모든 서비스가 동일한 Redis 인스턴스 사용

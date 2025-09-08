@@ -1,0 +1,113 @@
+@startuml product-change-erd
+!theme mono
+
+title Product-Change 서비스 ERD
+
+entity "pc_product_change_history" as history {
+  * id : BIGSERIAL <<PK>>
+  --
+  * request_id : VARCHAR(50) <<UK>>
+  * line_number : VARCHAR(20)
+  * customer_id : VARCHAR(50)
+  * current_product_code : VARCHAR(20)
+  * target_product_code : VARCHAR(20)
+  * process_status : VARCHAR(20)
+  validation_result : TEXT
+  process_message : TEXT
+  kos_request_data : JSONB
+  kos_response_data : JSONB
+  * requested_at : TIMESTAMP
+  validated_at : TIMESTAMP
+  processed_at : TIMESTAMP
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+  * version : BIGINT
+}
+
+entity "pc_kos_integration_log" as kos_log {
+  * id : BIGSERIAL <<PK>>
+  --
+  request_id : VARCHAR(50)
+  * integration_type : VARCHAR(30)
+  * method : VARCHAR(10)
+  * endpoint_url : VARCHAR(200)
+  request_headers : JSONB
+  request_body : JSONB
+  response_status : INTEGER
+  response_headers : JSONB
+  response_body : JSONB
+  response_time_ms : INTEGER
+  * is_success : BOOLEAN
+  error_message : TEXT
+  * retry_count : INTEGER
+  circuit_breaker_state : VARCHAR(20)
+  * created_at : TIMESTAMP
+}
+
+entity "pc_circuit_breaker_state" as cb_state {
+  * id : BIGSERIAL <<PK>>
+  --
+  * service_name : VARCHAR(50) <<UK>>
+  * state : VARCHAR(20)
+  * failure_count : INTEGER
+  * success_count : INTEGER
+  last_failure_time : TIMESTAMP
+  next_attempt_time : TIMESTAMP
+  * failure_threshold : INTEGER
+  * success_threshold : INTEGER
+  * timeout_duration_ms : INTEGER
+  * updated_at : TIMESTAMP
+}
+
+history ||..o{ kos_log : "request_id"
+
+note right of history
+  **인덱스**
+  - PK: id
+  - UK: request_id
+  - IDX: line_number, process_status, requested_at
+  - IDX: customer_id, requested_at
+end note
+
+note right of kos_log
+  **인덱스**
+  - PK: id
+  - IDX: request_id, integration_type, created_at
+  - IDX: is_success, created_at
+end note
+
+note right of cb_state
+  **인덱스**
+  - PK: id
+  - UK: service_name
+end note
+
+package "Redis Cache" {
+  class "customer_info" as customer_cache
+  class "product_info" as product_cache  
+  class "available_products" as products_cache
+}
+
+class "KOS System" as kos
+
+history ..> customer_cache
+history ..> product_cache
+kos_log ..> kos
+cb_state ..> kos
+
+legend right
+  **데이터베이스**: product_change_db
+  **스키마**: product_change
+  **테이블 접두어**: pc_
+  
+  **상태값**
+  process_status: REQUESTED, VALIDATED, 
+  PROCESSING, COMPLETED, FAILED
+  
+  integration_type: CUSTOMER_INFO, 
+  PRODUCT_INFO, PRODUCT_CHANGE
+  
+  cb_state: CLOSED, OPEN, HALF_OPEN
+end legend
+
+@enduml

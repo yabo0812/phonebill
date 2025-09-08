@@ -1,0 +1,258 @@
+spring:
+  application:
+    name: product-service
+    version: 1.0.0
+  
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+    
+  # Database 기본 설정
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 20000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+  
+  # JPA 기본 설정  
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:validate}
+    show-sql: ${JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        connection:
+          provider_disables_autocommit: true
+          
+  # Redis 기본 설정
+  data:
+    redis:
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 20
+          max-idle: 8
+          min-idle: 2
+          max-wait: -1ms
+          time-between-eviction-runs: 30s
+  
+  # Cache 설정
+  cache:
+    type: redis
+    cache-names:
+      - customerInfo
+      - productInfo  
+      - availableProducts
+      - productStatus
+      - lineStatus
+    redis:
+      time-to-live: 14400000 # 4시간 (ms)
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "product-service:"
+  
+  # Security 기본 설정
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth}
+  
+  # Jackson 설정
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-durations-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+      adjust-dates-to-context-time-zone: false
+    time-zone: Asia/Seoul
+    date-format: yyyy-MM-dd'T'HH:mm:ss
+  
+  # HTTP 설정
+  webflux:
+    base-path: /api/v1
+
+# Server 설정
+server:
+  port: ${SERVER_PORT:8083}
+  servlet:
+    context-path: /api/v1
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+  error:
+    include-stacktrace: never
+    include-message: always
+    include-binding-errors: always
+
+# Management & Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  health:
+    circuitbreakers:
+      enabled: true
+    redis:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+      slo:
+        http.server.requests: 50ms, 100ms, 200ms, 300ms, 500ms, 1s
+  info:
+    git:
+      mode: full
+    build:
+      enabled: true
+
+# Logging 설정
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.unicorn.phonebill: ${LOG_LEVEL_APP:INFO}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+    org.hibernate.type: WARN
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE:logs/product-service.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+
+# OpenAPI/Swagger 설정
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: false
+  group-configs:
+    - group: product-service
+      display-name: Product Change Service API
+      paths-to-match: /products/**
+
+# Resilience4j 기본 설정
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3s
+        permitted-number-of-calls-in-half-open-state: 3
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 10s
+        sliding-window-type: count-based
+        sliding-window-size: 10
+        record-exceptions:
+          - java.net.ConnectException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException
+          - jakarta.validation.ValidationException
+    instances:
+      kosClient:
+        base-config: default
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 30s
+        
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+    instances:
+      kosClient:
+        base-config: default
+        max-attempts: 2
+        wait-duration: 2s
+        
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 5s
+    instances:
+      kosClient:
+        base-config: default
+        timeout-duration: 10s
+
+# 비즈니스 설정
+app:
+  product:
+    cache:
+      customer-info-ttl: 14400 # 4시간 (초)
+      product-info-ttl: 7200   # 2시간 (초)  
+      available-products-ttl: 86400 # 24시간 (초)
+      product-status-ttl: 3600     # 1시간 (초)
+      line-status-ttl: 1800        # 30분 (초)
+    validation:
+      max-retry-attempts: 3
+      validation-timeout: 5s
+    processing:
+      async-enabled: ${PRODUCT_PROCESSING_ASYNC_ENABLED:true}
+      max-concurrent-requests: ${PRODUCT_PROCESSING_MAX_CONCURRENT_REQUESTS:100}
+      request-timeout: ${PRODUCT_PROCESSING_REQUEST_TIMEOUT:30s}
+  
+  security:
+    jwt:
+      secret: ${JWT_SECRET:product-service-secret-key-change-in-production}
+      expiration: ${JWT_EXPIRATION:86400} # 24시간
+      refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800} # 7일
+    cors:
+      allowed-origins: 
+        - http://localhost:3000
+        - https://mvno.com
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - Authorization
+        - Content-Type
+        - Accept
+        - X-Requested-With
+      allow-credentials: true
+      max-age: 3600

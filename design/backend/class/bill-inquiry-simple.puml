@@ -1,0 +1,138 @@
+@startuml
+!theme mono
+title Bill-Inquiry Service - 간단한 클래스 설계
+
+package "com.unicorn.phonebill.bill" {
+  
+  package "controller" {
+    class BillController {
+      -billService: BillService
+      -jwtTokenUtil: JwtTokenUtil
+    }
+    
+    note right of BillController : "API 매핑표\n\nGET /bills/menu → getBillMenu()\nPOST /bills/inquiry → inquireBill()\nGET /bills/inquiry/{requestId} → getBillInquiryStatus()\nGET /bills/history → getBillHistory()\n\n모든 메소드는 JWT 인증 필요\nController에는 API로 정의된 메소드만 존재"
+  }
+  
+  package "dto" {
+    class BillMenuData
+    class CustomerInfo  
+    class BillInquiryRequest
+    class BillInquiryData
+    class BillInquiryAsyncData
+    class BillInquiryStatusData
+    class BillHistoryData
+    class BillHistoryItem
+    class PaginationInfo
+  }
+  
+  package "service" {
+    interface BillService
+    class BillServiceImpl
+    interface KosClientService
+    class KosClientServiceImpl
+    interface BillCacheService
+    class BillCacheServiceImpl
+    interface KosAdapterService
+    class KosAdapterServiceImpl
+    interface CircuitBreakerService
+    class CircuitBreakerServiceImpl
+    interface RetryService
+    class RetryServiceImpl
+    interface MvnoApiClient
+    class MvnoApiClientImpl
+  }
+  
+  package "domain" {
+    class BillInfo
+    class DiscountInfo
+    class UsageInfo
+    class PaymentInfo
+    class KosRequest
+    class KosResponse
+    class KosData
+    class KosUsage
+    class KosPaymentInfo
+    class MvnoRequest
+    enum CircuitState
+    enum BillInquiryStatus
+  }
+  
+  package "repository" {
+    interface BillHistoryRepository
+    interface KosInquiryHistoryRepository
+    
+    package "entity" {
+      class BillHistoryEntity
+      class KosInquiryHistoryEntity
+    }
+    
+    package "jpa" {
+      interface BillHistoryJpaRepository
+      interface KosInquiryHistoryJpaRepository
+    }
+  }
+  
+  package "config" {
+    class RestTemplateConfig
+    class BillCacheConfig
+    class KosConfig
+    class MvnoConfig
+    class CircuitBreakerConfig
+    class AsyncConfig
+    class JwtTokenUtil
+  }
+}
+
+' 관계 설정
+' Controller Layer
+BillController --> BillService : "uses"
+BillController --> JwtTokenUtil : "uses"
+
+' Service Layer Relationships  
+BillServiceImpl ..|> BillService : "implements"
+BillServiceImpl --> BillCacheService : "uses"
+BillServiceImpl --> KosClientService : "uses"
+BillServiceImpl --> BillHistoryRepository : "uses"
+BillServiceImpl --> MvnoApiClient : "uses"
+
+KosClientServiceImpl ..|> KosClientService : "implements"
+KosClientServiceImpl --> KosAdapterService : "uses"
+KosClientServiceImpl --> CircuitBreakerService : "uses"
+KosClientServiceImpl --> RetryService : "uses"
+KosClientServiceImpl --> KosInquiryHistoryRepository : "uses"
+
+BillCacheServiceImpl ..|> BillCacheService : "implements"
+BillCacheServiceImpl --> BillHistoryRepository : "uses"
+
+KosAdapterServiceImpl ..|> KosAdapterService : "implements"
+KosAdapterServiceImpl --> KosConfig : "uses"
+
+CircuitBreakerServiceImpl ..|> CircuitBreakerService : "implements"
+RetryServiceImpl ..|> RetryService : "implements"
+MvnoApiClientImpl ..|> MvnoApiClient : "implements"
+
+' Domain Relationships
+BillInfo --> DiscountInfo : "contains"
+BillInfo --> UsageInfo : "contains"
+BillInfo --> PaymentInfo : "contains"
+KosResponse --> KosData : "contains"
+KosData --> KosUsage : "contains"
+KosData --> KosPaymentInfo : "contains"
+MvnoRequest --> BillInfo : "contains"
+
+' Repository Relationships
+BillHistoryRepository --> BillHistoryJpaRepository : "uses"
+KosInquiryHistoryRepository --> KosInquiryHistoryJpaRepository : "uses"
+
+' Entity Relationships  
+BillHistoryEntity --|> BaseTimeEntity : "extends"
+KosInquiryHistoryEntity --|> BaseTimeEntity : "extends"
+
+' DTO Relationships
+BillMenuData --> CustomerInfo : "contains"
+BillInquiryData --> BillInfo : "contains"
+BillInquiryStatusData --> BillInfo : "contains"
+BillHistoryData --> BillHistoryItem : "contains"
+BillHistoryData --> PaginationInfo : "contains"
+
+@enduml

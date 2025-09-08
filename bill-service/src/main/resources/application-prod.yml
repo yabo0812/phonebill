@@ -1,0 +1,237 @@
+# 통신요금 관리 서비스 - Bill Service 운영환경 설정
+# 운영환경 안정성과 보안을 위한 설정
+#
+# @author 이개발(백엔더)
+# @version 1.0.0
+# @since 2025-09-08
+
+spring:
+  # 데이터베이스 설정 (운영환경)
+  datasource:
+    url: ${DB_URL:jdbc:mysql://prod-db-host:3306/bill_service_prod?useUnicode=true&characterEncoding=utf8&useSSL=true&requireSSL=true&serverTimezone=Asia/Seoul}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      minimum-idle: 10
+      maximum-pool-size: 50
+      idle-timeout: 600000      # 10분
+      max-lifetime: 1800000     # 30분
+      connection-timeout: 30000 # 30초
+      validation-timeout: 5000  # 5초
+      leak-detection-threshold: 60000  # 1분
+  
+  # JPA 설정 (운영환경)
+  jpa:
+    hibernate:
+      ddl-auto: validate  # 운영환경에서는 스키마 검증만
+    show-sql: false       # 운영환경에서는 SQL 로그 비활성화
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        default_batch_fetch_size: 100
+        jdbc:
+          batch_size: 50
+        connection:
+          provider_disables_autocommit: true
+  
+  # Redis 설정 (운영환경)
+  redis:
+    host: ${REDIS_HOST:prod-redis-host}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD}
+    database: ${REDIS_DATABASE:0}
+    timeout: 5000
+    ssl: ${REDIS_SSL:true}
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 20
+        min-idle: 5
+        max-wait: 5000
+      cluster:
+        refresh:
+          adaptive: true
+          period: 30s
+  
+  # 캐시 설정 (운영환경)
+  cache:
+    redis:
+      time-to-live: 3600000  # 1시간
+
+# 서버 설정 (운영환경)
+server:
+  port: ${SERVER_PORT:8081}
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never     # 운영환경에서는 스택트레이스 숨김
+    include-exception: false      # 예외 정보 숨김
+  tomcat:
+    max-connections: 10000
+    accept-count: 200
+    threads:
+      max: 300
+      min-spare: 20
+    connection-timeout: 20000
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
+
+# 액추에이터 설정 (운영환경)
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus  # 제한적 노출
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when_authorized  # 인증된 사용자에게만 상세 정보 제공
+      show-components: when_authorized
+      probes:
+        enabled: true
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  security:
+    enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 500MB
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        descriptions: false
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.95, 0.99
+      sla:
+        http.server.requests: 100ms, 500ms, 1s, 2s
+
+# KOS 시스템 연동 설정 (운영환경)
+kos:
+  base-url: ${KOS_BASE_URL}
+  connect-timeout: 5000
+  read-timeout: 30000
+  max-retries: 3
+  retry-delay: 1000
+  
+  # Circuit Breaker 설정 (운영환경 - 엄격한 설정)
+  circuit-breaker:
+    failure-rate-threshold: 0.5     # 50% 실패율
+    slow-call-duration-threshold: 10000  # 10초
+    slow-call-rate-threshold: 0.5   # 50% 느린 호출
+    sliding-window-size: 20         # 큰 윈도우로 정확한 측정
+    minimum-number-of-calls: 10     # 충분한 샘플
+    permitted-number-of-calls-in-half-open-state: 5
+    wait-duration-in-open-state: 60000  # 60초
+  
+  # 인증 설정 (운영환경)
+  authentication:
+    enabled: true
+    api-key: ${KOS_API_KEY}
+    secret-key: ${KOS_SECRET_KEY}
+    token-expiration-seconds: 3600  # 1시간
+    token-refresh-threshold-seconds: 300  # 5분
+  
+  # 모니터링 설정 (운영환경)
+  monitoring:
+    performance-logging-enabled: true
+    slow-request-threshold: 3000    # 3초
+    metrics-enabled: true
+    health-check-interval: 30000    # 30초
+
+# 로깅 설정 (운영환경)
+logging:
+  level:
+    root: WARN
+    com.phonebill: INFO             # 애플리케이션 로그는 INFO 레벨
+    com.phonebill.bill.service: INFO
+    com.phonebill.bill.repository: WARN
+    org.springframework.cache: WARN
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN        # SQL 로그 비활성화
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    io.github.resilience4j: INFO
+    redis.clients.jedis: WARN
+    org.springframework.web.client.RestTemplate: WARN
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:%5p} ${PID:- } --- [%t] %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}"
+  file:
+    name: ${LOG_FILE:/app/logs/bill-service.log}
+    max-size: 200MB
+    max-history: 30  # 30일 보관
+  logback:
+    rollingpolicy:
+      total-size-cap: 5GB
+  appender:
+    console:
+      enabled: false  # 운영환경에서는 콘솔 로그 비활성화
+
+# Swagger 설정 (운영환경 - 보안상 비활성화)
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+  show-actuator: false
+
+# 운영환경 보안 설정
+security:
+  require-ssl: true
+  headers:
+    frame:
+      deny: true
+    content-type:
+      nosniff: true
+    xss-protection:
+      and-block: true
+
+# 운영환경 전용 설정
+debug: false
+
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# 운영환경 정보
+info:
+  environment: production
+  debug:
+    enabled: false
+  security:
+    ssl-enabled: true
+  database:
+    name: bill_service_prod
+    ssl-enabled: true
+  redis:
+    ssl-enabled: true
+    cluster-enabled: true
+  kos:
+    ssl-enabled: true
+    authentication-enabled: true
+
+# 운영환경 JVM 옵션 권장사항
+# -Xms2g -Xmx4g
+# -XX:+UseG1GC
+# -XX:MaxGCPauseMillis=200
+# -XX:+HeapDumpOnOutOfMemoryError
+# -XX:HeapDumpPath=/app/logs/heap-dump.hprof
+# -Djava.security.egd=file:/dev/./urandom
+# -Dspring.profiles.active=prod

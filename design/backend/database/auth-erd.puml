@@ -1,0 +1,129 @@
+@startuml auth-erd
+!theme mono
+
+title Auth Service - Entity Relationship Diagram
+
+' 사용자 계정 관리
+entity "auth_users" as users {
+  * user_id : VARCHAR(50) <<PK>>
+  --
+  * password_hash : VARCHAR(255)
+  * password_salt : VARCHAR(100)
+  * customer_id : VARCHAR(50) <<UK>>
+  * line_number : VARCHAR(20)
+  * account_status : VARCHAR(20)
+  * failed_login_count : INTEGER
+  * last_failed_login_at : TIMESTAMP
+  * account_locked_until : TIMESTAMP
+  * last_login_at : TIMESTAMP
+  * last_password_changed_at : TIMESTAMP
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+}
+
+' 사용자 세션
+entity "auth_user_sessions" as sessions {
+  * session_id : VARCHAR(100) <<PK>>
+  --
+  * user_id : VARCHAR(50) <<FK>>
+  * session_token : VARCHAR(500)
+  * refresh_token : VARCHAR(500)
+  * client_ip : VARCHAR(45)
+  * user_agent : TEXT
+  * auto_login_enabled : BOOLEAN
+  * expires_at : TIMESTAMP
+  * created_at : TIMESTAMP
+  * last_accessed_at : TIMESTAMP
+}
+
+' 서비스 정의
+entity "auth_services" as services {
+  * service_code : VARCHAR(30) <<PK>>
+  --
+  * service_name : VARCHAR(100)
+  * service_description : TEXT
+  * is_active : BOOLEAN
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+}
+
+' 권한 정의
+entity "auth_permissions" as permissions {
+  * permission_id : SERIAL <<PK>>
+  --
+  * service_code : VARCHAR(30) <<FK>>
+  * permission_code : VARCHAR(50)
+  * permission_name : VARCHAR(100)
+  * permission_description : TEXT
+  * is_active : BOOLEAN
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+}
+
+' 사용자 권한
+entity "auth_user_permissions" as user_permissions {
+  * user_permission_id : SERIAL <<PK>>
+  --
+  * user_id : VARCHAR(50) <<FK>>
+  * permission_id : INTEGER <<FK>>
+  * granted_by : VARCHAR(50)
+  * granted_at : TIMESTAMP
+  * expires_at : TIMESTAMP
+  * is_active : BOOLEAN
+  * created_at : TIMESTAMP
+  * updated_at : TIMESTAMP
+}
+
+' 로그인 이력
+entity "auth_login_history" as login_history {
+  * history_id : SERIAL <<PK>>
+  --
+  * user_id : VARCHAR(50) <<FK>>
+  * login_type : VARCHAR(20)
+  * login_status : VARCHAR(20)
+  * client_ip : VARCHAR(45)
+  * user_agent : TEXT
+  * failure_reason : VARCHAR(100)
+  * session_id : VARCHAR(100)
+  * attempted_at : TIMESTAMP
+}
+
+' 권한 접근 로그
+entity "auth_permission_access_log" as access_log {
+  * log_id : SERIAL <<PK>>
+  --
+  * user_id : VARCHAR(50) <<FK>>
+  * service_code : VARCHAR(30)
+  * permission_code : VARCHAR(50)
+  * access_status : VARCHAR(20)
+  * client_ip : VARCHAR(45)
+  * session_id : VARCHAR(100)
+  * requested_resource : VARCHAR(200)
+  * denial_reason : VARCHAR(100)
+  * accessed_at : TIMESTAMP
+}
+
+' 관계 정의
+users ||--o{ sessions : "사용자-세션"
+users ||--o{ user_permissions : "사용자-권한"
+users ||--o{ login_history : "사용자-로그인이력"
+users ||--o{ access_log : "사용자-접근로그"
+
+services ||--o{ permissions : "서비스-권한정의"
+permissions ||--o{ user_permissions : "권한-사용자권한"
+
+' 외부 참조 (점선으로 표시)
+note right of users : customer_id는 외부 서비스\n(Bill-Inquiry)의 고객 정보를\n캐시를 통해서만 참조
+note right of users : line_number는 외부 서비스\n(Product-Change)의 회선 정보를\n캐시를 통해서만 참조
+
+' 범례
+legend right
+  |= 관계 유형 |= 설명 |
+  | 실선 | 물리적 FK 관계 |
+  | 점선 | 논리적 참조 관계 (캐시) |
+  | <<PK>> | Primary Key |
+  | <<FK>> | Foreign Key |
+  | <<UK>> | Unique Key |
+end legend
+
+@enduml

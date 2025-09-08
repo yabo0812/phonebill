@@ -1,0 +1,343 @@
+-- Product-Change 서비스 데이터베이스 스키마
+-- 데이터베이스: product_change_db
+-- 스키마: product_change
+-- 작성일: 2025-09-08
+
+-- 데이터베이스 생성 (필요시)
+-- CREATE DATABASE product_change_db 
+--   WITH ENCODING = 'UTF8' 
+--        LC_COLLATE = 'C' 
+--        LC_CTYPE = 'C' 
+--        TEMPLATE = template0;
+
+-- 스키마 생성
+CREATE SCHEMA IF NOT EXISTS product_change;
+
+-- 스키마 사용 설정
+SET search_path TO product_change;
+
+-- 확장 모듈 설치
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- =======================
+-- 1. 상품변경 이력 테이블
+-- =======================
+CREATE TABLE pc_product_change_history (
+    id                    BIGSERIAL                PRIMARY KEY,
+    request_id            VARCHAR(50)              NOT NULL UNIQUE DEFAULT uuid_generate_v4(),
+    line_number           VARCHAR(20)              NOT NULL,
+    customer_id           VARCHAR(50)              NOT NULL,
+    current_product_code  VARCHAR(20)              NOT NULL,
+    target_product_code   VARCHAR(20)              NOT NULL,
+    process_status        VARCHAR(20)              NOT NULL DEFAULT 'REQUESTED' 
+                         CHECK (process_status IN ('REQUESTED', 'VALIDATED', 'PROCESSING', 'COMPLETED', 'FAILED')),
+    validation_result     TEXT,
+    process_message       TEXT,
+    kos_request_data      JSONB,
+    kos_response_data     JSONB,
+    requested_at          TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    validated_at          TIMESTAMP WITH TIME ZONE,
+    processed_at          TIMESTAMP WITH TIME ZONE,
+    created_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    updated_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+    version               BIGINT                   NOT NULL DEFAULT 0
+);
+
+-- 상품변경 이력 테이블 코멘트
+COMMENT ON TABLE pc_product_change_history IS '상품변경 요청 및 처리 이력을 관리하는 테이블';
+COMMENT ON COLUMN pc_product_change_history.id IS '이력 고유 ID';
+COMMENT ON COLUMN pc_product_change_history.request_id IS '요청 고유 식별자 (UUID)';
+COMMENT ON COLUMN pc_product_change_history.line_number IS '고객 회선번호';
+COMMENT ON COLUMN pc_product_change_history.customer_id IS '고객 식별자';
+COMMENT ON COLUMN pc_product_change_history.current_product_code IS '변경 전 상품코드';
+COMMENT ON COLUMN pc_product_change_history.target_product_code IS '변경 후 상품코드';
+COMMENT ON COLUMN pc_product_change_history.process_status IS '처리상태 (REQUESTED/VALIDATED/PROCESSING/COMPLETED/FAILED)';
+COMMENT ON COLUMN pc_product_change_history.validation_result IS '사전체크 결과 메시지';
+COMMENT ON COLUMN pc_product_change_history.process_message IS '처리 결과 메시지';
+COMMENT ON COLUMN pc_product_change_history.kos_request_data IS 'KOS 요청 데이터 (JSON)';
+COMMENT ON COLUMN pc_product_change_history.kos_response_data IS 'KOS 응답 데이터 (JSON)';
+COMMENT ON COLUMN pc_product_change_history.requested_at IS '요청 일시';
+COMMENT ON COLUMN pc_product_change_history.validated_at IS '검증 완료 일시';
+COMMENT ON COLUMN pc_product_change_history.processed_at IS '처리 완료 일시';
+COMMENT ON COLUMN pc_product_change_history.version IS '낙관적 락 버전';
+
+-- 상품변경 이력 테이블 인덱스
+CREATE INDEX idx_pc_history_line_status_date ON pc_product_change_history(line_number, process_status, requested_at DESC);
+CREATE INDEX idx_pc_history_customer_date ON pc_product_change_history(customer_id, requested_at DESC);
+CREATE INDEX idx_pc_history_status_date ON pc_product_change_history(process_status, requested_at DESC);
+
+-- =======================
+-- 2. KOS 연동 로그 테이블
+-- =======================
+CREATE TABLE pc_kos_integration_log (
+    id                    BIGSERIAL                PRIMARY KEY,
+    request_id            VARCHAR(50),
+    integration_type      VARCHAR(30)              NOT NULL 
+                         CHECK (integration_type IN ('CUSTOMER_INFO', 'PRODUCT_INFO', 'PRODUCT_CHANGE')),
+    method                VARCHAR(10)              NOT NULL 
+                         CHECK (method IN ('GET', 'POST', 'PUT', 'DELETE')),
+    endpoint_url          VARCHAR(200)             NOT NULL,
+    request_headers       JSONB,
+    request_body          JSONB,
+    response_status       INTEGER,
+    response_headers      JSONB,
+    response_body         JSONB,
+    response_time_ms      INTEGER,
+    is_success            BOOLEAN                  NOT NULL DEFAULT FALSE,
+    error_message         TEXT,
+    retry_count           INTEGER                  NOT NULL DEFAULT 0,
+    circuit_breaker_state VARCHAR(20)             CHECK (circuit_breaker_state IN ('CLOSED', 'OPEN', 'HALF_OPEN')),
+    created_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- KOS 연동 로그 테이블 코멘트
+COMMENT ON TABLE pc_kos_integration_log IS 'KOS 시스템과의 모든 연동 이력을 기록하는 테이블';
+COMMENT ON COLUMN pc_kos_integration_log.id IS '로그 고유 ID';
+COMMENT ON COLUMN pc_kos_integration_log.request_id IS '관련 요청 ID (상품변경 이력과 연결)';
+COMMENT ON COLUMN pc_kos_integration_log.integration_type IS '연동 유형 (CUSTOMER_INFO/PRODUCT_INFO/PRODUCT_CHANGE)';
+COMMENT ON COLUMN pc_kos_integration_log.method IS 'HTTP 메소드';
+COMMENT ON COLUMN pc_kos_integration_log.endpoint_url IS '호출한 엔드포인트 URL';
+COMMENT ON COLUMN pc_kos_integration_log.request_headers IS '요청 헤더 (JSON)';
+COMMENT ON COLUMN pc_kos_integration_log.request_body IS '요청 본문 (JSON)';
+COMMENT ON COLUMN pc_kos_integration_log.response_status IS 'HTTP 응답 상태코드';
+COMMENT ON COLUMN pc_kos_integration_log.response_headers IS '응답 헤더 (JSON)';
+COMMENT ON COLUMN pc_kos_integration_log.response_body IS '응답 본문 (JSON)';
+COMMENT ON COLUMN pc_kos_integration_log.response_time_ms IS '응답 시간 (밀리초)';
+COMMENT ON COLUMN pc_kos_integration_log.is_success IS '성공 여부';
+COMMENT ON COLUMN pc_kos_integration_log.error_message IS '오류 메시지';
+COMMENT ON COLUMN pc_kos_integration_log.retry_count IS '재시도 횟수';
+COMMENT ON COLUMN pc_kos_integration_log.circuit_breaker_state IS 'Circuit Breaker 상태';
+
+-- KOS 연동 로그 테이블 인덱스
+CREATE INDEX idx_kos_log_request_type_date ON pc_kos_integration_log(request_id, integration_type, created_at DESC);
+CREATE INDEX idx_kos_log_type_success_date ON pc_kos_integration_log(integration_type, is_success, created_at DESC);
+CREATE INDEX idx_kos_log_success_date ON pc_kos_integration_log(is_success, created_at DESC);
+
+-- =======================
+-- 3. Circuit Breaker 상태 테이블
+-- =======================
+CREATE TABLE pc_circuit_breaker_state (
+    id                    BIGSERIAL                PRIMARY KEY,
+    service_name          VARCHAR(50)              NOT NULL UNIQUE 
+                         CHECK (service_name IN ('KOS_CUSTOMER', 'KOS_PRODUCT', 'KOS_CHANGE')),
+    state                 VARCHAR(20)              NOT NULL DEFAULT 'CLOSED' 
+                         CHECK (state IN ('CLOSED', 'OPEN', 'HALF_OPEN')),
+    failure_count         INTEGER                  NOT NULL DEFAULT 0,
+    success_count         INTEGER                  NOT NULL DEFAULT 0,
+    last_failure_time     TIMESTAMP WITH TIME ZONE,
+    next_attempt_time     TIMESTAMP WITH TIME ZONE,
+    failure_threshold     INTEGER                  NOT NULL DEFAULT 5,
+    success_threshold     INTEGER                  NOT NULL DEFAULT 3,
+    timeout_duration_ms   INTEGER                  NOT NULL DEFAULT 60000,
+    updated_at            TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+);
+
+-- Circuit Breaker 상태 테이블 코멘트
+COMMENT ON TABLE pc_circuit_breaker_state IS 'Circuit Breaker 패턴의 서비스별 상태를 관리하는 테이블';
+COMMENT ON COLUMN pc_circuit_breaker_state.id IS '상태 고유 ID';
+COMMENT ON COLUMN pc_circuit_breaker_state.service_name IS '서비스명 (KOS_CUSTOMER/KOS_PRODUCT/KOS_CHANGE)';
+COMMENT ON COLUMN pc_circuit_breaker_state.state IS 'Circuit Breaker 상태 (CLOSED/OPEN/HALF_OPEN)';
+COMMENT ON COLUMN pc_circuit_breaker_state.failure_count IS '연속 실패 횟수';
+COMMENT ON COLUMN pc_circuit_breaker_state.success_count IS '연속 성공 횟수 (HALF_OPEN 상태에서)';
+COMMENT ON COLUMN pc_circuit_breaker_state.last_failure_time IS '마지막 실패 발생 시간';
+COMMENT ON COLUMN pc_circuit_breaker_state.next_attempt_time IS '다음 시도 가능 시간 (OPEN 상태에서)';
+COMMENT ON COLUMN pc_circuit_breaker_state.failure_threshold IS '실패 임계값 (CLOSED → OPEN)';
+COMMENT ON COLUMN pc_circuit_breaker_state.success_threshold IS '성공 임계값 (HALF_OPEN → CLOSED)';
+COMMENT ON COLUMN pc_circuit_breaker_state.timeout_duration_ms IS '타임아웃 기간 (밀리초)';
+
+-- =======================
+-- 4. 트리거 함수 생성
+-- =======================
+
+-- updated_at 컬럼 자동 업데이트 함수
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- updated_at 트리거 설정
+CREATE TRIGGER trigger_pc_history_updated_at
+    BEFORE UPDATE ON pc_product_change_history
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER trigger_pc_cb_state_updated_at
+    BEFORE UPDATE ON pc_circuit_breaker_state
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- =======================
+-- 5. 파티션 테이블 생성 (월별)
+-- =======================
+
+-- 상품변경 이력 파티션 테이블 생성 함수
+CREATE OR REPLACE FUNCTION create_monthly_partition(
+    table_name TEXT,
+    start_date DATE
+) RETURNS VOID AS $$
+DECLARE
+    partition_name TEXT;
+    start_month TEXT;
+    end_month TEXT;
+BEGIN
+    start_month := start_date::TEXT;
+    end_month := (start_date + INTERVAL '1 month')::TEXT;
+    partition_name := table_name || '_' || TO_CHAR(start_date, 'YYYY_MM');
+    
+    EXECUTE format('
+        CREATE TABLE IF NOT EXISTS %I PARTITION OF %I
+        FOR VALUES FROM (%L) TO (%L)',
+        partition_name, table_name, start_month, end_month);
+END;
+$$ LANGUAGE plpgsql;
+
+-- 현재 월부터 12개월 파티션 생성
+DO $$
+DECLARE
+    i INTEGER;
+    partition_date DATE;
+BEGIN
+    FOR i IN 0..11 LOOP
+        partition_date := DATE_TRUNC('month', CURRENT_DATE) + (i || ' months')::INTERVAL;
+        PERFORM create_monthly_partition('pc_product_change_history', partition_date);
+        PERFORM create_monthly_partition('pc_kos_integration_log', partition_date);
+    END LOOP;
+END $$;
+
+-- =======================
+-- 6. 초기 데이터 삽입
+-- =======================
+
+-- Circuit Breaker 상태 초기값 설정
+INSERT INTO pc_circuit_breaker_state (service_name, state, failure_threshold, success_threshold, timeout_duration_ms) VALUES
+    ('KOS_CUSTOMER', 'CLOSED', 5, 3, 60000),
+    ('KOS_PRODUCT', 'CLOSED', 5, 3, 60000),
+    ('KOS_CHANGE', 'CLOSED', 10, 5, 120000)
+ON CONFLICT (service_name) DO NOTHING;
+
+-- =======================
+-- 7. 권한 설정
+-- =======================
+
+-- 애플리케이션 사용자 생성 및 권한 부여
+-- CREATE USER product_change_app WITH PASSWORD 'strong_password_here';
+-- CREATE USER product_change_admin WITH PASSWORD 'admin_password_here';
+-- CREATE USER product_change_readonly WITH PASSWORD 'readonly_password_here';
+
+-- 애플리케이션 사용자 권한
+-- GRANT USAGE ON SCHEMA product_change TO product_change_app;
+-- GRANT SELECT, INSERT, UPDATE ON ALL TABLES IN SCHEMA product_change TO product_change_app;
+-- GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA product_change TO product_change_app;
+
+-- 관리자 사용자 권한
+-- GRANT ALL PRIVILEGES ON SCHEMA product_change TO product_change_admin;
+-- GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA product_change TO product_change_admin;
+-- GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA product_change TO product_change_admin;
+
+-- 읽기 전용 사용자 권한
+-- GRANT USAGE ON SCHEMA product_change TO product_change_readonly;
+-- GRANT SELECT ON ALL TABLES IN SCHEMA product_change TO product_change_readonly;
+
+-- =======================
+-- 8. 성능 모니터링 뷰 생성
+-- =======================
+
+-- 상품변경 처리 현황 뷰
+CREATE OR REPLACE VIEW v_product_change_summary AS
+SELECT 
+    process_status,
+    COUNT(*) as request_count,
+    COUNT(CASE WHEN DATE(requested_at) = CURRENT_DATE THEN 1 END) as today_count,
+    AVG(EXTRACT(EPOCH FROM (processed_at - requested_at))) as avg_processing_time_sec
+FROM pc_product_change_history
+WHERE requested_at >= CURRENT_DATE - INTERVAL '30 days'
+GROUP BY process_status
+ORDER BY process_status;
+
+-- KOS 연동 성공률 뷰
+CREATE OR REPLACE VIEW v_kos_integration_summary AS
+SELECT 
+    integration_type,
+    COUNT(*) as total_requests,
+    COUNT(CASE WHEN is_success THEN 1 END) as success_count,
+    ROUND((COUNT(CASE WHEN is_success THEN 1 END) * 100.0 / COUNT(*)), 2) as success_rate,
+    AVG(response_time_ms) as avg_response_time_ms,
+    COUNT(CASE WHEN DATE(created_at) = CURRENT_DATE THEN 1 END) as today_count
+FROM pc_kos_integration_log
+WHERE created_at >= CURRENT_DATE - INTERVAL '7 days'
+GROUP BY integration_type
+ORDER BY integration_type;
+
+-- Circuit Breaker 상태 모니터링 뷰
+CREATE OR REPLACE VIEW v_circuit_breaker_status AS
+SELECT 
+    service_name,
+    state,
+    failure_count,
+    success_count,
+    last_failure_time,
+    next_attempt_time,
+    CASE 
+        WHEN state = 'OPEN' AND next_attempt_time <= NOW() THEN 'READY_FOR_HALF_OPEN'
+        WHEN state = 'HALF_OPEN' AND success_count >= success_threshold THEN 'READY_FOR_CLOSE'
+        ELSE 'STABLE'
+    END as recommended_action,
+    updated_at
+FROM pc_circuit_breaker_state
+ORDER BY service_name;
+
+-- =======================
+-- 9. 데이터 정리 함수
+-- =======================
+
+-- 오래된 로그 데이터 정리 함수
+CREATE OR REPLACE FUNCTION cleanup_old_logs() RETURNS INTEGER AS $$
+DECLARE
+    deleted_count INTEGER := 0;
+BEGIN
+    -- 12개월 이전 KOS 연동 로그 삭제
+    DELETE FROM pc_kos_integration_log 
+    WHERE created_at < CURRENT_DATE - INTERVAL '12 months';
+    
+    GET DIAGNOSTICS deleted_count = ROW_COUNT;
+    
+    -- 24개월 이전 상품변경 이력 중 완료/실패 상태만 아카이브 (실제로는 삭제하지 않음)
+    -- UPDATE pc_product_change_history 
+    -- SET archived = TRUE 
+    -- WHERE requested_at < CURRENT_DATE - INTERVAL '24 months' 
+    --   AND process_status IN ('COMPLETED', 'FAILED');
+    
+    RETURN deleted_count;
+END;
+$$ LANGUAGE plpgsql;
+
+-- =======================
+-- 10. 스키마 정보 조회
+-- =======================
+
+-- 테이블 정보 조회
+SELECT 
+    table_name,
+    table_type,
+    table_comment
+FROM information_schema.tables 
+WHERE table_schema = 'product_change'
+ORDER BY table_name;
+
+-- 인덱스 정보 조회
+SELECT 
+    schemaname,
+    tablename,
+    indexname,
+    indexdef
+FROM pg_indexes
+WHERE schemaname = 'product_change'
+ORDER BY tablename, indexname;
+
+COMMIT;
+
+-- 스키마 생성 완료 메시지
+SELECT 'Product-Change 서비스 데이터베이스 스키마 생성이 완료되었습니다.' as message;

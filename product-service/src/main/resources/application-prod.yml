@@ -1,0 +1,273 @@
+spring:
+  # Database - 운영환경 (PostgreSQL)
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:phonebill_product_prod}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 20000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      
+  # JPA 운영 설정
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        use_sql_comments: false
+        generate_statistics: false
+        
+  # Redis - 운영환경 (클러스터)
+  data:
+    redis:
+      cluster:
+        nodes: ${REDIS_CLUSTER_NODES}
+      password: ${REDIS_PASSWORD}
+      timeout: 2000ms
+      lettuce:
+        cluster:
+          refresh:
+            adaptive: true
+            period: 30s
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 5
+          max-wait: 3000ms
+
+# Server 운영 설정
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+  compression:
+    enabled: true
+    min-response-size: 1024
+  tomcat:
+    connection-timeout: 30s
+    max-connections: 8192
+    max-threads: 200
+    min-spare-threads: 10
+    accept-count: 100
+  error:
+    include-stacktrace: never
+    include-message: on-param
+    include-binding-errors: never
+
+# Graceful Shutdown
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
+
+# Logging 운영 설정
+logging:
+  level:
+    root: WARN
+    com.unicorn.phonebill: INFO
+    org.springframework.security: WARN
+    org.hibernate: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: /app/logs/product-service.log
+    max-size: 500MB
+    max-history: 30
+    total-size-cap: 10GB
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+
+# Management 운영 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+      show-components: never
+    info:
+      enabled: true
+  health:
+    probes:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+      slo:
+        http.server.requests: 50ms, 100ms, 200ms, 500ms, 1s, 2s
+  
+# OpenAPI 운영 설정 (비활성화)
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+
+# Resilience4j 운영 설정
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3s
+        permitted-number-of-calls-in-half-open-state: 5
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 20
+    instances:
+      kosClient:
+        base-config: default
+        failure-rate-threshold: 40
+        wait-duration-in-open-state: 60s
+        minimum-number-of-calls: 20
+        
+  retry:
+    configs:
+      default:
+        max-attempts: 3
+        wait-duration: 2s
+        exponential-backoff-multiplier: 2
+    instances:
+      kosClient:
+        base-config: default
+        max-attempts: 2
+        wait-duration: 3s
+        
+  timelimiter:
+    configs:
+      default:
+        timeout-duration: 8s
+    instances:
+      kosClient:
+        timeout-duration: 15s
+
+# KOS 서버 설정 (운영환경)
+kos:
+  base-url: ${KOS_BASE_URL}
+  connect-timeout: 10s
+  read-timeout: 30s
+  max-retries: 2
+  retry-delay: 3s
+  
+  endpoints:
+    customer-info: /api/v1/customer/{lineNumber}
+    product-info: /api/v1/product/{productCode}
+    available-products: /api/v1/products/available
+    product-change: /api/v1/product/change
+    
+  headers:
+    api-key: ${KOS_API_KEY}
+    client-id: ${KOS_CLIENT_ID:product-service}
+    
+  # 운영환경 보안 설정
+  ssl:
+    enabled: true
+    trust-store: ${SSL_TRUST_STORE:/app/certs/truststore.jks}
+    trust-store-password: ${SSL_TRUST_STORE_PASSWORD}
+    key-store: ${SSL_KEY_STORE:/app/certs/keystore.jks}
+    key-store-password: ${SSL_KEY_STORE_PASSWORD}
+
+# 비즈니스 운영 설정
+app:
+  product:
+    cache:
+      customer-info-ttl: 14400  # 4시간
+      product-info-ttl: 7200    # 2시간  
+      available-products-ttl: 86400 # 24시간
+      product-status-ttl: 3600     # 1시간
+      line-status-ttl: 1800        # 30분
+    validation:
+      enabled: true
+      strict-mode: true
+      max-retry-attempts: 2
+      validation-timeout: 10s
+    processing:
+      async-enabled: true
+      max-concurrent-requests: 500
+      request-timeout: 60s
+      
+  security:
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration: 86400 # 24시간
+      refresh-expiration: 604800 # 7일
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS}
+      allowed-methods:
+        - GET
+        - POST
+        - PUT
+        - DELETE
+        - OPTIONS
+      allowed-headers:
+        - Authorization
+        - Content-Type
+        - Accept
+        - X-Requested-With
+        - X-Forwarded-For
+        - X-Forwarded-Proto
+      allow-credentials: true
+      max-age: 3600
+      
+  # 모니터링 설정
+  monitoring:
+    health-check:
+      interval: 30s
+      timeout: 10s
+    metrics:
+      enabled: true
+      export-interval: 60s
+    alerts:
+      email-enabled: ${ALERT_EMAIL_ENABLED:false}
+      slack-enabled: ${ALERT_SLACK_ENABLED:false}
+      webhook-url: ${ALERT_WEBHOOK_URL:}
+
+# 운영 환경 정보
+info:
+  app:
+    name: ${spring.application.name}
+    description: Product-Change Service Production Environment
+    version: ${spring.application.version}
+    environment: production
+  build:
+    artifact: product-service
+    version: ${BUILD_VERSION:1.0.0}
+    time: ${BUILD_TIME}
+    commit: ${GIT_COMMIT:unknown}
+    branch: ${GIT_BRANCH:main}
+
+# JVM 튜닝 설정 (환경변수로 설정)
+# JAVA_OPTS=-Xms2g -Xmx4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 
+#           -XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=/app/heapdumps/
+#           -Dspring.profiles.active=prod
+
+# 외부 의존성 URLs
+external:
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://auth-service:8080}
+  bill-inquiry-service:
+    url: ${BILL_INQUIRY_SERVICE_URL:http://bill-inquiry-service:8081}
+
+# 데이터베이스 마이그레이션 (Flyway)
+spring:
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+    validate-on-migrate: true

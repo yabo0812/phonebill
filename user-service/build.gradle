@@ -1,0 +1,41 @@
+// user-service 모듈
+// 루트 build.gradle의 subprojects 블록에서 공통 설정 적용됨
+
+dependencies {
+    // Common module dependency
+    implementation project(':common')
+    
+    // Database (user service specific)
+    runtimeOnly 'org.postgresql:postgresql'
+    
+    // Redis (user service specific)
+    implementation 'redis.clients:jedis'
+    
+    // BCrypt for password hashing
+    implementation 'org.springframework.security:spring-security-crypto'
+    
+    // Micrometer for metrics
+    implementation 'io.micrometer:micrometer-registry-prometheus'
+    
+    // Test dependencies (user service specific)
+    testImplementation 'org.testcontainers:postgresql'
+    testImplementation 'com.h2database:h2'
+    testImplementation 'it.ozimov:embedded-redis:0.7.3'
+}
+
+// 추가 테스트 설정 (루트에서 기본 설정됨)
+
+// JAR 파일명 설정
+jar {
+    archiveBaseName = 'user-service'
+    enabled = false
+}
+
+bootJar {
+    archiveBaseName = 'user-service'
+}
+
+// Spring Boot 실행 설정
+springBoot {
+    mainClass = 'com.phonebill.user.UserServiceApplication'
+}

@@ -1,0 +1,176 @@
+@startuml
+!theme mono
+
+title Common Base Classes - 통신요금 관리 서비스
+
+package "Common Module" {
+  package "dto" {
+    class ApiResponse<T> {
+      -success: boolean
+      -message: String
+      -data: T
+      -timestamp: LocalDateTime
+      +of(data: T): ApiResponse<T>
+      +success(data: T, message: String): ApiResponse<T>
+      +error(message: String): ApiResponse<T>
+      +getSuccess(): boolean
+      +getMessage(): String
+      +getData(): T
+      +getTimestamp(): LocalDateTime
+    }
+
+    class ErrorResponse {
+      -code: String
+      -message: String
+      -details: String
+      -timestamp: LocalDateTime
+      +ErrorResponse(code: String, message: String, details: String)
+      +getCode(): String
+      +getMessage(): String
+      +getDetails(): String
+      +getTimestamp(): LocalDateTime
+    }
+
+    class JwtTokenDTO {
+      -accessToken: String
+      -refreshToken: String
+      -tokenType: String
+      -expiresIn: long
+      +JwtTokenDTO(accessToken: String, refreshToken: String, expiresIn: long)
+      +getAccessToken(): String
+      +getRefreshToken(): String
+      +getTokenType(): String
+      +getExpiresIn(): long
+    }
+
+    class JwtTokenVerifyDTO {
+      -userId: String
+      -lineNumber: String
+      -permissions: List<String>
+      -expiresAt: LocalDateTime
+      +JwtTokenVerifyDTO(userId: String, lineNumber: String, permissions: List<String>)
+      +getUserId(): String
+      +getLineNumber(): String
+      +getPermissions(): List<String>
+      +getExpiresAt(): LocalDateTime
+    }
+  }
+
+  package "entity" {
+    abstract class BaseTimeEntity {
+      #createdAt: LocalDateTime
+      #updatedAt: LocalDateTime
+      +getCreatedAt(): LocalDateTime
+      +getUpdatedAt(): LocalDateTime
+      +{abstract} getId(): Object
+    }
+  }
+
+  package "exception" {
+    enum ErrorCode {
+      AUTH001("인증 실패")
+      AUTH002("토큰이 유효하지 않음")
+      AUTH003("권한이 부족함")
+      AUTH004("계정이 잠겨있음")
+      AUTH005("토큰이 만료됨")
+      BILL001("요금 조회 실패")
+      BILL002("KOS 연동 실패")
+      BILL003("조회 이력 없음")
+      PROD001("상품변경 실패")
+      PROD002("사전체크 실패")
+      PROD003("상품정보 없음")
+      SYS001("시스템 오류")
+      SYS002("외부 연동 실패")
+      
+      -code: String
+      -message: String
+      
+      +ErrorCode(code: String, message: String)
+      +getCode(): String
+      +getMessage(): String
+    }
+
+    class BusinessException {
+      -errorCode: ErrorCode
+      -details: String
+      +BusinessException(errorCode: ErrorCode)
+      +BusinessException(errorCode: ErrorCode, details: String)
+      +getErrorCode(): ErrorCode
+      +getDetails(): String
+    }
+
+    class InfraException {
+      -errorCode: ErrorCode
+      -details: String
+      +InfraException(errorCode: ErrorCode)
+      +InfraException(errorCode: ErrorCode, details: String)
+      +getErrorCode(): ErrorCode
+      +getDetails(): String
+    }
+  }
+
+  package "util" {
+    class DateUtil {
+      +{static} getCurrentDateTime(): LocalDateTime
+      +{static} formatDate(date: LocalDateTime, pattern: String): String
+      +{static} parseDate(dateString: String, pattern: String): LocalDateTime
+      +{static} getStartOfMonth(date: LocalDateTime): LocalDateTime
+      +{static} getEndOfMonth(date: LocalDateTime): LocalDateTime
+      +{static} isWithinRange(date: LocalDateTime, start: LocalDateTime, end: LocalDateTime): boolean
+    }
+
+    class SecurityUtil {
+      +{static} encryptPassword(password: String): String
+      +{static} verifyPassword(password: String, encodedPassword: String): boolean
+      +{static} generateSalt(): String
+      +{static} maskPhoneNumber(phoneNumber: String): String
+      +{static} maskUserId(userId: String): String
+    }
+
+    class ValidatorUtil {
+      +{static} isValidPhoneNumber(phoneNumber: String): boolean
+      +{static} isValidUserId(userId: String): boolean
+      +{static} isValidPassword(password: String): boolean
+      +{static} isNotEmpty(value: String): boolean
+      +{static} isValidDateRange(startDate: LocalDateTime, endDate: LocalDateTime): boolean
+    }
+  }
+
+  package "config" {
+    class JpaConfig {
+      +auditorProvider(): AuditorAware<String>
+      +entityManagerFactory(): LocalContainerEntityManagerFactoryBean
+      +transactionManager(): PlatformTransactionManager
+    }
+
+    interface CacheConfig {
+      +redisConnectionFactory(): RedisConnectionFactory
+      +redisTemplate(): RedisTemplate<String, Object>
+      +cacheManager(): CacheManager
+      +redisCacheConfiguration(): RedisCacheConfiguration
+    }
+  }
+
+  package "aop" {
+    class LoggingAspect {
+      -logger: Logger
+      +logExecutionTime(joinPoint: ProceedingJoinPoint): Object
+      +logMethodEntry(joinPoint: JoinPoint): void
+      +logMethodExit(joinPoint: JoinPoint, result: Object): void
+      +logException(joinPoint: JoinPoint, exception: Exception): void
+    }
+  }
+}
+
+' 관계 설정
+ApiResponse --> ErrorResponse : "contains"
+BusinessException --> ErrorCode : "uses"
+InfraException --> ErrorCode : "uses"
+
+' 노트 추가
+note top of ApiResponse : "모든 API 응답의 표준 구조\n제네릭을 사용한 타입 안전성 보장"
+note top of BaseTimeEntity : "모든 엔티티의 기본 클래스\nJPA Auditing을 통한 생성/수정 시간 자동 관리"
+note top of ErrorCode : "시스템 전체의 오류 코드 표준화\n서비스별 오류 코드 체계"
+note top of LoggingAspect : "AOP를 통한 로깅 처리\n실행 시간 측정 및 예외 로깅"
+
+@enduml

@@ -1,0 +1,147 @@
+@startuml
+!theme mono
+title Auth Service - 토큰 검증 내부 시퀀스
+
+participant "API Gateway" as Gateway
+participant "AuthController" as Controller
+participant "AuthService" as Service
+participant "TokenService" as TokenService
+participant "Redis Cache<<E>>" as Redis
+participant "UserRepository" as UserRepo
+participant "Auth DB<<E>>" as AuthDB
+
+== UFR-AUTH-020: 사용자 정보 조회 및 토큰 검증 ==
+
+Gateway -> Controller: GET /user-info\nAuthorization: Bearer {accessToken}
+activate Controller
+
+Controller -> TokenService: validateAccessToken(accessToken)
+activate TokenService
+
+TokenService -> TokenService: JWT 토큰 파싱 및 검증\n- 서명 검증\n- 만료 시간 확인\n- 토큰 구조 검증
+
+alt 토큰 무효 (만료/변조/형식오류)
+    TokenService --> Controller: InvalidTokenException
+    Controller --> Gateway: 401 Unauthorized\n"토큰이 유효하지 않습니다"
+else 토큰 유효
+    TokenService -> TokenService: 토큰에서 userId 추출
+    TokenService --> Controller: DecodedToken{userId, permissions, exp}
+    deactivate TokenService
+    
+    Controller -> Service: getUserInfo(userId)
+    activate Service
+    
+    == Cache-Aside 패턴으로 사용자 정보 조회 ==
+    
+    Service -> Redis: getUserSession(userId)\nKey: user_session:{userId}
+    activate Redis
+    
+    alt 캐시 Hit
+        Redis --> Service: 사용자 세션 데이터 반환\n{userInfo, permissions, lastAccess}
+        deactivate Redis
+        note right: 캐시 히트\n응답 시간 < 50ms
+        
+        Service -> Service: 세션 유효성 확인\n(lastAccess 시간 체크)
+        
+    else 캐시 Miss (세션 만료 또는 없음)
+        Redis --> Service: null (캐시 데이터 없음)
+        deactivate Redis
+        
+        Service -> UserRepo: findUserById(userId)
+        activate UserRepo
+        
+        UserRepo -> AuthDB: SELECT user_id, name, permissions, status\nWHERE user_id = ? AND status = 'ACTIVE'
+        activate AuthDB
+        AuthDB --> UserRepo: 사용자 정보 반환
+        deactivate AuthDB
+        
+        alt 사용자 없음 또는 비활성
+            UserRepo --> Service: null
+            deactivate UserRepo
+            Service --> Controller: UserNotFoundException
+            Controller --> Gateway: 401 Unauthorized\n"사용자 정보를 찾을 수 없습니다"
+        else 사용자 정보 존재
+            UserRepo --> Service: User Entity
+            deactivate UserRepo
+            
+            Service -> Service: UserInfo 및 Permission 매핑
+            
+            Service -> Redis: setUserSession\nKey: user_session:{userId}\nValue: {userInfo, permissions, lastAccess}\nTTL: 30분
+            activate Redis
+            Redis --> Service: 세션 재생성 완료
+            deactivate Redis
+        end
+    end
+    
+    alt 세션 정보 획득 성공
+        Service -> Service: lastAccess 시간 업데이트
+        Service -> Redis: updateLastAccess\nKey: user_session:{userId}
+        activate Redis
+        Redis --> Service: 업데이트 완료
+        deactivate Redis
+        
+        Service --> Controller: UserInfoResponse\n{userInfo, permissions}
+        deactivate Service
+        
+        Controller --> Gateway: 200 OK\n{userInfo, permissions}
+        deactivate Controller
+    else 세션 정보 획득 실패
+        Service --> Controller: SessionNotFoundException
+        Controller --> Gateway: 401 Unauthorized\n"세션이 만료되었습니다"
+    end
+end
+
+== 토큰 갱신 처리 ==
+
+note over Gateway, AuthDB
+토큰 갱신 요청 시 별도 엔드포인트 처리
+POST /auth/refresh
+end note
+
+Gateway -> Controller: POST /refresh\n{refreshToken}
+activate Controller
+
+Controller -> TokenService: validateRefreshToken(refreshToken)
+activate TokenService
+
+TokenService -> TokenService: Refresh Token 검증\n- JWT 서명 확인\n- 만료 시간 확인\n- 토큰 타입 확인
+
+alt Refresh Token 무효
+    TokenService --> Controller: InvalidTokenException
+    Controller --> Gateway: 401 Unauthorized\n"토큰 갱신이 필요합니다"
+else Refresh Token 유효
+    TokenService -> TokenService: userId 추출
+    TokenService --> Controller: userId
+    deactivate TokenService
+    
+    Controller -> Service: refreshUserToken(userId)
+    activate Service
+    
+    Service -> Redis: getUserSession(userId)
+    activate Redis
+    Redis --> Service: 세션 데이터 확인
+    deactivate Redis
+    
+    alt 세션 유효
+        Service -> TokenService: generateAccessToken(userInfo)
+        activate TokenService
+        TokenService --> Service: 새로운 AccessToken (30분)
+        deactivate TokenService
+        
+        Service -> Redis: updateUserSession\n새로운 토큰 정보로 세션 업데이트
+        activate Redis
+        Redis --> Service: 세션 업데이트 완료
+        deactivate Redis
+        
+        Service --> Controller: TokenRefreshResponse\n{newAccessToken}
+        deactivate Service
+        
+        Controller --> Gateway: 200 OK\n{accessToken}
+        deactivate Controller
+    else 세션 무효
+        Service --> Controller: SessionExpiredException
+        Controller --> Gateway: 401 Unauthorized\n"재로그인이 필요합니다"
+    end
+end
+
+@enduml

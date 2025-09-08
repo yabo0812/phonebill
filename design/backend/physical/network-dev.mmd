@@ -1,0 +1,100 @@
+graph TB
+    %% 네트워크 구성
+    subgraph "Internet"
+        Internet[인터넷<br/>Public Network]
+    end
+
+    subgraph "Azure Virtual Network - phonebill-vnet-dev"
+        subgraph "Public Subnet - 10.0.1.0/24"
+            LB[Azure Load Balancer Basic<br/>Public IP<br/>80/443 포트]
+            Ingress[NGINX Ingress Controller<br/>10.0.1.10<br/>Internal Service]
+        end
+        
+        subgraph "Application Subnet - 10.0.2.0/24"
+            Auth[Auth Service<br/>10.0.2.10:8080<br/>ClusterIP Service]
+            Bill[Bill-Inquiry Service<br/>10.0.2.11:8080<br/>ClusterIP Service]
+            Product[Product-Change Service<br/>10.0.2.12:8080<br/>ClusterIP Service]
+        end
+        
+        subgraph "Data Subnet - 10.0.3.0/24"
+            PostgreSQL[PostgreSQL<br/>10.0.3.10:5432<br/>ClusterIP Service]
+            Redis[Redis<br/>10.0.3.11:6379<br/>ClusterIP Service]
+        end
+        
+        subgraph "Management Subnet - 10.0.4.0/24"
+            K8sDashboard[Kubernetes Dashboard<br/>10.0.4.10<br/>개발용 모니터링]
+        end
+    end
+
+    subgraph "Azure Managed Services"
+        ServiceBus[Azure Service Bus Basic<br/>sb-phonebill-dev.servicebus.windows.net<br/>AMQP 5671, HTTPS 443]
+        ACR[Azure Container Registry<br/>phonebilldev.azurecr.io<br/>HTTPS 443]
+    end
+
+    subgraph "External Systems"
+        KOS[KOS-Order System<br/>On-premises<br/>HTTPS/VPN 연결]
+        MVNO[MVNO AP Server<br/>External System<br/>HTTPS API]
+    end
+
+    %% 네트워크 연결
+    Internet --> LB
+    LB --> Ingress
+    
+    Ingress --> Auth
+    Ingress --> Bill
+    Ingress --> Product
+    
+    Auth --> PostgreSQL
+    Auth --> Redis
+    Bill --> PostgreSQL
+    Bill --> Redis
+    Product --> PostgreSQL
+    Product --> Redis
+    
+    Bill --> ServiceBus
+    Product --> ServiceBus
+    
+    Auth -.-> ACR
+    Bill -.-> ACR
+    Product -.-> ACR
+    
+    Bill --> KOS
+    Product --> KOS
+    
+    MVNO --> LB
+    
+    %% DNS 서비스
+    subgraph "DNS Resolution"
+        CoreDNS[CoreDNS<br/>Cluster DNS<br/>10.0.0.10]
+    end
+    
+    Auth -.-> CoreDNS
+    Bill -.-> CoreDNS
+    Product -.-> CoreDNS
+
+    %% 네트워크 보안
+    subgraph "Network Security"
+        NSG[Network Security Group<br/>기본 보안 규칙<br/>개발환경 허용적 정책]
+        NetworkPolicy[Kubernetes Network Policy<br/>기본 허용 정책<br/>개발 편의성 우선]
+    end
+
+    %% 스타일링
+    classDef internet fill:#ffebee
+    classDef public fill:#e3f2fd
+    classDef application fill:#e8f5e8
+    classDef data fill:#fff3e0
+    classDef management fill:#f3e5f5
+    classDef managed fill:#fce4ec
+    classDef external fill:#e1f5fe
+    classDef security fill:#fff8e1
+    classDef dns fill:#f1f8e9
+
+    class Internet internet
+    class LB,Ingress public
+    class Auth,Bill,Product application
+    class PostgreSQL,Redis data
+    class K8sDashboard management
+    class ServiceBus,ACR managed
+    class KOS,MVNO external
+    class NSG,NetworkPolicy security
+    class CoreDNS dns

@@ -1,0 +1,107 @@
+@startuml
+!theme mono
+title Auth Service - 사용자 로그인 내부 시퀀스
+
+participant "API Gateway" as Gateway
+participant "AuthController" as Controller
+participant "AuthService" as Service
+participant "UserRepository" as UserRepo
+participant "TokenService" as TokenService
+participant "Redis Cache<<E>>" as Redis
+participant "Auth DB<<E>>" as AuthDB
+
+== UFR-AUTH-010: 사용자 로그인 처리 ==
+
+Gateway -> Controller: POST /login\n{userId, password, autoLogin}
+activate Controller
+
+Controller -> Controller: 입력값 유효성 검사\n(userId, password 필수값 확인)
+note right: 입력값 검증\n- userId: not null, not empty\n- password: not null, 최소 8자
+
+alt 입력값 오류
+    Controller --> Gateway: 400 Bad Request\n"입력값을 확인해주세요"
+else 입력값 정상
+    Controller -> Service: authenticateUser(userId, password)
+    activate Service
+    
+    Service -> Service: 로그인 시도 횟수 체크
+    Service -> UserRepo: findUserById(userId)
+    activate UserRepo
+    
+    UserRepo -> AuthDB: SELECT user_id, password_hash, salt,\nlocked_until, login_attempt_count\nWHERE user_id = ?
+    activate AuthDB
+    AuthDB --> UserRepo: 사용자 정보 반환
+    deactivate AuthDB
+    
+    UserRepo --> Service: User Entity 반환
+    deactivate UserRepo
+    
+    alt 사용자 없음
+        Service --> Controller: UserNotFoundException
+        Controller --> Gateway: 401 Unauthorized\n"ID 또는 비밀번호를 확인해주세요"
+    else 계정 잠김 (5회 연속 실패)
+        Service -> Service: 잠금 시간 확인\n(현재시간 < locked_until)
+        Service --> Controller: AccountLockedException
+        Controller --> Gateway: 401 Unauthorized\n"30분간 계정이 잠금되었습니다"
+    else 정상 계정
+        Service -> Service: 비밀번호 검증\nbcrypt.checkpw(password, storedHash)
+        
+        alt 비밀번호 불일치
+            Service -> UserRepo: incrementLoginAttempt(userId)
+            activate UserRepo
+            UserRepo -> AuthDB: UPDATE users\nSET login_attempt_count = login_attempt_count + 1\nWHERE user_id = ?
+            AuthDB --> UserRepo: 업데이트 완료
+            deactivate UserRepo
+            
+            alt 5회째 실패
+                Service -> UserRepo: lockAccount(userId, 30분)
+                activate UserRepo
+                UserRepo -> AuthDB: UPDATE users\nSET locked_until = NOW() + INTERVAL 30 MINUTE\nWHERE user_id = ?
+                deactivate UserRepo
+                Service --> Controller: AccountLockedException
+                Controller --> Gateway: 401 Unauthorized\n"5회 연속 실패하여 30분간 잠금"
+            else 1~4회 실패
+                Service --> Controller: AuthenticationException
+                Controller --> Gateway: 401 Unauthorized\n"ID 또는 비밀번호를 확인해주세요"
+            end
+        else 비밀번호 일치 (로그인 성공)
+            Service -> UserRepo: resetLoginAttempt(userId)
+            activate UserRepo
+            UserRepo -> AuthDB: UPDATE users\nSET login_attempt_count = 0\nWHERE user_id = ?
+            deactivate UserRepo
+            
+            == 토큰 생성 및 세션 처리 ==
+            
+            Service -> TokenService: generateAccessToken(userInfo)
+            activate TokenService
+            TokenService -> TokenService: JWT 생성\n(payload: {userId, permissions}\nexpiry: 30분)
+            TokenService --> Service: accessToken
+            deactivate TokenService
+            
+            Service -> TokenService: generateRefreshToken(userId)
+            activate TokenService
+            TokenService -> TokenService: JWT 생성\n(payload: {userId}\nexpiry: 24시간 또는 autoLogin 기준)
+            TokenService --> Service: refreshToken
+            deactivate TokenService
+            
+            Service -> Redis: setUserSession\nKey: user_session:{userId}\nValue: {userInfo, permissions}\nTTL: autoLogin ? 24시간 : 30분
+            activate Redis
+            Redis --> Service: 세션 저장 완료
+            deactivate Redis
+            
+            Service -> UserRepo: saveLoginHistory(userId, ipAddress, loginTime)
+            activate UserRepo
+            UserRepo -> AuthDB: INSERT INTO login_history\n(user_id, login_time, ip_address)
+            note right: 비동기 처리로\n응답 성능에 영향 없음
+            deactivate UserRepo
+            
+            Service --> Controller: AuthenticationResult\n{accessToken, refreshToken, userInfo}
+            deactivate Service
+            
+            Controller --> Gateway: 200 OK\n{accessToken, refreshToken, userInfo}
+            deactivate Controller
+        end
+    end
+end
+
+@enduml

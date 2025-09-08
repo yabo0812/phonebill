@@ -1,0 +1,215 @@
+@startuml
+!theme mono
+
+title Auth Service - Simple Class Design
+
+package "com.unicorn.phonebill.auth" {
+
+  package "controller" {
+    class AuthController {
+      +login()
+      +logout()
+      +verifyToken()
+      +refreshToken()
+      +getUserPermissions()
+      +checkPermission()
+      +getUserInfo()
+    }
+  }
+
+  package "dto" {
+    class LoginRequest
+    class LoginResponse
+    class RefreshTokenRequest
+    class RefreshTokenResponse
+    class TokenVerifyResponse
+    class PermissionCheckRequest
+    class PermissionCheckResponse
+    class PermissionsResponse
+    class UserInfoResponse
+    class UserInfo
+    class Permission
+    class SuccessResponse
+  }
+
+  package "service" {
+    interface AuthService
+    class AuthServiceImpl
+    interface TokenService
+    class TokenServiceImpl
+    interface PermissionService
+    class PermissionServiceImpl
+  }
+
+  package "domain" {
+    class User
+    enum UserStatus
+    class UserSession
+    class AuthenticationResult
+    class DecodedToken
+    class PermissionResult
+    class TokenRefreshResult
+    class UserInfoDetail
+  }
+
+  package "repository" {
+    interface UserRepository
+    interface UserPermissionRepository
+    interface LoginHistoryRepository
+    
+    package "entity" {
+      class UserEntity
+      class UserPermissionEntity
+      class LoginHistoryEntity
+    }
+
+    package "jpa" {
+      interface UserJpaRepository
+      interface UserPermissionJpaRepository
+      interface LoginHistoryJpaRepository
+    }
+  }
+
+  package "config" {
+    class SecurityConfig
+    class JwtConfig
+    class RedisConfig
+  }
+}
+
+' Common Base Classes
+package "Common Module" <<External>> {
+  class ApiResponse<T>
+  class ErrorResponse
+  abstract class BaseTimeEntity
+  enum ErrorCode
+  class BusinessException
+}
+
+' 관계 정의 (간단화)
+AuthController --> AuthService
+AuthController --> TokenService
+
+AuthServiceImpl --> UserRepository
+AuthServiceImpl --> TokenService
+AuthServiceImpl --> PermissionService
+AuthServiceImpl --> LoginHistoryRepository
+
+PermissionServiceImpl --> UserPermissionRepository
+
+UserRepository --> UserEntity
+UserPermissionRepository --> UserPermissionEntity
+LoginHistoryRepository --> LoginHistoryEntity
+
+UserEntity --|> BaseTimeEntity
+UserPermissionEntity --|> BaseTimeEntity
+LoginHistoryEntity --|> BaseTimeEntity
+
+AuthService <|-- AuthServiceImpl
+TokenService <|-- TokenServiceImpl
+PermissionService <|-- PermissionServiceImpl
+
+UserRepository <|-- UserJpaRepository
+UserPermissionRepository <|-- UserPermissionJpaRepository
+LoginHistoryRepository <|-- LoginHistoryJpaRepository
+
+User --> UserStatus
+
+' API 매핑표
+note as N1
+<b>AuthController API Mapping</b>
+===
+<b>POST /auth/login</b>
+- Method: login(LoginRequest)
+- Response: ApiResponse<LoginResponse>
+- Description: 사용자 로그인 처리
+
+<b>POST /auth/logout</b>
+- Method: logout()
+- Response: ApiResponse<SuccessResponse>
+- Description: 사용자 로그아웃 처리
+
+<b>GET /auth/verify</b>
+- Method: verifyToken()
+- Response: ApiResponse<TokenVerifyResponse>
+- Description: JWT 토큰 검증
+
+<b>POST /auth/refresh</b>
+- Method: refreshToken(RefreshTokenRequest)
+- Response: ApiResponse<RefreshTokenResponse>
+- Description: 토큰 갱신
+
+<b>GET /auth/permissions</b>
+- Method: getUserPermissions()
+- Response: ApiResponse<PermissionsResponse>
+- Description: 사용자 권한 조회
+
+<b>POST /auth/permissions/check</b>
+- Method: checkPermission(PermissionCheckRequest)
+- Response: ApiResponse<PermissionCheckResponse>
+- Description: 특정 서비스 접근 권한 확인
+
+<b>GET /auth/user-info</b>
+- Method: getUserInfo()
+- Response: ApiResponse<UserInfoResponse>
+- Description: 사용자 정보 조회
+end note
+
+N1 .. AuthController
+
+' 패키지 구조 설명
+note as N2
+<b>패키지 구조 (Layered Architecture)</b>
+===
+<b>controller</b>
+- AuthController: REST API 엔드포인트
+
+<b>dto</b>
+- Request/Response 객체들
+- API 계층과 Service 계층 간 데이터 전송
+
+<b>service</b>
+- AuthService: 인증/인가 비즈니스 로직
+- TokenService: JWT 토큰 관리
+- PermissionService: 권한 관리
+
+<b>domain</b>
+- 도메인 모델 및 비즈니스 엔티티
+- 비즈니스 로직 포함
+
+<b>repository</b>
+- 데이터 접근 계층
+- entity: JPA 엔티티
+- jpa: JPA Repository 인터페이스
+
+<b>config</b>
+- 설정 클래스들 (Security, JWT, Redis)
+end note
+
+N2 .. "com.unicorn.phonebill.auth"
+
+' 핵심 기능 설명
+note as N3
+<b>핵심 기능</b>
+===
+<b>인증 (Authentication)</b>
+- 로그인/로그아웃 처리
+- JWT 토큰 생성/검증/갱신
+- 세션 관리 (Redis 캐시)
+- 로그인 실패 횟수 관리 (5회 실패 시 30분 잠금)
+
+<b>인가 (Authorization)</b>
+- 서비스별 접근 권한 확인
+- 권한 캐싱 (Redis, TTL: 4시간)
+- Cache-Aside 패턴 적용
+
+<b>보안</b>
+- bcrypt 패스워드 해싱
+- JWT 토큰 기반 인증
+- Redis 세션 캐싱 (TTL: 30분/24시간)
+- IP 기반 로그인 이력 추적
+end note
+
+N3 .. AuthServiceImpl
+
+@enduml

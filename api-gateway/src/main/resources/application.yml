@@ -1,0 +1,186 @@
+# API Gateway 기본 설정
+# Spring Boot 3.2 + Spring Cloud Gateway
+
+server:
+  port: ${SERVER_PORT:8080}
+  netty:
+    connection-timeout: ${SERVER_NETTY_CONNECTION_TIMEOUT:30s}
+    idle-timeout: ${SERVER_NETTY_IDLE_TIMEOUT:60s}
+  http2:
+    enabled: ${SERVER_HTTP2_ENABLED:true}
+
+spring:
+  application:
+    name: api-gateway
+  
+  profiles:
+    active: dev
+  
+  # Spring Cloud Gateway 설정
+  cloud:
+    gateway:
+      default-filters:
+        - name: AddRequestHeader
+          args:
+            name: X-Gateway-Request
+            value: API-Gateway
+        - name: AddResponseHeader
+          args:
+            name: X-Gateway-Response
+            value: API-Gateway
+      
+      # Global CORS 설정
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowed-origin-patterns: "*"
+            allowed-methods: 
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+              - HEAD
+            allowed-headers: "*"
+            allow-credentials: true
+            max-age: 3600
+      
+      # Discovery 설정 비활성화 (직접 라우팅 사용)
+      discovery:
+        locator:
+          enabled: false
+
+
+  # JSON 설정
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+
+# JWT 설정
+app:
+  jwt:
+    secret: ${JWT_SECRET:phonebill-api-gateway-jwt-secret-key-256-bit-minimum-length-required}
+    access-token-validity-in-seconds: 1800  # 30분
+    refresh-token-validity-in-seconds: 86400 # 24시간
+
+# 서비스 URL 설정
+services:
+  auth-service:
+    url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  bill-service:
+    url: ${BILL_SERVICE_URL:http://localhost:8082}
+  product-service:
+    url: ${PRODUCT_SERVICE_URL:http://localhost:8083}
+  kos-mock-service:
+    url: ${KOS_MOCK_SERVICE_URL:http://localhost:8084}
+
+# Circuit Breaker 설정
+resilience4j:
+  circuitbreaker:
+    instances:
+      auth-service-cb:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+      bill-service-cb:
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+      product-service-cb:
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+      kos-mock-cb:
+        failure-rate-threshold: 70
+        wait-duration-in-open-state: 10s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+  
+  retry:
+    instances:
+      default:
+        max-attempts: 3
+        wait-duration: 2s
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - org.springframework.web.client.ResourceAccessException
+
+# Actuator 설정
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,gateway
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+    gateway:
+      enabled: true
+  health:
+    redis:
+      enabled: true
+    circuitbreakers:
+      enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    build:
+      enabled: true
+
+# 로깅 설정
+logging:
+  level:
+    com.unicorn.phonebill.gateway: ${LOG_LEVEL_GATEWAY:INFO}
+    org.springframework.cloud.gateway: ${LOG_LEVEL_SPRING_CLOUD_GATEWAY:DEBUG}
+    reactor.netty: ${LOG_LEVEL_REACTOR_NETTY:INFO}
+    io.netty: ${LOG_LEVEL_IO_NETTY:WARN}
+    root: ${LOG_LEVEL_ROOT:INFO}
+  file:
+    name: ${LOG_FILE:logs/api-gateway.log}
+  logback:
+    rollingpolicy:
+      max-file-size: 10MB
+      max-history: 7
+      total-size-cap: 100MB
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    console: "%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan([%X{traceId:-},%X{spanId:-}]) %logger{36} - %msg%n"
+
+# OpenAPI 설정
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    urls:
+      - name: Auth Service
+        url: /v3/api-docs/auth
+      - name: Bill Service  
+        url: /v3/api-docs/bills
+      - name: Product Service
+        url: /v3/api-docs/products
+
+# 애플리케이션 정보
+info:
+  app:
+    name: PhoneBill API Gateway
+    description: 통신요금 관리 서비스 API Gateway
+    version: 1.0.0
+    encoding: UTF-8
+    java:
+      version: 17

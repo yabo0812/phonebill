@@ -1,0 +1,127 @@
+@startuml
+!theme mono
+title 통신요금 관리 서비스 - 상품변경 플로우 (외부 시퀀스)
+
+actor "MVNO 고객" as User
+participant "Frontend\n(MVNO Web)" as Frontend
+participant "API Gateway" as Gateway
+participant "Auth Service" as Auth
+participant "Product-Change\nService" as ProductService
+participant "Redis Cache" as Redis
+participant "Product DB" as ProductDB
+participant "KOS-Order\nSystem" as KOS
+participant "MVNO AP\nServer" as MVNO
+
+== 1. 상품변경 메뉴 접근 (UFR-PROD-010) ==
+
+User -> Frontend : 상품변경 메뉴 요청
+Frontend -> Gateway : GET /product/menu
+Gateway -> Auth : 권한 확인 요청
+Auth -> Gateway : 권한 확인 응답
+note right : UFR-AUTH-020\n서비스 접근권한 확인
+
+alt 권한 있음
+    Gateway -> ProductService : GET /menu
+    ProductService -> Redis : 고객정보 조회 (Cache-Aside)
+    
+    alt 캐시 Miss
+        ProductService -> KOS : 고객정보 조회
+        note right : Circuit Breaker 적용\n타임아웃: 3초
+        KOS -> ProductService : 고객정보 응답
+        ProductService -> Redis : 고객정보 캐싱 (TTL: 4시간)
+    end
+    
+    Redis -> ProductService : 고객정보 반환
+    ProductService -> Gateway : 메뉴 데이터 응답
+    Gateway -> Frontend : 메뉴 화면 데이터
+    Frontend -> User : 상품변경 메뉴 표시
+else 권한 없음
+    Gateway -> Frontend : 권한 오류 응답
+    Frontend -> User : "서비스 이용 권한이 없습니다"
+end
+
+== 2. 상품변경 화면 (UFR-PROD-020) ==
+
+User -> Frontend : 상품변경 화면 요청
+Frontend -> Gateway : GET /product/change
+Gateway -> ProductService : GET /change
+
+ProductService -> Redis : 상품정보 조회 (Cache-Aside)
+
+alt 캐시 Miss
+    ProductService -> KOS : 상품정보 조회
+    note right : Circuit Breaker 적용
+    KOS -> ProductService : 상품정보 응답
+    ProductService -> Redis : 상품정보 캐싱 (TTL: 24시간)
+end
+
+Redis -> ProductService : 상품정보 반환
+ProductService -> Gateway : 상품목록 데이터
+Gateway -> Frontend : 변경가능 상품목록
+Frontend -> User : 상품변경 화면 표시
+
+== 3. 상품변경 요청 및 사전체크 (UFR-PROD-030) ==
+
+User -> Frontend : 상품 선택 및 변경 요청
+Frontend -> Gateway : POST /product/request
+Gateway -> ProductService : 상품변경 요청\n{회선번호, 변경전상품코드, 변경후상품코드}
+
+ProductService -> ProductService : 사전체크 수행
+note right : 1. 판매중인 상품 확인\n2. 사업자 일치 확인\n3. 회선 사용상태 확인
+
+alt 사전체크 성공
+    ProductService -> Gateway : 사전체크 성공
+    Gateway -> Frontend : 변경 요청 접수
+    Frontend -> User : "상품 변경이 진행되었다"
+else 사전체크 실패  
+    ProductService -> Gateway : 사전체크 실패\n{실패사유}
+    Gateway -> Frontend : 체크 실패 응답
+    Frontend -> User : "상품 사전 체크에 실패하였다"
+    note left : 실패사유별 안내메시지 표시
+end
+
+== 4. KOS 상품변경 처리 (UFR-PROD-040) ==
+
+alt 사전체크 통과한 경우
+    ProductService -> KOS : 상품변경 처리 요청
+    note right : Circuit Breaker 적용\n타임아웃: 5초
+    
+    alt KOS 상품변경 성공
+        KOS -> ProductService : 변경 완료 응답\n{변경후상품코드, 처리결과:정상}
+        
+        ProductService -> MVNO : 변경완료 결과 전송
+        note right : 성공 메시지:\n"상품 변경이 완료되었다"
+        
+        ProductService -> ProductDB : 변경 이력 저장 (비동기)
+        note left : 변경 이력:\n- 회선번호, 변경전/후상품코드\n- 생성일시, 처리결과
+        
+        ProductService -> Redis : 고객 상품정보 캐시 무효화
+        ProductService -> Gateway : 변경 성공 응답
+        Gateway -> Frontend : 처리 완료 데이터
+        Frontend -> User : 변경 완료 화면
+        
+    else KOS 상품변경 실패
+        KOS -> ProductService : 변경 실패 응답\n{처리결과:실패, 실패메시지}
+        
+        ProductService -> MVNO : 변경실패 결과 전송  
+        note right : 실패 메시지:\n"상품 변경에 실패하여\n실패 사유에 따라 문구를 화면에 출력한다"
+        
+        ProductService -> ProductDB : 실패 이력 저장 (비동기)
+        ProductService -> Gateway : 변경 실패 응답
+        Gateway -> Frontend : 처리 실패 데이터
+        Frontend -> User : 변경 실패 화면
+    end
+    
+else Circuit Breaker Open (KOS 장애)
+    ProductService -> MVNO : 시스템 장애 안내
+    ProductService -> Gateway : 시스템 오류 응답
+    Gateway -> Frontend : 시스템 오류
+    Frontend -> User : "시스템 일시 장애, 잠시 후 재시도"
+end
+
+== 5. 처리결과 화면 (UFR-PROD-040) ==
+
+User -> Frontend : 처리결과 확인
+note right : SCR-008: 처리결과 화면\n- 성공/실패 상태 표시\n- 처리내용 또는 실패사유\n- 후속 액션 버튼
+
+@enduml

@@ -1,0 +1,72 @@
+graph TB
+    subgraph ClientLayer ["Client Layer"]
+        Client[MVNO Frontend<br/>React SPA]
+    end
+    
+    subgraph GatewayLayer ["API Gateway Layer"]
+        Gateway[API Gateway<br/>Authentication/Authorization<br/>Rate Limiting Load Balancing<br/>Request Routing<br/>Logging Monitoring]
+    end
+    
+    subgraph MicroservicesLayer ["Microservices Layer"]
+        Auth[Auth Service<br/>JWT Management<br/>User Sessions<br/>Role-based Access Control<br/>Login Failure Handling]
+        
+        BillQuery[Bill-Inquiry Service<br/>Query Menu Processing<br/>KOS Integration<br/>Cache Management<br/>History Tracking]
+        
+        ProdChange[Product-Change Service<br/>Change Menu Screen<br/>Pre-check Processing<br/>KOS Integration<br/>Change History]
+    end
+    
+    subgraph CachingLayer ["Caching Layer"]
+        Redis[Redis Cache<br/>User Sessions 30min TTL<br/>Bill Query Results 1hr TTL<br/>Product Information 24hr TTL<br/>Customer Data 4hr TTL]
+    end
+    
+    subgraph DataLayer ["Data Layer"]
+        AuthDB[(Auth Database<br/>PostgreSQL<br/>User Information<br/>Access Rights<br/>Login History)]
+        BillDB[(Bill History DB<br/>PostgreSQL<br/>Query History<br/>KOS Integration Logs)]
+        ProdDB[(Product Change DB<br/>PostgreSQL<br/>Change History<br/>Processing Logs)]
+    end
+    
+    subgraph ExternalSystems ["External Systems"]
+        KOS[KOS-Order System<br/>Legacy Backend<br/>Bill Query API<br/>Product Change API<br/>Customer Info API]
+        MVNO[MVNO AP Server<br/>Frontend API<br/>Result Transmission<br/>Screen Updates]
+    end
+    
+    %% Client to Gateway
+    Client -->|HTTPS Request| Gateway
+    
+    %% Gateway to Services (API Gateway Pattern)
+    Gateway -->|Auth Login Request| Auth
+    Gateway -->|Bill Query Menu| BillQuery  
+    Gateway -->|Product Change Request| ProdChange
+    
+    %% Services to Cache (Cache-Aside Pattern)
+    Auth -.->|Session Cache<br/>Cache-Aside| Redis
+    BillQuery -.->|Query Result Cache<br/>Cache-Aside| Redis
+    ProdChange -.->|Product Info Cache<br/>Cache-Aside| Redis
+    
+    %% Services to Databases
+    Auth --> AuthDB
+    BillQuery --> BillDB
+    ProdChange --> ProdDB
+    
+    %% External System Connections (Circuit Breaker Pattern)
+    BillQuery -->|KOS Bill Query<br/>Circuit Breaker| KOS
+    ProdChange -->|Product Change Process<br/>Circuit Breaker| KOS
+    BillQuery -->|Query Result Send| MVNO
+    ProdChange -->|Process Result Send| MVNO
+    
+    %% Service Dependencies (Token Validation via Gateway)
+    BillQuery -.->|Token Validation<br/>via Gateway| Auth
+    ProdChange -.->|Token Validation<br/>via Gateway| Auth
+    
+    %% Styling
+    classDef gateway fill:#e1f5fe,stroke:#01579b,stroke-width:3px
+    classDef service fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef cache fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef database fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
+    classDef external fill:#ffebee,stroke:#b71c1c,stroke-width:2px
+    
+    class Gateway gateway
+    class Auth,BillQuery,ProdChange service
+    class Redis cache
+    class AuthDB,BillDB,ProdDB database
+    class KOS,MVNO external

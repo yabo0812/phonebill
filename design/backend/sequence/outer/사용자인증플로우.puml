@@ -1,0 +1,192 @@
+@startuml 사용자인증플로우
+!theme mono
+
+title 사용자 인증 플로우 - 외부 시퀀스
+
+actor "MVNO 고객" as User
+participant "Frontend\n(React SPA)" as Frontend
+participant "API Gateway" as APIGateway
+participant "Auth Service" as AuthService
+participant "Redis Cache" as Redis
+participant "Auth DB\n(PostgreSQL)" as AuthDB
+
+== 1. 로그인 요청 처리 (UFR-AUTH-010) ==
+
+User -> Frontend: ID/Password 입력
+note right of User
+  SCR-001: 로그인 화면
+  - ID, Password 입력
+  - 자동 로그인 옵션
+end note
+
+Frontend -> Frontend: 입력값 유효성 검사
+Frontend -> APIGateway: POST /auth/login\n{userId, password, autoLogin}
+
+APIGateway -> APIGateway: 요청 라우팅 및 기본 검증
+APIGateway -> AuthService: POST /login\n{userId, password, autoLogin}
+
+AuthService -> AuthService: 로그인 시도 횟수 확인
+AuthService -> AuthDB: SELECT user_info\nWHERE user_id = ?
+
+alt 계정이 5회 연속 실패로 잠긴 경우
+    AuthDB --> AuthService: 계정 잠금 상태 반환
+    AuthService --> APIGateway: 401 Unauthorized\n"30분간 계정 잠금"
+    APIGateway --> Frontend: 401 Error Response
+    Frontend --> User: "계정이 잠금되었습니다.\n30분 후 다시 시도해주세요."
+else 정상 계정인 경우
+    AuthDB --> AuthService: 사용자 정보 반환
+    
+    AuthService -> AuthService: 비밀번호 검증
+    
+    alt 인증 실패
+        AuthService -> AuthDB: UPDATE login_attempt_count\nSET attempt_count = attempt_count + 1
+        AuthDB --> AuthService: 업데이트 완료
+        
+        alt 5회째 실패
+            AuthService -> AuthDB: UPDATE user_status\nSET locked_until = NOW() + INTERVAL 30 MINUTE
+            AuthService --> APIGateway: 401 Unauthorized\n"5회 실패로 계정 잠금"
+            APIGateway --> Frontend: 401 Error Response
+            Frontend --> User: "5회 연속 실패하여\n30분간 계정이 잠금되었습니다."
+        else 1~4회 실패
+            AuthService --> APIGateway: 401 Unauthorized\n"ID 또는 비밀번호를 확인해주세요"
+            APIGateway --> Frontend: 401 Error Response  
+            Frontend --> User: "ID 또는 비밀번호를 확인해주세요"
+        end
+    else 인증 성공
+        AuthService -> AuthDB: UPDATE login_attempt_count\nSET attempt_count = 0
+        AuthDB --> AuthService: 초기화 완료
+        
+        == 2. 세션 생성 및 토큰 발급 ==
+        
+        AuthService -> AuthService: JWT Access Token 생성\n(만료: 30분)
+        AuthService -> AuthService: JWT Refresh Token 생성\n(만료: 24시간)
+        
+        AuthService -> Redis: SETEX user_session:{userId}\n{sessionData} TTL=1800
+        note right of Redis
+          Cache-Aside 패턴
+          - 세션 데이터 캐싱
+          - TTL: 30분
+          - 자동 로그인 시: TTL=24시간
+        end note
+        Redis --> AuthService: 세션 저장 완료
+        
+        AuthService -> AuthDB: INSERT INTO login_history\n(user_id, login_time, ip_address)
+        AuthDB --> AuthService: 로그인 이력 저장 완료
+        
+        AuthService --> APIGateway: 200 OK\n{accessToken, refreshToken, userInfo}
+        APIGateway --> Frontend: 200 OK Response
+        Frontend -> Frontend: 토큰 로컬 저장\n(localStorage or sessionStorage)
+        Frontend --> User: 메인 화면으로 이동
+    end
+end
+
+== 3. 메인 화면 권한 확인 (UFR-AUTH-020) ==
+
+User -> Frontend: 메인 화면 접근
+note right of User
+  SCR-002: 메인 화면
+  - 사용자 정보 표시
+  - 서비스 메뉴 권한별 표시
+end note
+
+Frontend -> APIGateway: GET /auth/user-info\nAuthorization: Bearer {accessToken}
+
+APIGateway -> APIGateway: JWT 토큰 검증
+alt 토큰 유효하지 않음
+    APIGateway --> Frontend: 401 Unauthorized
+    Frontend -> Frontend: 로그인 페이지로 리다이렉트
+    Frontend --> User: 로그인 페이지 표시
+else 토큰 유효함
+    APIGateway -> AuthService: GET /user-info\n{decodedTokenData}
+    
+    AuthService -> Redis: GET user_session:{userId}
+    alt 세션이 Redis에 존재
+        Redis --> AuthService: 세션 데이터 반환
+        note right of Redis
+          캐시 히트
+          - 빠른 응답 (< 50ms)
+          - DB 부하 감소
+        end note
+    else 세션이 Redis에 없음 (캐시 미스)
+        Redis --> AuthService: null
+        AuthService -> AuthDB: SELECT user_info, permissions\nWHERE user_id = ?
+        AuthDB --> AuthService: 사용자 정보 및 권한 반환
+        AuthService -> Redis: SETEX user_session:{userId}\n{userData} TTL=1800
+        Redis --> AuthService: 세션 재생성 완료
+    end
+    
+    AuthService --> APIGateway: 200 OK\n{userInfo, permissions}
+    APIGateway --> Frontend: 200 OK Response
+    Frontend -> Frontend: 권한 기반 메뉴 렌더링
+    Frontend --> User: 메인 화면 표시\n(권한별 메뉴)
+end
+
+== 4. 서비스별 접근 권한 검증 ==
+
+User -> Frontend: 요금조회/상품변경 메뉴 클릭
+Frontend -> APIGateway: GET /auth/check-permission/{serviceType}\nAuthorization: Bearer {accessToken}
+
+APIGateway -> APIGateway: JWT 토큰 검증
+APIGateway -> AuthService: GET /check-permission\n{userId, serviceType}
+
+AuthService -> Redis: GET user_session:{userId}
+Redis --> AuthService: 세션 데이터 반환 (권한 포함)
+
+AuthService -> AuthService: 서비스별 권한 확인\n- BILL_INQUIRY\n- PRODUCT_CHANGE
+
+alt 접근 권한 있음
+    AuthService --> APIGateway: 200 OK\n{permission: granted}
+    APIGateway --> Frontend: 200 OK Response
+    Frontend --> User: 해당 서비스 화면 표시
+else 접근 권한 없음
+    AuthService --> APIGateway: 403 Forbidden\n{permission: denied}
+    APIGateway --> Frontend: 403 Error Response
+    Frontend --> User: "서비스 이용 권한이 없습니다"
+end
+
+== 5. 토큰 갱신 처리 ==
+
+note over Frontend, AuthService
+  Access Token 만료 시 (30분)
+  자동으로 토큰 갱신 처리
+end note
+
+Frontend -> APIGateway: POST /auth/refresh\n{refreshToken}
+APIGateway -> AuthService: POST /refresh-token\n{refreshToken}
+
+AuthService -> AuthService: Refresh Token 검증
+alt Refresh Token 유효함
+    AuthService -> Redis: GET user_session:{userId}
+    Redis --> AuthService: 세션 확인
+    
+    AuthService -> AuthService: 새로운 Access Token 생성
+    AuthService -> Redis: SETEX user_session:{userId}\n{updatedSessionData} TTL=1800
+    
+    AuthService --> APIGateway: 200 OK\n{newAccessToken}
+    APIGateway --> Frontend: 200 OK Response
+    Frontend -> Frontend: 새 토큰으로 업데이트
+else Refresh Token 무효함
+    AuthService --> APIGateway: 401 Unauthorized
+    APIGateway --> Frontend: 401 Error Response
+    Frontend -> Frontend: 로그인 페이지로 리다이렉트
+    Frontend --> User: 재로그인 필요
+end
+
+== 6. 로그아웃 처리 ==
+
+User -> Frontend: 로그아웃 버튼 클릭
+Frontend -> APIGateway: POST /auth/logout\nAuthorization: Bearer {accessToken}
+
+APIGateway -> AuthService: POST /logout\n{userId}
+AuthService -> Redis: DEL user_session:{userId}
+Redis --> AuthService: 세션 삭제 완료
+
+AuthService -> AuthDB: INSERT INTO logout_history\n(user_id, logout_time)
+AuthDB --> AuthService: 로그아웃 이력 저장 완료
+
+AuthService --> APIGateway: 200 OK
+APIGateway --> Frontend: 200 OK Response
+Frontend -> Frontend: 로컬 토큰 삭제
+Frontend --> User: 로그인 페이지로 이동
+
+@enduml

@@ -1,0 +1,134 @@
+@startuml
+!theme mono
+title 통신요금 관리 서비스 - 요금조회 플로우
+
+actor "MVNO 고객" as Client
+participant "MVNO Frontend" as Frontend
+participant "API Gateway" as Gateway
+participant "Auth Service" as Auth
+participant "Bill-Inquiry Service" as BillService
+participant "Redis Cache" as Cache
+participant "Bill DB" as BillDB
+participant "KOS-Order" as KOS
+participant "MVNO AP Server" as MVNOServer
+
+== 요금조회 메뉴 접근 (UFR-BILL-010) ==
+
+Client -> Frontend: 요금조회 메뉴 요청
+activate Frontend
+
+Frontend -> Gateway: GET /api/bill/menu
+activate Gateway
+
+Gateway -> Auth: JWT 토큰 검증 및 권한 확인
+activate Auth
+Auth --> Gateway: 권한 확인 완료
+deactivate Auth
+
+Gateway -> BillService: 요금조회 메뉴 요청
+activate BillService
+
+BillService -> Cache: 고객 정보 캐시 조회
+activate Cache
+Cache --> BillService: 고객 정보 반환 (회선번호)
+deactivate Cache
+
+BillService --> Gateway: 요금조회 메뉴 데이터
+deactivate BillService
+
+Gateway --> Frontend: 요금조회 메뉴 응답
+deactivate Gateway
+
+Frontend --> Client: 요금조회 메뉴 화면 표시\n(회선번호, 조회월 선택 옵션)
+deactivate Frontend
+
+== 요금조회 신청 (UFR-BILL-020) ==
+
+Client -> Frontend: 조회월 선택 후 조회 신청\n(당월 또는 특정월)
+activate Frontend
+
+Frontend -> Gateway: POST /api/bill/inquiry\n{lineNumber, inquiryMonth}
+activate Gateway
+
+Gateway -> Auth: JWT 토큰 검증
+activate Auth
+Auth --> Gateway: 인증 확인
+deactivate Auth
+
+Gateway -> BillService: 요금조회 요청
+activate BillService
+
+== Cache-Aside 패턴 적용 ==
+
+BillService -> Cache: 조회 결과 캐시 확인\nKey: "bill:lineNumber:month"
+activate Cache
+
+alt 캐시 Hit (1시간 TTL 내)
+    Cache --> BillService: 캐시된 요금 정보 반환
+    deactivate Cache
+    note right: 성능 최적화\nKOS 호출 없이 즉시 응답
+    
+else 캐시 Miss
+    Cache --> BillService: 캐시 데이터 없음
+    deactivate Cache
+    
+    == Circuit Breaker 패턴 적용 (UFR-BILL-030) ==
+    
+    BillService -> KOS: 요금조회 API 호출\n{회선번호, 조회월}
+    activate KOS
+    
+    alt Circuit Breaker - 정상 상태
+        KOS --> BillService: 요금 정보 응답\n{상품명, 청구월, 요금, 할인정보,\n사용량, 예상해지비용, 단말기할부금,\n청구/납부정보}
+        deactivate KOS
+        
+        BillService -> Cache: 조회 결과 캐싱 (TTL: 1시간)
+        activate Cache
+        Cache --> BillService: 캐싱 완료
+        deactivate Cache
+        
+    else Circuit Breaker - 장애 상태
+        KOS --> BillService: 연동 실패 (타임아웃/오류)
+        deactivate KOS
+        
+        BillService --> Gateway: 서비스 장애 응답\n"일시적으로 서비스 이용이 어렵습니다"
+        Gateway --> Frontend: 오류 응답
+        Frontend --> Client: 오류 메시지 표시
+        note right: Circuit Breaker로\n서비스 안정성 확보
+        
+        [-> BillService: 장애 로그 기록
+    end
+end
+
+== 요금조회 결과 전송 (UFR-BILL-040) ==
+
+BillService -> MVNOServer: 조회 결과 전송\n(상품명, 청구월, 요금 등 전체 정보)
+activate MVNOServer
+MVNOServer --> BillService: 전송 완료 확인
+deactivate MVNOServer
+
+BillService -> BillDB: 요금 조회 이력 저장 (비동기)
+activate BillDB
+note right: 비동기 처리로\n응답 성능에 영향 없음
+BillDB --> BillService: 이력 저장 완료
+deactivate BillDB
+
+BillService --> Gateway: 요금조회 결과
+deactivate BillService
+
+Gateway --> Frontend: 조회 결과 응답
+deactivate Gateway
+
+Frontend --> Client: 요금조회 결과 화면 표시\n{상품명, 청구월, 요금, 할인정보,\n사용량, 예상해지비용, 단말기할부금,\n청구/납부정보}
+deactivate Frontend
+
+== 오류 처리 흐름 ==
+
+note over Frontend, BillService
+각 단계별 오류 처리
+- 권한 없음: 서비스 이용 권한이 없습니다
+- 메뉴 로딩 실패: 요금 조회 메뉴 로딩에 실패하였습니다
+- 조회 신청 실패: 요금 조회 신청에 실패하였습니다
+- KOS 연동 실패: Circuit Breaker로 장애 격리
+end note
+
+@enduml

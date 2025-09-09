@@ -2,11 +2,14 @@ package com.phonebill.user.controller;
 
 import com.phonebill.user.dto.*;
 import com.phonebill.user.service.AuthService;
+import com.phonebill.user.service.JwtService;
+import com.phonebill.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -19,12 +22,14 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 @RequiredArgsConstructor
 @Tag(name = "Authentication", description = "인증 관련 API")
 public class AuthController {
     
     private final AuthService authService;
+    private final JwtService jwtService;
+    private final UserService userService;
     
     /**
      * 사용자 로그인
@@ -47,7 +52,10 @@ public class AuthController {
             @Parameter(description = "로그인 요청 정보", required = true)
             @Valid @RequestBody LoginRequest loginRequest
     ) {
-        log.info("로그인 요청: userId={}", loginRequest.getUserId());
+        log.info("로그인 요청 받음: userId={}, password존재={}, autoLogin={}", 
+                loginRequest.getUserId(), 
+                loginRequest.getPassword() != null,
+                loginRequest.getAutoLogin());
         
         LoginResponse response = authService.login(loginRequest);
         
@@ -85,29 +93,43 @@ public class AuthController {
     
     /**
      * 로그아웃
-     * @param userId 사용자 ID
-     * @param refreshToken Refresh Token
+     * @param request HTTP 요청 (Authorization Header에서 JWT 토큰 추출)
      * @return 로그아웃 결과
      */
     @Operation(
         summary = "사용자 로그아웃",
-        description = "현재 세션을 종료하고 Refresh Token을 무효화합니다."
+        description = "Authorization Header의 JWT 토큰에서 사용자 정보를 추출하여 현재 세션을 종료하고 Refresh Token을 무효화합니다."
     )
     @ApiResponses(value = {
         @ApiResponse(responseCode = "200", description = "로그아웃 성공"),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+        @ApiResponse(responseCode = "401", description = "유효하지 않은 토큰"),
         @ApiResponse(responseCode = "500", description = "서버 내부 오류")
     })
     @PostMapping("/logout")
-    public ResponseEntity<String> logout(
-            @Parameter(description = "사용자 ID", required = true)
-            @RequestParam String userId,
-            @Parameter(description = "Refresh Token", required = true)
-            @RequestParam String refreshToken
-    ) {
+    public ResponseEntity<String> logout(HttpServletRequest request) {
+        // Authorization Header에서 JWT 토큰 추출
+        String authHeader = request.getHeader("Authorization");
+        if (authHeader == null || !authHeader.startsWith("Bearer ")) {
+            return ResponseEntity.badRequest().body("Authorization Header가 필요합니다.");
+        }
+        
+        String accessToken = authHeader.substring(7); // "Bearer " 제거
+        
+        // JWT 유효성 확인 (AuthService에서 블랙리스트도 확인함)
+        if (!jwtService.validateToken(accessToken)) {
+            return ResponseEntity.badRequest().body("유효하지 않은 토큰입니다.");
+        }
+        
+        // JWT에서 사용자 ID 추출
+        String userId = jwtService.getUserIdFromToken(accessToken);
+        if (userId == null) {
+            return ResponseEntity.badRequest().body("유효하지 않은 토큰입니다.");
+        }
+        
         log.info("로그아웃 요청: userId={}", userId);
         
-        authService.logout(userId, refreshToken);
+        // 해당 사용자의 모든 활성 세션 무효화 (Access Token 기반)
+        authService.logoutWithAccessToken(userId, accessToken);
         
         log.info("로그아웃 성공: userId={}", userId);
         return ResponseEntity.ok("로그아웃이 완료되었습니다.");
@@ -173,6 +195,62 @@ public class AuthController {
         
         log.info("비밀번호 변경 성공: userId={}", userId);
         return ResponseEntity.ok("비밀번호가 성공적으로 변경되었습니다. 다시 로그인해 주세요.");
+    }
+    
+    /**
+     * 계정 잠금 해제 (관리자용)
+     * @param userId 사용자 ID
+     * @return 처리 결과
+     */
+    @Operation(
+        summary = "계정 잠금 해제",
+        description = "잠겨있는 사용자 계정의 잠금을 해제합니다. (관리자 권한 필요)"
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "잠금 해제 성공"),
+        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping("/unlock/{userId}")
+    public ResponseEntity<String> unlockAccount(
+            @Parameter(description = "사용자 ID", required = true)
+            @PathVariable String userId
+    ) {
+        log.info("계정 잠금 해제 요청: userId={}", userId);
+        
+        userService.unlockAccount(userId);
+        
+        log.info("계정 잠금 해제 성공: userId={}", userId);
+        return ResponseEntity.ok("계정 잠금이 성공적으로 해제되었습니다.");
+    }
+    
+    /**
+     * 사용자 등록
+     * @param request 사용자 등록 요청
+     * @return 등록 결과
+     */
+    @Operation(
+        summary = "사용자 등록",
+        description = "새로운 사용자를 등록하고 지정된 권한을 부여합니다."
+    )
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "사용자 등록 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (입력값 검증 실패 또는 중복 데이터)"),
+        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
+    @PostMapping("/register")
+    public ResponseEntity<UserRegistrationResponse> registerUser(
+            @Parameter(description = "사용자 등록 요청 정보", required = true)
+            @Valid @RequestBody UserRegistrationRequest request
+    ) {
+        log.info("사용자 등록 요청 받음: request={}", request);
+        log.info("상세 정보 - userId={}, customerId={}, lineNumber={}, userName={}", 
+                request.getUserId(), request.getCustomerId(), request.getLineNumber(), request.getUserName());
+        
+        UserRegistrationResponse response = userService.registerUser(request);
+        
+        log.info("사용자 등록 API 처리 완료: userId={}", request.getUserId());
+        return ResponseEntity.ok(response);
     }
     
     /**

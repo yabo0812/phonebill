@@ -1,11 +1,14 @@
 package com.unicorn.phonebill.product.config;
 
+import com.phonebill.common.security.JwtAuthenticationFilter;
+import com.phonebill.common.security.JwtTokenProvider;
+import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -16,133 +19,106 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
- * Spring Security 설정 클래스
- * 
- * 주요 기능:
- * - JWT 인증 필터 설정
- * - CORS 설정
- * - API 엔드포인트 보안 설정
- * - 세션 비활성화 (Stateless)
+ * Spring Security 설정
  */
 @Configuration
 @EnableWebSecurity
+@RequiredArgsConstructor
 public class SecurityConfig {
+    
+    private final JwtTokenProvider jwtTokenProvider;
+    @Value("${cors.allowed-origins")
+    private String allowedOrigins;
 
-    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
-    private final JwtAccessDeniedHandler jwtAccessDeniedHandler;
-    private final JwtAuthenticationFilter jwtAuthenticationFilter;
-
-    public SecurityConfig(JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint,
-                         JwtAccessDeniedHandler jwtAccessDeniedHandler,
-                         JwtAuthenticationFilter jwtAuthenticationFilter) {
-        this.jwtAuthenticationEntryPoint = jwtAuthenticationEntryPoint;
-        this.jwtAccessDeniedHandler = jwtAccessDeniedHandler;
-        this.jwtAuthenticationFilter = jwtAuthenticationFilter;
-    }
-
-    /**
-     * Security Filter Chain 설정
-     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF 비활성화 (JWT 사용으로 불필요)
-                .csrf(AbstractHttpConfigurer::disable)
+            // CSRF 비활성화 (JWT 사용으로 불필요)
+            .csrf(csrf -> csrf.disable())
+            
+            // CORS 설정
+            .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+            
+            // 세션 비활성화 (JWT 기반 Stateless)
+            .sessionManagement(session -> 
+                session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            
+            // 권한 설정
+            .authorizeHttpRequests(authz -> authz
+                // Public endpoints (인증 불필요)
+                .requestMatchers(
+                    "/actuator/health",
+                    "/actuator/info",
+                    "/actuator/prometheus",
+                    "/v3/api-docs/**",
+                    "/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
+                    "/swagger-resources/**",
+                    "/webjars/**"
+                ).permitAll()
                 
-                // CORS 설정
-                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // OPTIONS 요청은 모두 허용 (CORS Preflight)
+                .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                 
-                // 세션 비활성화 (Stateless)
-                .sessionManagement(session -> 
-                    session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // Protected endpoints (인증 필요)
+                .requestMatchers("/products/**").authenticated()
                 
-                // 예외 처리 설정
-                .exceptionHandling(exceptions -> exceptions
-                    .authenticationEntryPoint(jwtAuthenticationEntryPoint)
-                    .accessDeniedHandler(jwtAccessDeniedHandler))
+                // Actuator endpoints (관리용)
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 
-                // 권한 설정
-                .authorizeHttpRequests(authorize -> authorize
-                    // Health Check 및 문서화 API는 인증 불필요
-                    .requestMatchers("/actuator/**").permitAll()
-                    .requestMatchers("/v3/api-docs/**", "/api-docs/**", "/swagger-ui/**", "/swagger-ui.html").permitAll()
-                    .requestMatchers("/swagger-resources/**", "/webjars/**").permitAll()
-                    
-                    // OPTIONS 요청은 인증 불필요 (CORS Preflight)
-                    .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                    
-                    // 모든 API는 인증 필요
-                    .requestMatchers("/products/**").authenticated()
-                    
-                    // 나머지 요청은 모두 인증 필요
-                    .anyRequest().authenticated())
-                
-                // JWT 인증 필터 추가
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
+                // 나머지 모든 요청 인증 필요
+                .anyRequest().authenticated()
+            )
+            
+            // JWT 필터 추가
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+            
+            // Exception 처리
+            .exceptionHandling(exceptions -> exceptions
+                .authenticationEntryPoint((request, response, authException) -> {
+                    response.setStatus(401);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"인증이 필요합니다.\",\"details\":\"유효한 토큰이 필요합니다.\"}}");
+                })
+                .accessDeniedHandler((request, response, accessDeniedException) -> {
+                    response.setStatus(403);
+                    response.setContentType("application/json;charset=UTF-8");
+                    response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"ACCESS_DENIED\",\"message\":\"접근이 거부되었습니다.\",\"details\":\"권한이 부족합니다.\"}}");
+                })
+            );
+        
         return http.build();
     }
-
-    /**
-     * CORS 설정
-     */
+    
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtTokenProvider);
+    }
+    
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(12); // 기본 설정에서 강도 12 사용
+    }
+    
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // 허용할 Origin 설정
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:3000",        // 개발환경 프론트엔드
-            "http://localhost:8080",        // API Gateway
-            "https://*.mvno.com",           // 운영환경
-            "https://*.mvno-dev.com"        // 개발환경
-        ));
-        
-        // 허용할 HTTP 메서드
-        configuration.setAllowedMethods(Arrays.asList(
-            "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"
-        ));
-        
-        // 허용할 헤더
-        configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization",
-            "Content-Type",
-            "X-Requested-With",
-            "Accept",
-            "Origin",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers",
-            "X-User-ID",
-            "X-Customer-ID",
-            "X-Request-ID"
-        ));
-        
-        // 노출할 헤더
-        configuration.setExposedHeaders(Arrays.asList(
-            "Authorization",
-            "X-Request-ID",
-            "X-Total-Count"
-        ));
-        
-        // 자격 증명 허용
+
+        // 환경변수에서 허용할 Origin 패턴 설정
+        String[] origins = allowedOrigins.split(",");
+        configuration.setAllowedOriginPatterns(Arrays.asList(origins));
+
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
-        
-        // Preflight 요청 캐시 시간 설정 (1시간)
         configuration.setMaxAge(3600L);
         
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-        
         return source;
-    }
-
-    /**
-     * 비밀번호 암호화기
-     */
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 }

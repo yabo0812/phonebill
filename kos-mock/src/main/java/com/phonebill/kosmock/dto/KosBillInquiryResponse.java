@@ -17,6 +17,9 @@ public class KosBillInquiryResponse {
     @Schema(description = "요청 ID", example = "REQ_20250108_001")
     private String requestId;
     
+    @Schema(description = "처리 상태", example = "SUCCESS")
+    private String procStatus;
+    
     @Schema(description = "처리 결과 코드", example = "0000")
     private String resultCode;
     

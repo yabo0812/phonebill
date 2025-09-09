@@ -33,6 +33,9 @@ public class AuthUserEntity extends BaseTimeEntity {
     @Column(name = "line_number", length = 20)
     private String lineNumber;
     
+    @Column(name = "user_name", length = 100)
+    private String userName;
+    
     @Enumerated(EnumType.STRING)
     @Column(name = "account_status", length = 20)
     @Builder.Default

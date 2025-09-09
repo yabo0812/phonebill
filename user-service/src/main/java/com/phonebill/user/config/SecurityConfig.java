@@ -3,6 +3,7 @@ package com.phonebill.user.config;
 import com.phonebill.common.security.JwtAuthenticationFilter;
 import com.phonebill.common.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -28,7 +29,9 @@ import java.util.List;
 public class SecurityConfig {
     
     private final JwtTokenProvider jwtTokenProvider;
-    
+    @Value("${cors.allowed-origins")
+    private String allowedOrigins;
+
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -46,8 +49,10 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 // Public endpoints (인증 불필요)
                 .requestMatchers(
-                    "/auth/login",
-                    "/auth/refresh",
+                    "/api/v1/auth/login",
+                    "/api/v1/auth/register",
+                    "/api/v1/auth/refresh",
+                    "/api/v1/users",
                     "/actuator/health",
                     "/actuator/info",
                     "/actuator/prometheus",
@@ -102,10 +107,11 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // 개발환경에서는 모든 Origin 허용, 운영환경에서는 특정 도메인만 허용
-        configuration.setAllowedOriginPatterns(List.of("*"));
-        
+
+        // 환경변수에서 허용할 Origin 패턴 설정
+        String[] origins = allowedOrigins.split(",");
+        configuration.setAllowedOriginPatterns(Arrays.asList(origins));
+
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);

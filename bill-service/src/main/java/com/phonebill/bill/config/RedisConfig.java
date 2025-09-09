@@ -98,8 +98,8 @@ public class RedisConfig {
         template.setKeySerializer(new StringRedisSerializer());
         template.setHashKeySerializer(new StringRedisSerializer());
 
-        // Value 직렬화: JSON 사용
-        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(objectMapper());
+        // Value 직렬화: Redis 전용 ObjectMapper 사용
+        GenericJackson2JsonRedisSerializer jsonSerializer = new GenericJackson2JsonRedisSerializer(redisObjectMapper());
         template.setValueSerializer(jsonSerializer);
         template.setHashValueSerializer(jsonSerializer);
 
@@ -128,8 +128,8 @@ public class RedisConfig {
                 .serializeKeysWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
                         .fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(org.springframework.data.redis.serializer.RedisSerializationContext.SerializationPair
-                        .fromSerializer(new GenericJackson2JsonRedisSerializer(objectMapper())))
-                .disableCachingNullValues();  // null 값 캐싱 비활성화
+                        .fromSerializer(new GenericJackson2JsonRedisSerializer(redisObjectMapper())));
+                // null 값 캐싱은 @Cacheable unless 조건으로 처리
 
         // 캐시별 개별 설정
         Map<String, RedisCacheConfiguration> cacheConfigurations = new HashMap<>();
@@ -163,25 +163,24 @@ public class RedisConfig {
     }
 
     /**
-     * ObjectMapper 구성
+     * Redis 전용 ObjectMapper 구성
      * 
-     * @return JSON 직렬화용 ObjectMapper
+     * @return Redis 직렬화용 ObjectMapper (다형성 타입 정보 포함)
      */
-    @Bean
-    public ObjectMapper objectMapper() {
+    private ObjectMapper redisObjectMapper() {
         ObjectMapper mapper = new ObjectMapper();
         
         // Java Time 모듈 등록 (LocalDateTime 등 지원)
         mapper.registerModule(new JavaTimeModule());
         
-        // 타입 정보 포함 (다형성 지원)
+        // 타입 정보 포함 (다형성 지원) - Redis 캐싱에만 필요
         mapper.activateDefaultTyping(
             LaissezFaireSubTypeValidator.instance, 
             ObjectMapper.DefaultTyping.NON_FINAL, 
             JsonTypeInfo.As.PROPERTY
         );
         
-        log.debug("ObjectMapper 구성 완료");
+        log.debug("Redis 전용 ObjectMapper 구성 완료");
         return mapper;
     }
 

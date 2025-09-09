@@ -39,9 +39,9 @@ public class SwaggerConfig {
                                 .addServerVariable("port", new io.swagger.v3.oas.models.servers.ServerVariable()
                                         ._default("8083")
                                         .description("Server port"))))
-                .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
+                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .components(new Components()
-                        .addSecuritySchemes("Bearer Authentication", createAPIKeyScheme()));
+                        .addSecuritySchemes("bearerAuth", createAPIKeyScheme()));
     }
 
     private Info apiInfo() {

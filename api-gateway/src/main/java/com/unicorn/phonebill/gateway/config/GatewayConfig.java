@@ -1,6 +1,7 @@
 package com.unicorn.phonebill.gateway.config;
 
 import com.unicorn.phonebill.gateway.filter.JwtAuthenticationGatewayFilterFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
@@ -31,6 +32,9 @@ public class GatewayConfig {
 
     private final JwtAuthenticationGatewayFilterFactory jwtAuthFilter;
 
+    @Value("${cors.allowed-origins")
+    private String allowedOrigins;
+
     public GatewayConfig(JwtAuthenticationGatewayFilterFactory jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
     }
@@ -48,28 +52,30 @@ public class GatewayConfig {
     public RouteLocator customRouteLocator(RouteLocatorBuilder builder) {
         return builder.routes()
                 // Auth Service 라우팅 (인증 불필요)
-                .route("auth-service", r -> r
-                        .path("/auth/login", "/auth/refresh")
+                .route("user-service-login", r -> r
+                        .path("/api/auth/login", "/api/auth/refresh")
                         .and()
                         .method("POST")
-                        .uri("lb://auth-service"))
+                        .filters(f -> f.rewritePath("/api/auth/(?<segment>.*)", "/auth/${segment}"))
+                        .uri("lb://user-service"))
                 
                 // Auth Service 라우팅 (인증 필요)
-                .route("auth-service-authenticated", r -> r
-                        .path("/auth/**")
+                .route("user-service-authenticated", r -> r
+                        .path("/api/auth/**")
                         .filters(f -> f
+                                .rewritePath("/api/auth/(?<segment>.*)", "/auth/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
-                                        .setName("auth-service-cb")
+                                        .setName("user-service-cb")
                                         .setFallbackUri("forward:/fallback/auth"))
                                 .retry(retry -> retry
                                         .setRetries(3)
                                         .setBackoff(java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10), 2, true)))
-                        .uri("lb://auth-service"))
+                        .uri("lb://user-service"))
                 
                 // Bill-Inquiry Service 라우팅 (인증 필요)
                 .route("bill-service", r -> r
-                        .path("/bills/**")
+                        .path("/api/v1/bills/**")
                         .filters(f -> f
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
@@ -131,15 +137,11 @@ public class GatewayConfig {
     @Bean
     public CorsWebFilter corsWebFilter() {
         CorsConfiguration corsConfig = new CorsConfiguration();
-        
-        // 허용할 Origin 설정
-        corsConfig.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:3000",        // React 개발 서버
-                "http://localhost:3001",        // Next.js 개발 서버  
-                "https://*.unicorn.com",        // 운영 도메인
-                "https://*.phonebill.com"       // 운영 도메인
-        ));
-        
+
+        // 환경변수에서 허용할 Origin 패턴 설정
+        String[] origins = allowedOrigins.split(",");
+        corsConfig.setAllowedOriginPatterns(Arrays.asList(origins));
+
         // 허용할 HTTP 메서드
         corsConfig.setAllowedMethods(Arrays.asList(
                 "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"

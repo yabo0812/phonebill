@@ -37,7 +37,6 @@ public class ProductCacheService {
     private static final String AVAILABLE_PRODUCTS_PREFIX = "availableProducts:";
     private static final String PRODUCT_STATUS_PREFIX = "productStatus:";
     private static final String LINE_STATUS_PREFIX = "lineStatus:";
-    private static final String MENU_INFO_PREFIX = "menuInfo:";
     private static final String PRODUCT_CHANGE_RESULT_PREFIX = "productChangeResult:";
 
     public ProductCacheService(RedisTemplate<String, Object> redisTemplate) {
@@ -155,27 +154,6 @@ public class ProductCacheService {
         }
     }
 
-    // ========== 메뉴정보 캐시 (TTL: 6시간) ==========
-
-    /**
-     * 메뉴정보 캐시 조회
-     */
-    @Cacheable(value = "menuInfo", key = "#userId", unless = "#result == null")
-    public Object getMenuInfo(String userId) {
-        logger.debug("메뉴정보 캐시 조회: {}", userId);
-        return null;
-    }
-
-    /**
-     * 메뉴정보 캐시 저장
-     */
-    public void cacheMenuInfo(String userId, Object menuInfo) {
-        if (StringUtils.hasText(userId) && menuInfo != null) {
-            String key = MENU_INFO_PREFIX + userId;
-            redisTemplate.opsForValue().set(key, menuInfo, Duration.ofHours(6));
-            logger.debug("메뉴정보 캐시 저장: {}", userId);
-        }
-    }
 
     // ========== 상품변경결과 캐시 (TTL: 1시간) ==========
 
@@ -207,9 +185,6 @@ public class ProductCacheService {
     public void evictCustomerCaches(String lineNumber, String customerId) {
         evictCustomerProductInfo(lineNumber);
         evictLineStatus(lineNumber);
-        if (StringUtils.hasText(customerId)) {
-            evictMenuInfo(customerId);
-        }
         logger.info("고객 관련 캐시 무효화 완료: lineNumber={}, customerId={}", lineNumber, customerId);
     }
 
@@ -271,10 +246,6 @@ public class ProductCacheService {
         logger.debug("회선상태 캐시 무효화: {}", lineNumber);
     }
 
-    @CacheEvict(value = "menuInfo", key = "#userId")
-    public void evictMenuInfo(String userId) {
-        logger.debug("메뉴정보 캐시 무효화: {}", userId);
-    }
 
     @CacheEvict(value = "productChangeResult", key = "#requestId")
     public void evictProductChangeResult(String requestId) {

@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.util.Base64;
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -33,6 +34,7 @@ public class AuthService {
     private final JwtService jwtService;
     private final JwtConfig jwtConfig;
     private final PasswordEncoder passwordEncoder;
+    private final TokenBlacklistService tokenBlacklistService;
     
     private static final int MAX_LOGIN_ATTEMPTS = 5;
     private static final long LOCKOUT_DURATION = 30 * 60 * 1000L; // 30분
@@ -65,7 +67,7 @@ public class AuthService {
         String refreshToken = jwtService.generateRefreshToken(user);
         
         // 세션 저장
-        saveUserSession(user, refreshToken);
+        saveUserSession(user, accessToken, refreshToken);
         
         log.info("사용자 로그인 성공: userId={}", user.getUserId());
         
@@ -89,7 +91,12 @@ public class AuthService {
     public RefreshTokenResponse refreshToken(RefreshTokenRequest request) {
         String refreshToken = request.getRefreshToken();
         
-        // Refresh Token 유효성 검증
+        // 1. 블랙리스트 확인
+        if (tokenBlacklistService.isBlacklisted(refreshToken)) {
+            throw InvalidTokenException.invalid();
+        }
+        
+        // 2. JWT 토큰 유효성 검증
         if (!jwtService.validateToken(refreshToken) || !jwtService.isRefreshToken(refreshToken)) {
             throw InvalidTokenException.invalid();
         }
@@ -119,7 +126,7 @@ public class AuthService {
         
         // 기존 세션 비활성화 및 새 세션 생성
         session.deactivate();
-        saveUserSession(user, newRefreshToken);
+        saveUserSession(user, newAccessToken, newRefreshToken);
         
         log.info("토큰 갱신 성공: userId={}", userId);
         
@@ -132,7 +139,7 @@ public class AuthService {
     }
     
     /**
-     * 로그아웃
+     * 로그아웃 (Refresh Token 기반)
      * @param userId 사용자 ID
      * @param refreshToken Refresh Token
      */
@@ -148,12 +155,65 @@ public class AuthService {
     }
     
     /**
-     * 토큰 검증
+     * 로그아웃 (Access Token 기반)
+     * @param userId 사용자 ID
+     * @param accessToken Access Token
+     */
+    @Transactional
+    public void logoutWithAccessToken(String userId, String accessToken) {
+        // 1. Access Token을 블랙리스트에 추가 (즉시 무효화)
+        tokenBlacklistService.addToBlacklist(accessToken, "LOGOUT");
+        
+        // 2. Access Token과 일치하는 활성 세션 찾아서 비활성화
+        Optional<AuthUserSessionEntity> sessionOpt = authUserSessionRepository
+                .findByUserIdAndSessionTokenAndIsActiveTrue(userId, accessToken);
+        
+        if (sessionOpt.isPresent()) {
+            AuthUserSessionEntity session = sessionOpt.get();
+            session.deactivate();
+            
+            // 3. 해당 세션의 Refresh Token도 블랙리스트에 추가
+            if (session.getRefreshToken() != null) {
+                tokenBlacklistService.addToBlacklist(session.getRefreshToken(), "LOGOUT");
+            }
+            
+            log.info("Access Token 기반 로그아웃 완료: userId={}", userId);
+        } else {
+            // 세션이 없는 경우, 해당 사용자의 모든 활성 세션 무효화
+            List<AuthUserSessionEntity> activeSessions = authUserSessionRepository
+                    .findByUserId(userId)
+                    .stream()
+                    .filter(AuthUserSessionEntity::isActive)
+                    .toList();
+            
+            // 모든 활성 세션의 토큰들을 블랙리스트에 추가
+            for (AuthUserSessionEntity session : activeSessions) {
+                if (session.getSessionToken() != null) {
+                    tokenBlacklistService.addToBlacklist(session.getSessionToken(), "LOGOUT_ALL");
+                }
+                if (session.getRefreshToken() != null) {
+                    tokenBlacklistService.addToBlacklist(session.getRefreshToken(), "LOGOUT_ALL");
+                }
+            }
+            
+            authUserSessionRepository.deactivateAllUserSessions(userId);
+            log.info("모든 세션 무효화 로그아웃 완료: userId={}, 무효화된 세션 수={}", userId, activeSessions.size());
+        }
+    }
+    
+    /**
+     * 토큰 검증 (블랙리스트 포함)
      * @param token 검증할 토큰
      * @return 토큰 검증 결과
      */
     public TokenVerifyResponse verifyToken(String token) {
         try {
+            // 1. 블랙리스트 확인
+            if (tokenBlacklistService.isBlacklisted(token)) {
+                return TokenVerifyResponse.invalid();
+            }
+            
+            // 2. JWT 유효성 확인
             if (!jwtService.validateToken(token)) {
                 return TokenVerifyResponse.invalid();
             }
@@ -225,11 +285,13 @@ public class AuthService {
     /**
      * 사용자 세션 저장
      * @param user 사용자 정보
+     * @param sessionToken Session Token (Access Token)
      * @param refreshToken Refresh Token
      */
-    private void saveUserSession(AuthUserEntity user, String refreshToken) {
+    private void saveUserSession(AuthUserEntity user, String sessionToken, String refreshToken) {
         AuthUserSessionEntity session = AuthUserSessionEntity.builder()
                 .userId(user.getUserId())
+                .sessionToken(sessionToken)
                 .refreshToken(refreshToken)
                 .expiresAt(jwtService.getExpirationDateFromToken(refreshToken))
                 .isActive(true)

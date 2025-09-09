@@ -112,6 +112,11 @@ public interface AuthUserSessionRepository extends JpaRepository<AuthUserSession
     Optional<AuthUserSessionEntity> findByUserIdAndRefreshTokenAndIsActiveTrue(String userId, String refreshToken);
     
     /**
+     * 사용자 ID와 세션 토큰으로 활성 세션 조회
+     */
+    Optional<AuthUserSessionEntity> findByUserIdAndSessionTokenAndIsActiveTrue(String userId, String sessionToken);
+    
+    /**
      * 사용자의 모든 세션 비활성화
      */
     @Modifying

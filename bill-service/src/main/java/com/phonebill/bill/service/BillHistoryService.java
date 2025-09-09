@@ -194,11 +194,9 @@ public class BillHistoryService {
                 endDateTime = LocalDate.parse(endDate).atTime(23, 59, 59);
             }
 
-            String statusFilter = status != null ? status.name() : null;
-
-            // 이력 조회
-            Page<BillInquiryHistoryEntity> historyPage = historyRepository.findBillHistoryWithFilters(
-                    userLineNumbers, lineNumber, startDateTime, endDateTime, statusFilter, pageable
+            // 조건에 따라 적절한 쿼리 선택
+            Page<BillInquiryHistoryEntity> historyPage = getBillHistoryByConditions(
+                    userLineNumbers, lineNumber, startDateTime, endDateTime, status, pageable
             );
 
             // 응답 데이터 변환
@@ -230,6 +228,64 @@ public class BillHistoryService {
         } catch (Exception e) {
             log.error("요금조회 이력 목록 조회 오류 - 오류: {}", e.getMessage(), e);
             throw new BillInquiryException("이력 조회 중 오류가 발생했습니다", e);
+        }
+    }
+
+    /**
+     * 조건에 따라 적절한 쿼리를 선택하여 이력 조회
+     */
+    private Page<BillInquiryHistoryEntity> getBillHistoryByConditions(
+            List<String> userLineNumbers, String lineNumber, 
+            LocalDateTime startDateTime, LocalDateTime endDateTime, 
+            BillInquiryResponse.ProcessStatus status, Pageable pageable) {
+        
+        boolean hasLineNumber = lineNumber != null && !lineNumber.trim().isEmpty();
+        boolean hasDateRange = startDateTime != null && endDateTime != null;
+        boolean hasStatus = status != null;
+        
+        String statusFilter = hasStatus ? status.name() : null;
+        
+        // 8가지 경우의 수에 따라 적절한 쿼리 선택
+        if (hasLineNumber && hasDateRange && hasStatus) {
+            // 모든 필터 적용
+            return historyRepository.findBillHistoryWithAllFilters(
+                    userLineNumbers, lineNumber, startDateTime, endDateTime, statusFilter, pageable
+            );
+        } else if (hasLineNumber && hasDateRange) {
+            // 회선번호 + 날짜 범위
+            return historyRepository.findBillHistoryByLineNumbersAndLineNumberAndDateRange(
+                    userLineNumbers, lineNumber, startDateTime, endDateTime, pageable
+            );
+        } else if (hasLineNumber && hasStatus) {
+            // 회선번호 + 상태
+            return historyRepository.findBillHistoryByLineNumbersAndLineNumberAndStatus(
+                    userLineNumbers, lineNumber, statusFilter, pageable
+            );
+        } else if (hasDateRange && hasStatus) {
+            // 날짜 범위 + 상태
+            return historyRepository.findBillHistoryByLineNumbersAndDateRangeAndStatus(
+                    userLineNumbers, startDateTime, endDateTime, statusFilter, pageable
+            );
+        } else if (hasLineNumber) {
+            // 회선번호만
+            return historyRepository.findBillHistoryByLineNumbersAndLineNumber(
+                    userLineNumbers, lineNumber, pageable
+            );
+        } else if (hasDateRange) {
+            // 날짜 범위만
+            return historyRepository.findBillHistoryByLineNumbersAndDateRange(
+                    userLineNumbers, startDateTime, endDateTime, pageable
+            );
+        } else if (hasStatus) {
+            // 상태만
+            return historyRepository.findBillHistoryByLineNumbersAndStatus(
+                    userLineNumbers, statusFilter, pageable
+            );
+        } else {
+            // 필터 없음 (기본)
+            return historyRepository.findBillHistoryByLineNumbers(
+                    userLineNumbers, pageable
+            );
         }
     }
 

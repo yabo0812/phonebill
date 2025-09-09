@@ -1,6 +1,7 @@
 package com.phonebill.bill.service;
 
 import com.phonebill.bill.dto.*;
+import com.phonebill.kosmock.dto.KosBillInquiryResponse;
 
 /**
  * 요금조회 서비스 인터페이스
@@ -41,20 +42,8 @@ public interface BillInquiryService {
      * @param request 요금조회 요청 데이터
      * @return 요금조회 응답 데이터
      */
-    BillInquiryResponse inquireBill(BillInquiryRequest request);
+    KosBillInquiryResponse inquireBill(BillInquiryRequest request);
 
-    /**
-     * 요금조회 결과 확인
-     * 
-     * 비동기로 처리된 요금조회의 상태와 결과를 반환
-     * - PROCESSING: 처리 중 상태
-     * - COMPLETED: 처리 완료 (요금 정보 포함)
-     * - FAILED: 처리 실패 (오류 메시지 포함)
-     * 
-     * @param requestId 요금조회 요청 ID
-     * @return 요금조회 응답 데이터
-     */
-    BillInquiryResponse getBillInquiryResult(String requestId);
 
     /**
      * 요금조회 이력 조회

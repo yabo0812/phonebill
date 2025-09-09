@@ -7,15 +7,15 @@ server:
     connection-timeout: ${SERVER_NETTY_CONNECTION_TIMEOUT:30s}
     idle-timeout: ${SERVER_NETTY_IDLE_TIMEOUT:60s}
   http2:
-    enabled: ${SERVER_HTTP2_ENABLED:true}
+    enabled: true
 
 spring:
   application:
     name: api-gateway
   
   profiles:
-    active: dev
-  
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+
   # Spring Cloud Gateway 설정
   cloud:
     gateway:
@@ -59,12 +59,15 @@ spring:
     deserialization:
       fail-on-unknown-properties: false
 
-# JWT 설정
-app:
-  jwt:
-    secret: ${JWT_SECRET:phonebill-api-gateway-jwt-secret-key-256-bit-minimum-length-required}
-    access-token-validity-in-seconds: 1800  # 30분
-    refresh-token-validity-in-seconds: 86400 # 24시간
+# CORS
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+# JWT 토큰 설정
+jwt:
+  secret: ${JWT_SECRET:}
+  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800}
+  refresh-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:86400}
 
 # 서비스 URL 설정
 services:
@@ -142,14 +145,8 @@ management:
 
 # 로깅 설정
 logging:
-  level:
-    com.unicorn.phonebill.gateway: ${LOG_LEVEL_GATEWAY:INFO}
-    org.springframework.cloud.gateway: ${LOG_LEVEL_SPRING_CLOUD_GATEWAY:DEBUG}
-    reactor.netty: ${LOG_LEVEL_REACTOR_NETTY:INFO}
-    io.netty: ${LOG_LEVEL_IO_NETTY:WARN}
-    root: ${LOG_LEVEL_ROOT:INFO}
   file:
-    name: ${LOG_FILE:logs/api-gateway.log}
+    name: logs/api-gateway.log
   logback:
     rollingpolicy:
       max-file-size: 10MB

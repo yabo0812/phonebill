@@ -28,6 +28,7 @@ dependencies {
     
     // Common modules (로컬 의존성)
     implementation project(':common')
+    implementation project(':kos-mock')
     
     // Test Dependencies (bill service specific)
     testImplementation 'org.testcontainers:postgresql'

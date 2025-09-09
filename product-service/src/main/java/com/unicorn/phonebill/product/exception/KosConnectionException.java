@@ -43,4 +43,19 @@ public class KosConnectionException extends BusinessException {
         return new KosConnectionException("KOS_AUTH_FAILED", 
             "KOS 시스템 인증에 실패했습니다", serviceName);
     }
+
+    public static KosConnectionException apiError(String serviceName, String statusCode, String details) {
+        return new KosConnectionException("KOS_API_ERROR", 
+            "KOS API 호출 오류 [" + statusCode + "]: " + details, serviceName);
+    }
+
+    public static KosConnectionException networkError(String serviceName, Throwable cause) {
+        return new KosConnectionException("KOS_NETWORK_ERROR", 
+            "KOS 네트워크 연결 오류", serviceName, cause);
+    }
+
+    public static KosConnectionException dataConversionError(String serviceName, String dataType, Throwable cause) {
+        return new KosConnectionException("KOS_DATA_CONVERSION_ERROR", 
+            "KOS 데이터 변환 오류: " + dataType, serviceName, cause);
+    }
 }

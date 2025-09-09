@@ -11,59 +11,50 @@ spring:
   
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-    include:
-      - common
-  
-  # 데이터베이스 설정
   datasource:
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/bill_inquiry_db}
-    username: ${DB_USERNAME:bill_user}
-    password: ${DB_PASSWORD:bill_pass}
+    url: jdbc:postgresql://${DB_HOST:20.249.107.185}:${DB_PORT:5432}/${DB_NAME:product_change}
+    username: ${DB_USERNAME:product_user}
+    password: ${DB_PASSWORD:product_pass}
     driver-class-name: org.postgresql.Driver
     hikari:
-      minimum-idle: ${DB_MIN_IDLE:5}
-      maximum-pool-size: ${DB_MAX_POOL:20}
-      idle-timeout: ${DB_IDLE_TIMEOUT:300000}
-      max-lifetime: ${DB_MAX_LIFETIME:1800000}
-      connection-timeout: ${DB_CONNECTION_TIMEOUT:30000}
-      validation-timeout: ${DB_VALIDATION_TIMEOUT:5000}
-      leak-detection-threshold: ${DB_LEAK_DETECTION:60000}
-  
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
   # JPA 설정
   jpa:
-    hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:validate}
-      naming:
-        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
-    show-sql: ${JPA_SHOW_SQL:false}
+    show-sql: ${SHOW_SQL:true}
     properties:
       hibernate:
-        dialect: org.hibernate.dialect.PostgreSQLDialect
-        format_sql: ${JPA_FORMAT_SQL:false}
-        use_sql_comments: ${JPA_SQL_COMMENTS:false}
-        default_batch_fetch_size: ${JPA_BATCH_SIZE:100}
-        jdbc:
-          batch_size: ${JPA_JDBC_BATCH_SIZE:20}
-          order_inserts: true
-          order_updates: true
+        format_sql: true
+        use_sql_comments: true
         connection:
-          provider_disables_autocommit: true
-    open-in-view: false
-  
+          provider_disables_autocommit: false
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+
   # Redis 설정
-  redis:
-    host: ${REDIS_HOST:localhost}
-    port: ${REDIS_PORT:6379}
-    password: ${REDIS_PASSWORD:}
-    database: ${REDIS_DATABASE:0}
-    timeout: ${REDIS_TIMEOUT:5000}
-    lettuce:
-      pool:
-        max-active: ${REDIS_MAX_ACTIVE:20}
-        max-idle: ${REDIS_MAX_IDLE:8}
-        min-idle: ${REDIS_MIN_IDLE:0}
-        max-wait: ${REDIS_MAX_WAIT:-1}
-  
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+      database: ${REDIS_DATABASE:2}
+
+  # Cache 개발 설정 (TTL 단축)
+  cache:
+    redis:
+      time-to-live: 3600000 # 1시간 (개발환경에서 단축)
+
   # Jackson 설정
   jackson:
     default-property-inclusion: non_null
@@ -75,22 +66,6 @@ spring:
       accept-single-value-as-array: true
     time-zone: Asia/Seoul
     date-format: yyyy-MM-dd HH:mm:ss
-  
-  # Servlet 설정
-  servlet:
-    multipart:
-      max-file-size: ${SERVLET_MAX_FILE_SIZE:10MB}
-      max-request-size: ${SERVLET_MAX_REQUEST_SIZE:100MB}
-  
-  # 비동기 처리 설정
-  task:
-    execution:
-      pool:
-        core-size: ${ASYNC_CORE_SIZE:5}
-        max-size: ${ASYNC_MAX_SIZE:20}
-        queue-capacity: ${ASYNC_QUEUE_CAPACITY:100}
-        keep-alive: ${ASYNC_KEEP_ALIVE:60s}
-      thread-name-prefix: "bill-async-"
 
 # 서버 설정
 server:
@@ -105,13 +80,6 @@ server:
     include-binding-errors: always
     include-stacktrace: on_param
     include-exception: false
-  tomcat:
-    uri-encoding: UTF-8
-    max-connections: ${TOMCAT_MAX_CONNECTIONS:8192}
-    accept-count: ${TOMCAT_ACCEPT_COUNT:100}
-    threads:
-      max: ${TOMCAT_MAX_THREADS:200}
-      min-spare: ${TOMCAT_MIN_THREADS:10}
 
 # 액추에이터 설정 (모니터링)
 management:
@@ -126,7 +94,7 @@ management:
   endpoint:
     health:
       enabled: true
-      show-details: ${ACTUATOR_HEALTH_DETAILS:when_authorized}
+      show-details: always
       show-components: always
       probes:
         enabled: true
@@ -159,7 +127,7 @@ management:
 
 # KOS 시스템 연동 설정
 kos:
-  base-url: ${KOS_BASE_URL:http://localhost:9090}
+  base-url: ${KOS_BASE_URL:http://localhost:8084}
   connect-timeout: ${KOS_CONNECT_TIMEOUT:5000}
   read-timeout: ${KOS_READ_TIMEOUT:30000}
   max-retries: ${KOS_MAX_RETRIES:3}
@@ -174,82 +142,40 @@ kos:
     minimum-number-of-calls: ${KOS_CB_MIN_CALLS:5}
     permitted-number-of-calls-in-half-open-state: ${KOS_CB_HALF_OPEN_CALLS:3}
     wait-duration-in-open-state: ${KOS_CB_OPEN_DURATION:60000}
-  
-  # 인증 설정
-  authentication:
-    enabled: ${KOS_AUTH_ENABLED:true}
-    api-key: ${KOS_API_KEY:}
-    secret-key: ${KOS_SECRET_KEY:}
-    token-expiration-seconds: ${KOS_TOKEN_EXPIRATION:3600}
-    token-refresh-threshold-seconds: ${KOS_TOKEN_REFRESH_THRESHOLD:300}
-  
-  # 모니터링 설정
-  monitoring:
-    performance-logging-enabled: ${KOS_PERF_LOGGING:true}
-    slow-request-threshold: ${KOS_SLOW_THRESHOLD:3000}
-    metrics-enabled: ${KOS_METRICS_ENABLED:true}
-    health-check-interval: ${KOS_HEALTH_INTERVAL:30000}
-
-# 로깅 설정
-logging:
-  level:
-    root: ${LOG_LEVEL_ROOT:INFO}
-    com.phonebill: ${LOG_LEVEL_APP:INFO}
-    com.phonebill.bill.service: ${LOG_LEVEL_SERVICE:INFO}
-    com.phonebill.bill.repository: ${LOG_LEVEL_REPOSITORY:INFO}
-    org.springframework.cache: ${LOG_LEVEL_CACHE:INFO}
-    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
-    org.springframework.security: ${LOG_LEVEL_SECURITY:INFO}
-    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
-    org.hibernate.type.descriptor.sql.BasicBinder: ${LOG_LEVEL_SQL_PARAM:WARN}
-    io.github.resilience4j: ${LOG_LEVEL_RESILIENCE4J:INFO}
-    redis.clients.jedis: ${LOG_LEVEL_REDIS:INFO}
-  pattern:
-    console: "${LOG_PATTERN_CONSOLE:%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}}"
-    file: "${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:%5p} ${PID:- } --- [%t] %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}}"
-  file:
-    name: ${LOG_FILE_NAME:logs/bill-service.log}
-    max-size: ${LOG_FILE_MAX_SIZE:100MB}
-    max-history: ${LOG_FILE_MAX_HISTORY:30}
 
 # Swagger/OpenAPI 설정
 springdoc:
   api-docs:
-    enabled: ${SWAGGER_ENABLED:true}
+    enabled: true
     path: /v3/api-docs
   swagger-ui:
-    enabled: ${SWAGGER_UI_ENABLED:true}
+    enabled: true
     path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: alpha
     display-request-duration: true
     default-models-expand-depth: 1
     default-model-expand-depth: 1
-  show-actuator: ${SWAGGER_SHOW_ACTUATOR:false}
+  show-actuator: false
   writer-with-default-pretty-printer: true
+  paths-to-exclude: /actuator/**
+
+# CORS
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
 
 # JWT 보안 설정
 jwt:
-  secret: ${JWT_SECRET:dev-jwt-secret-key-for-development-only}
-  expiration: ${JWT_EXPIRATION:86400000}  # 24시간 (밀리초)
-  refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800000}  # 7일 (밀리초)
-  header: ${JWT_HEADER:Authorization}
-  prefix: ${JWT_PREFIX:Bearer }
+  secret: ${JWT_SECRET:}
+  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800}
+  refresh-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:86400}
 
-# 애플리케이션 정보
-info:
-  app:
-    name: ${spring.application.name}
-    description: 통신요금 조회 및 관리 서비스
-    version: ${BUILD_VERSION:1.0.0}
-    author: 이개발(백엔더)
-    contact: dev@phonebill.com
-  build:
-    time: ${BUILD_TIME:@project.build.time@}
-    artifact: ${BUILD_ARTIFACT:@project.artifactId@}
-    group: ${BUILD_GROUP:@project.groupId@}
-  java:
-    version: ${java.version}
-  git:
-    branch: ${GIT_BRANCH:unknown}
-    commit: ${GIT_COMMIT:unknown}
+# 로깅 설정
+logging:
+  pattern:
+    console: "${LOG_PATTERN_CONSOLE:%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}}"
+    file: "${LOG_PATTERN_FILE:%d{yyyy-MM-dd HH:mm:ss.SSS} ${LOG_LEVEL_PATTERN:%5p} ${PID:- } --- [%t] %-40.40logger{39} : %m%n${LOG_EXCEPTION_CONVERSION_WORD:%wEx}}"
+  file:
+    name: logs/bill-service.log
+    max-size: ${LOG_FILE_MAX_SIZE:100MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}

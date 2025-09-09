@@ -3,28 +3,8 @@
     <ExternalSystemSettings>
       <option name="env">
         <map>
-          <!-- Server Configuration -->
           <entry key="SERVER_PORT" value="8084" />
           <entry key="SPRING_PROFILES_ACTIVE" value="dev" />
-          
-          <!-- Logging Configuration -->
-          <entry key="LOG_FILE" value="logs/kos-mock.log" />
-          <entry key="LOG_LEVEL_ROOT" value="INFO" />
-          <entry key="LOG_LEVEL_APP" value="DEBUG" />
-          
-          <!-- Redis Configuration (Optional - KOS Mock에서는 캐시 기능 비활성화 상태) -->
-          <entry key="REDIS_HOST" value="20.249.193.103" />
-          <entry key="REDIS_PORT" value="6379" />
-          <entry key="REDIS_PASSWORD" value="Redis2025Dev!" />
-          <entry key="REDIS_DATABASE" value="4" />
-          
-          <!-- KOS Mock Specific Settings -->
-          <entry key="KOS_MOCK_DELAY_MIN" value="100" />
-          <entry key="KOS_MOCK_DELAY_MAX" value="500" />
-          <entry key="KOS_MOCK_ERROR_RATE" value="0.05" />
-          
-          <!-- Development Settings -->
-          <entry key="CORS_ALLOWED_ORIGINS" value="*" />
         </map>
       </option>
       <option name="executionName" />

@@ -95,12 +95,92 @@ public interface BillInquiryHistoryRepository extends JpaRepository<BillInquiryH
      */
     @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
            "h.lineNumber IN :lineNumbers " +
-           "AND (:lineNumber IS NULL OR h.lineNumber = :lineNumber) " +
-           "AND (:startTime IS NULL OR h.requestTime >= :startTime) " +
-           "AND (:endTime IS NULL OR h.requestTime <= :endTime) " +
-           "AND (:status IS NULL OR h.status = :status) " +
            "ORDER BY h.requestTime DESC")
-    Page<BillInquiryHistoryEntity> findBillHistoryWithFilters(
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbers(
+            @Param("lineNumbers") List<String> lineNumbers,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.lineNumber = :lineNumber " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbersAndLineNumber(
+            @Param("lineNumbers") List<String> lineNumbers,
+            @Param("lineNumber") String lineNumber,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.requestTime >= :startTime " +
+           "AND h.requestTime <= :endTime " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbersAndDateRange(
+            @Param("lineNumbers") List<String> lineNumbers,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.status = :status " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbersAndStatus(
+            @Param("lineNumbers") List<String> lineNumbers,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.lineNumber = :lineNumber " +
+           "AND h.requestTime >= :startTime " +
+           "AND h.requestTime <= :endTime " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbersAndLineNumberAndDateRange(
+            @Param("lineNumbers") List<String> lineNumbers,
+            @Param("lineNumber") String lineNumber,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.lineNumber = :lineNumber " +
+           "AND h.status = :status " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbersAndLineNumberAndStatus(
+            @Param("lineNumbers") List<String> lineNumbers,
+            @Param("lineNumber") String lineNumber,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.requestTime >= :startTime " +
+           "AND h.requestTime <= :endTime " +
+           "AND h.status = :status " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryByLineNumbersAndDateRangeAndStatus(
+            @Param("lineNumbers") List<String> lineNumbers,
+            @Param("startTime") LocalDateTime startTime,
+            @Param("endTime") LocalDateTime endTime,
+            @Param("status") String status,
+            Pageable pageable
+    );
+
+    @Query("SELECT h FROM BillInquiryHistoryEntity h WHERE " +
+           "h.lineNumber IN :lineNumbers " +
+           "AND h.lineNumber = :lineNumber " +
+           "AND h.requestTime >= :startTime " +
+           "AND h.requestTime <= :endTime " +
+           "AND h.status = :status " +
+           "ORDER BY h.requestTime DESC")
+    Page<BillInquiryHistoryEntity> findBillHistoryWithAllFilters(
             @Param("lineNumbers") List<String> lineNumbers,
             @Param("lineNumber") String lineNumber,
             @Param("startTime") LocalDateTime startTime,

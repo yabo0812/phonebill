@@ -95,77 +95,114 @@ public class KosMockController {
     }
 
     /**
-     * 처리 상태 조회 API
+     * 상품 정보 목록 조회 API
      */
-    @GetMapping("/status/{requestId}")
-    @Operation(summary = "처리 상태 조회", description = "요청의 처리 상태를 조회합니다.")
+    @GetMapping("/product/list")
+    @Operation(summary = "상품 목록 조회", description = "등록된 통신 상품들의 목록을 조회합니다.")
     @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "조회 성공"),
-        @ApiResponse(responseCode = "404", description = "요청 ID를 찾을 수 없음"),
+        @ApiResponse(responseCode = "200", description = "조회 성공", 
+                    content = @Content(schema = @Schema(implementation = KosCommonResponse.class))),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청"),
         @ApiResponse(responseCode = "500", description = "서버 오류")
     })
-    public ResponseEntity<KosCommonResponse<Object>> getProcessingStatus(
-            @Parameter(description = "요청 ID", example = "REQ_20250108_001")
-            @PathVariable String requestId) {
+    public ResponseEntity<KosCommonResponse<KosProductListResponse>> getProductList() {
         
-        log.info("처리 상태 조회 요청 - RequestId: {}", requestId);
+        log.info("상품 목록 조회 요청 수신");
         
         try {
-            // Mock 데이터에서 처리 결과 조회 로직은 간단하게 구현
-            // 실제로는 mockDataService.getProcessingResult(requestId) 사용
+            KosProductListResponse response = kosMockService.getProductList();
             
-            return ResponseEntity.ok(KosCommonResponse.success(
-                "PROCESSING 상태 - 처리 중입니다.", 
-                "처리 상태 조회가 완료되었습니다"));
-                
+            if ("0000".equals(response.getResultCode())) {
+                return ResponseEntity.ok(KosCommonResponse.success(response, "상품 목록 조회가 완료되었습니다"));
+            } else {
+                return ResponseEntity.ok(KosCommonResponse.failure(
+                        response.getResultCode(), response.getResultMessage()));
+            }
+            
         } catch (Exception e) {
-            log.error("처리 상태 조회 중 오류 발생 - RequestId: {}", requestId, e);
+            log.error("상품 목록 조회 처리 중 오류 발생", e);
             return ResponseEntity.ok(KosCommonResponse.systemError());
         }
     }
 
     /**
-     * 서비스 상태 체크 API
+     * 데이터 보유 월 목록 조회 API
      */
-    @GetMapping("/health")
-    @Operation(summary = "서비스 상태 체크", description = "KOS Mock 서비스의 상태를 확인합니다.")
-    public ResponseEntity<KosCommonResponse<Object>> healthCheck() {
+    @GetMapping("/bill/available-months/{lineNumber}")
+    @Operation(summary = "데이터 보유 월 목록 조회", description = "회선번호의 실제 요금 데이터가 있는 월 목록을 조회합니다.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "조회 성공", 
+                    content = @Content(schema = @Schema(implementation = KosCommonResponse.class))),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    public ResponseEntity<KosCommonResponse<KosAvailableMonthsResponse>> getAvailableMonths(
+            @Parameter(description = "회선번호 (하이픈 제거된 형태)", example = "01012345678")
+            @PathVariable String lineNumber) {
         
-        log.debug("KOS Mock 서비스 상태 체크 요청");
+        log.info("데이터 보유 월 목록 조회 요청 수신 - LineNumber: {}", lineNumber);
         
         try {
-            return ResponseEntity.ok(KosCommonResponse.success(
-                "KOS Mock Service is running normally", 
-                "서비스가 정상 동작 중입니다"));
-                
+            // 하이픈 없는 형태 그대로 사용 (MockDataService와 일치)
+            KosAvailableMonthsResponse response = kosMockService.getAvailableMonths(lineNumber);
+            
+            if ("0000".equals(response.getResultCode())) {
+                return ResponseEntity.ok(KosCommonResponse.success(response, "데이터 보유 월 목록 조회가 완료되었습니다"));
+            } else {
+                return ResponseEntity.ok(KosCommonResponse.failure(
+                        response.getResultCode(), response.getResultMessage()));
+            }
+            
         } catch (Exception e) {
-            log.error("서비스 상태 체크 중 오류 발생", e);
+            log.error("데이터 보유 월 목록 조회 처리 중 오류 발생 - LineNumber: {}", lineNumber, e);
+            return ResponseEntity.ok(KosCommonResponse.systemError());
+        }
+    }
+    
+    /**
+     * 가입상품 조회 API
+     */
+    @PostMapping("/product/inquiry")
+    @Operation(summary = "가입상품 조회", description = "고객의 가입상품 정보를 조회합니다.")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "조회 성공", 
+                    content = @Content(schema = @Schema(implementation = KosCommonResponse.class))),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    public ResponseEntity<KosCommonResponse<KosProductInquiryResponse>> inquireProduct(
+            @Valid @RequestBody KosProductInquiryRequest request) {
+        
+        log.info("가입상품 조회 요청 수신 - RequestId: {}, LineNumber: {}", 
+                request.getRequestId(), request.getLineNumber());
+        
+        try {
+            KosProductInquiryResponse response = kosMockService.processProductInquiry(request);
+            
+            if ("0000".equals(response.getResultCode())) {
+                return ResponseEntity.ok(KosCommonResponse.success(response, "가입상품 조회가 완료되었습니다"));
+            } else {
+                return ResponseEntity.ok(KosCommonResponse.failure(
+                        response.getResultCode(), response.getResultMessage()));
+            }
+            
+        } catch (Exception e) {
+            log.error("가입상품 조회 처리 중 오류 발생 - RequestId: {}", request.getRequestId(), e);
             return ResponseEntity.ok(KosCommonResponse.systemError());
         }
     }
 
     /**
-     * Mock 설정 조회 API (개발/테스트용)
+     * 회선번호 형식 변환 (01012345678 → 010-1234-5678)
      */
-    @GetMapping("/mock/config")
-    @Operation(summary = "Mock 설정 조회", description = "현재 Mock 서비스의 설정을 조회합니다. (개발/테스트용)")
-    public ResponseEntity<KosCommonResponse<Object>> getMockConfig() {
-        
-        log.info("Mock 설정 조회 요청");
-        
-        try {
-            // Mock 설정 정보를 간단히 반환
-            String configInfo = String.format(
-                "Response Delay: %dms, Failure Rate: %.2f%%, Service Status: ACTIVE",
-                500, 1.0); // 하드코딩된 값 (실제로는 MockConfig에서 가져올 수 있음)
-                
-            return ResponseEntity.ok(KosCommonResponse.success(
-                configInfo, 
-                "Mock 설정 조회가 완료되었습니다"));
-                
-        } catch (Exception e) {
-            log.error("Mock 설정 조회 중 오류 발생", e);
-            return ResponseEntity.ok(KosCommonResponse.systemError());
+    private String formatLineNumber(String lineNumber) {
+        if (lineNumber == null || lineNumber.length() != 11) {
+            return lineNumber;
         }
+        
+        return lineNumber.substring(0, 3) + "-" + 
+               lineNumber.substring(3, 7) + "-" + 
+               lineNumber.substring(7, 11);
     }
+
 }

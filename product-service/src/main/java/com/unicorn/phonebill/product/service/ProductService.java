@@ -9,21 +9,12 @@ import java.util.List;
  * 상품 관리 서비스 인터페이스
  * 
  * 주요 기능:
- * - 상품변경 메뉴 조회
  * - 고객 및 상품 정보 조회
  * - 상품변경 처리
  * - 상품변경 이력 관리
  */
 public interface ProductService {
 
-    /**
-     * 상품변경 메뉴 조회
-     * UFR-PROD-010 구현
-     * 
-     * @param userId 사용자 ID
-     * @return 메뉴 응답
-     */
-    ProductMenuResponse getProductMenu(String userId);
 
     /**
      * 고객 정보 조회
@@ -39,10 +30,9 @@ public interface ProductService {
      * UFR-PROD-020 구현
      * 
      * @param currentProductCode 현재 상품코드 (필터링용)
-     * @param operatorCode 사업자 코드 (필터링용)
      * @return 가용 상품 목록 응답
      */
-    AvailableProductsResponse getAvailableProducts(String currentProductCode, String operatorCode);
+    AvailableProductsResponse getAvailableProducts(String currentProductCode);
 
     /**
      * 상품변경 사전체크
@@ -73,13 +63,6 @@ public interface ProductService {
      */
     ProductChangeAsyncResponse requestProductChangeAsync(ProductChangeRequest request, String userId);
 
-    /**
-     * 상품변경 결과 조회
-     * 
-     * @param requestId 상품변경 요청 ID
-     * @return 상품변경 결과 응답
-     */
-    ProductChangeResultResponse getProductChangeResult(String requestId);
 
     /**
      * 상품변경 이력 조회

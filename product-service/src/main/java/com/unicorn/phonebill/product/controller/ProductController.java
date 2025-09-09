@@ -29,7 +29,6 @@ import java.time.LocalDate;
  * 상품변경 서비스 REST API 컨트롤러
  * 
  * 주요 기능:
- * - 상품변경 메뉴 조회 (UFR-PROD-010)
  * - 고객 및 상품 정보 조회 (UFR-PROD-020)
  * - 상품변경 요청 및 사전체크 (UFR-PROD-030)
  * - KOS 연동 상품변경 처리 (UFR-PROD-040)
@@ -50,41 +49,12 @@ public class ProductController {
         this.productService = productService;
     }
 
-    /**
-     * 상품변경 메뉴 조회
-     * UFR-PROD-010 구현
-     */
-    @GetMapping("/menu")
-    @Operation(summary = "상품변경 메뉴 조회", 
-               description = "상품변경 메뉴 접근 시 필요한 기본 정보를 조회합니다")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "메뉴 조회 성공",
-                    content = @Content(schema = @Schema(implementation = ProductMenuResponse.class))),
-        @ApiResponse(responseCode = "401", description = "인증 실패",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "403", description = "권한 없음",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "500", description = "서버 오류",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<ProductMenuResponse> getProductMenu() {
-        String userId = getCurrentUserId();
-        logger.info("상품변경 메뉴 조회 요청: userId={}", userId);
-
-        try {
-            ProductMenuResponse response = productService.getProductMenu(userId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("상품변경 메뉴 조회 실패: userId={}", userId, e);
-            throw new RuntimeException("메뉴 조회 중 오류가 발생했습니다");
-        }
-    }
 
     /**
      * 고객 정보 조회
      * UFR-PROD-020 구현
      */
-    @GetMapping("/customer/{lineNumber}")
+    @GetMapping("/customer")
     @Operation(summary = "고객 정보 조회", 
                description = "특정 회선번호의 고객 정보와 현재 상품 정보를 조회합니다")
     @ApiResponses({
@@ -99,7 +69,7 @@ public class ProductController {
     })
     public ResponseEntity<CustomerInfoResponse> getCustomerInfo(
             @Parameter(description = "고객 회선번호", example = "01012345678")
-            @PathVariable 
+            @RequestParam("lineNumber")
             @Pattern(regexp = "^010[0-9]{8}$", message = "회선번호는 010으로 시작하는 11자리 숫자여야 합니다")
             String lineNumber) {
         
@@ -130,20 +100,18 @@ public class ProductController {
     })
     public ResponseEntity<AvailableProductsResponse> getAvailableProducts(
             @Parameter(description = "현재 상품코드 (필터링용)")
-            @RequestParam(required = false) String currentProductCode,
-            @Parameter(description = "사업자 코드")
-            @RequestParam(required = false) String operatorCode) {
+            @RequestParam(required = false) String currentProductCode) {
         
         String userId = getCurrentUserId();
-        logger.info("가용 상품 목록 조회 요청: currentProductCode={}, operatorCode={}, userId={}", 
-                   currentProductCode, operatorCode, userId);
+        logger.info("가용 상품 목록 조회 요청: currentProductCode={}, userId={}", 
+                   currentProductCode, userId);
 
         try {
-            AvailableProductsResponse response = productService.getAvailableProducts(currentProductCode, operatorCode);
+            AvailableProductsResponse response = productService.getAvailableProducts(currentProductCode);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
-            logger.error("가용 상품 목록 조회 실패: currentProductCode={}, operatorCode={}, userId={}", 
-                        currentProductCode, operatorCode, userId, e);
+            logger.error("가용 상품 목록 조회 실패: currentProductCode={}, userId={}", 
+                        currentProductCode, userId, e);
             throw new RuntimeException("상품 목록 조회 중 오류가 발생했습니다");
         }
     }
@@ -186,12 +154,10 @@ public class ProductController {
      */
     @PostMapping("/change")
     @Operation(summary = "상품변경 요청", 
-               description = "실제 상품변경 처리를 요청합니다")
+               description = "실제 상품변경 처리를 요청합니다 (동기 처리)")
     @ApiResponses({
         @ApiResponse(responseCode = "200", description = "상품변경 처리 완료",
                     content = @Content(schema = @Schema(implementation = ProductChangeResponse.class))),
-        @ApiResponse(responseCode = "202", description = "상품변경 요청 접수 (비동기 처리)",
-                    content = @Content(schema = @Schema(implementation = ProductChangeAsyncResponse.class))),
         @ApiResponse(responseCode = "400", description = "잘못된 요청",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
         @ApiResponse(responseCode = "409", description = "사전체크 실패 또는 처리 불가 상태",
@@ -201,63 +167,24 @@ public class ProductController {
         @ApiResponse(responseCode = "500", description = "서버 오류",
                     content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
     })
-    public ResponseEntity<?> requestProductChange(
-            @Valid @RequestBody ProductChangeRequest request,
-            @Parameter(description = "처리 모드 (sync: 동기, async: 비동기)")
-            @RequestParam(defaultValue = "sync") String mode) {
+    public ResponseEntity<ProductChangeResponse> requestProductChange(
+            @Valid @RequestBody ProductChangeRequest request) {
         
         String userId = getCurrentUserId();
-        logger.info("상품변경 요청: lineNumber={}, current={}, target={}, mode={}, userId={}", 
+        logger.info("상품변경 요청: lineNumber={}, current={}, target={}, userId={}", 
                    request.getLineNumber(), request.getCurrentProductCode(), 
-                   request.getTargetProductCode(), mode, userId);
+                   request.getTargetProductCode(), userId);
 
         try {
-            if ("async".equalsIgnoreCase(mode)) {
-                // 비동기 처리
-                ProductChangeAsyncResponse response = productService.requestProductChangeAsync(request, userId);
-                return ResponseEntity.accepted().body(response);
-            } else {
-                // 동기 처리 (기본값)
-                ProductChangeResponse response = productService.requestProductChange(request, userId);
-                return ResponseEntity.ok(response);
-            }
+            // 동기 처리
+            ProductChangeResponse response = productService.requestProductChange(request, userId);
+            return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("상품변경 요청 실패: lineNumber={}, userId={}", request.getLineNumber(), userId, e);
             throw new RuntimeException("상품변경 처리 중 오류가 발생했습니다");
         }
     }
 
-    /**
-     * 상품변경 결과 조회
-     */
-    @GetMapping("/change/{requestId}")
-    @Operation(summary = "상품변경 결과 조회", 
-               description = "특정 요청ID의 상품변경 처리 결과를 조회합니다")
-    @ApiResponses({
-        @ApiResponse(responseCode = "200", description = "처리 결과 조회 성공",
-                    content = @Content(schema = @Schema(implementation = ProductChangeResultResponse.class))),
-        @ApiResponse(responseCode = "400", description = "잘못된 요청",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "404", description = "요청 정보를 찾을 수 없음",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
-        @ApiResponse(responseCode = "500", description = "서버 오류",
-                    content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
-    })
-    public ResponseEntity<ProductChangeResultResponse> getProductChangeResult(
-            @Parameter(description = "상품변경 요청 ID")
-            @PathVariable String requestId) {
-        
-        String userId = getCurrentUserId();
-        logger.info("상품변경 결과 조회 요청: requestId={}, userId={}", requestId, userId);
-
-        try {
-            ProductChangeResultResponse response = productService.getProductChangeResult(requestId);
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            logger.error("상품변경 결과 조회 실패: requestId={}, userId={}", requestId, userId, e);
-            throw new RuntimeException("상품변경 결과 조회 중 오류가 발생했습니다");
-        }
-    }
 
     /**
      * 상품변경 이력 조회

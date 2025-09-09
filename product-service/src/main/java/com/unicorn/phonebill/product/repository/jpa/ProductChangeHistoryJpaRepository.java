@@ -17,12 +17,12 @@ import java.util.Optional;
  * 상품변경 이력 JPA Repository
  */
 @Repository
-public interface ProductChangeHistoryJpaRepository extends JpaRepository<ProductChangeHistoryEntity, Long> {
+public interface ProductChangeHistoryJpaRepository extends JpaRepository<ProductChangeHistoryEntity, String> {
 
     /**
-     * 요청 ID로 이력 조회
+     * 요청 ID로 이력 조회 (id 필드 사용)
      */
-    Optional<ProductChangeHistoryEntity> findByRequestId(String requestId);
+    Optional<ProductChangeHistoryEntity> findById(String id);
 
     /**
      * 회선번호로 이력 조회 (최신순)
@@ -82,7 +82,7 @@ public interface ProductChangeHistoryJpaRepository extends JpaRepository<Product
      * 처리 중인 요청 조회 (타임아웃 체크용)
      */
     @Query("SELECT h FROM ProductChangeHistoryEntity h " +
-           "WHERE h.processStatus IN ('PROCESSING', 'VALIDATED') " +
+           "WHERE h.processStatus IN (com.unicorn.phonebill.product.domain.ProcessStatus.PROCESSING, com.unicorn.phonebill.product.domain.ProcessStatus.VALIDATED) " +
            "AND h.requestedAt < :timeoutThreshold " +
            "ORDER BY h.requestedAt ASC")
     List<ProductChangeHistoryEntity> findProcessingRequestsOlderThan(
@@ -93,8 +93,8 @@ public interface ProductChangeHistoryJpaRepository extends JpaRepository<Product
      */
     @Query("SELECT h FROM ProductChangeHistoryEntity h " +
            "WHERE h.lineNumber = :lineNumber " +
-           "AND h.processStatus = 'COMPLETED' " +
-           "ORDER BY h.processedAt DESC")
+           "AND h.processStatus = com.unicorn.phonebill.product.domain.ProcessStatus.COMPLETED " +
+           "ORDER BY h.completionTime DESC")
     Page<ProductChangeHistoryEntity> findLatestSuccessfulChangeByLineNumber(
             @Param("lineNumber") String lineNumber,
             Pageable pageable);
@@ -115,8 +115,8 @@ public interface ProductChangeHistoryJpaRepository extends JpaRepository<Product
     @Query("SELECT COUNT(h) FROM ProductChangeHistoryEntity h " +
            "WHERE h.currentProductCode = :currentProductCode " +
            "AND h.targetProductCode = :targetProductCode " +
-           "AND h.processStatus = 'COMPLETED' " +
-           "AND h.processedAt >= :fromDate")
+           "AND h.processStatus = com.unicorn.phonebill.product.domain.ProcessStatus.COMPLETED " +
+           "AND h.completionTime >= :fromDate")
     long countSuccessfulChangesByProductCodesSince(
             @Param("currentProductCode") String currentProductCode,
             @Param("targetProductCode") String targetProductCode,
@@ -127,11 +127,11 @@ public interface ProductChangeHistoryJpaRepository extends JpaRepository<Product
      */
     @Query("SELECT COUNT(h) FROM ProductChangeHistoryEntity h " +
            "WHERE h.lineNumber = :lineNumber " +
-           "AND h.processStatus IN ('PROCESSING', 'VALIDATED')")
+           "AND h.processStatus IN (com.unicorn.phonebill.product.domain.ProcessStatus.PROCESSING, com.unicorn.phonebill.product.domain.ProcessStatus.VALIDATED)")
     long countInProgressRequestsByLineNumber(@Param("lineNumber") String lineNumber);
 
     /**
-     * 요청 ID 존재 여부 확인
+     * 요청 ID 존재 여부 확인 (id 필드 사용)
      */
-    boolean existsByRequestId(String requestId);
+    boolean existsById(String id);
 }

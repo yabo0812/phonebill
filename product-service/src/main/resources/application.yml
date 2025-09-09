@@ -5,69 +5,60 @@ spring:
   
   profiles:
     active: ${SPRING_PROFILES_ACTIVE:dev}
-    
-  # Database 기본 설정
+
   datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:product_change}
+    username: ${DB_USERNAME:product_user}
+    password: ${DB_PASSWORD:product_pass}
+    driver-class-name: org.postgresql.Driver
     hikari:
       maximum-pool-size: 20
       minimum-idle: 5
-      idle-timeout: 300000
+      connection-timeout: 30000
+      idle-timeout: 600000
       max-lifetime: 1800000
-      connection-timeout: 20000
-      validation-timeout: 5000
       leak-detection-threshold: 60000
-  
-  # JPA 기본 설정  
+  # JPA 설정
   jpa:
-    open-in-view: false
-    hibernate:
-      ddl-auto: ${JPA_DDL_AUTO:validate}
-    show-sql: ${JPA_SHOW_SQL:false}
+    show-sql: ${SHOW_SQL:true}
     properties:
       hibernate:
-        format_sql: false
-        use_sql_comments: false
-        jdbc:
-          batch_size: 25
-          order_inserts: true
-          order_updates: true
+        format_sql: true
+        use_sql_comments: true
         connection:
-          provider_disables_autocommit: true
-          
-  # Redis 기본 설정
+          provider_disables_autocommit: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+
+  # Redis 설정
   data:
     redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
       timeout: 2000ms
       lettuce:
         pool:
-          max-active: 20
+          max-active: 8
           max-idle: 8
-          min-idle: 2
+          min-idle: 0
           max-wait: -1ms
-          time-between-eviction-runs: 30s
-  
-  # Cache 설정
+      database: ${REDIS_DATABASE:2}
+
+  # Cache 개발 설정 (TTL 단축)
   cache:
-    type: redis
-    cache-names:
-      - customerInfo
-      - productInfo  
-      - availableProducts
-      - productStatus
-      - lineStatus
     redis:
-      time-to-live: 14400000 # 4시간 (ms)
-      cache-null-values: false
-      use-key-prefix: true
-      key-prefix: "product-service:"
-  
-  # Security 기본 설정
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8080/auth}
-  
+      time-to-live: 3600000 # 1시간 (개발환경에서 단축)
+
+# Server 개발 설정
+server:
+  port: ${SERVER_PORT:8083}
+  error:
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
+
   # Jackson 설정
   jackson:
     serialization:
@@ -78,22 +69,16 @@ spring:
       adjust-dates-to-context-time-zone: false
     time-zone: Asia/Seoul
     date-format: yyyy-MM-dd'T'HH:mm:ss
-  
-  # HTTP 설정
-  webflux: {}
 
-# Server 설정
-server:
-  port: ${SERVER_PORT:8083}
-  compression:
-    enabled: true
-    mime-types: application/json,application/xml,text/html,text/xml,text/plain
-  http2:
-    enabled: true
-  error:
-    include-stacktrace: never
-    include-message: always
-    include-binding-errors: always
+# CORS
+cors:
+  allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+
+# JWT 토큰 설정
+jwt:
+  secret: ${JWT_SECRET:}
+  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800000}
+  refresh-token-validity: ${JWT_REFRESH_TOKEN_VALIDITY:86400000}
 
 # Management & Actuator
 management:
@@ -127,25 +112,6 @@ management:
       mode: full
     build:
       enabled: true
-
-# Logging 설정
-logging:
-  level:
-    root: ${LOG_LEVEL_ROOT:INFO}
-    com.unicorn.phonebill: ${LOG_LEVEL_APP:INFO}
-    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
-    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
-    org.hibernate.type: WARN
-  pattern:
-    console: "%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
-  file:
-    name: ${LOG_FILE:logs/product-service.log}
-  logback:
-    rollingpolicy:
-      max-file-size: 10MB
-      max-history: 7
-      total-size-cap: 100MB
 
 # OpenAPI/Swagger 설정
 springdoc:
@@ -214,42 +180,44 @@ resilience4j:
         base-config: default
         timeout-duration: 10s
 
-# 비즈니스 설정
-app:
-  product:
-    cache:
-      customer-info-ttl: 14400 # 4시간 (초)
-      product-info-ttl: 7200   # 2시간 (초)  
-      available-products-ttl: 86400 # 24시간 (초)
-      product-status-ttl: 3600     # 1시간 (초)
-      line-status-ttl: 1800        # 30분 (초)
-    validation:
-      max-retry-attempts: 3
-      validation-timeout: 5s
-    processing:
-      async-enabled: ${PRODUCT_PROCESSING_ASYNC_ENABLED:true}
-      max-concurrent-requests: ${PRODUCT_PROCESSING_MAX_CONCURRENT_REQUESTS:100}
-      request-timeout: ${PRODUCT_PROCESSING_REQUEST_TIMEOUT:30s}
-  
-  security:
-    jwt:
-      secret: ${JWT_SECRET:product-service-secret-key-change-in-production}
-      expiration: ${JWT_EXPIRATION:86400} # 24시간
-      refresh-expiration: ${JWT_REFRESH_EXPIRATION:604800} # 7일
-    cors:
-      allowed-origins: 
-        - http://localhost:3000
-        - https://mvno.com
-      allowed-methods:
-        - GET
-        - POST
-        - PUT
-        - DELETE
-        - OPTIONS
-      allowed-headers:
-        - Authorization
-        - Content-Type
-        - Accept
-        - X-Requested-With
-      allow-credentials: true
-      max-age: 3600
+# KOS Mock 서버 설정
+kos:
+  base-url: ${KOS_BASE_URL:http://localhost:9090}
+  connect-timeout: ${KOS_CONNECT_TIMEOUT:5000}
+  read-timeout: ${KOS_READ_TIMEOUT:10000}
+  max-retries: ${KOS_MAX_RETRIES:3}
+  retry-delay: ${KOS_RETRY_DELAY:1000}
+
+  # Circuit Breaker 설정
+  circuit-breaker:
+    failure-rate-threshold: ${KOS_CB_FAILURE_RATE:0.5}
+    slow-call-duration-threshold: ${KOS_CB_SLOW_CALL_THRESHOLD:10000}
+    slow-call-rate-threshold: ${KOS_CB_SLOW_CALL_RATE:0.5}
+    sliding-window-size: ${KOS_CB_SLIDING_WINDOW_SIZE:10}
+    minimum-number-of-calls: ${KOS_CB_MIN_CALLS:5}
+    permitted-number-of-calls-in-half-open-state: ${KOS_CB_HALF_OPEN_CALLS:3}
+    wait-duration-in-open-state: ${KOS_CB_WAIT_DURATION:60000}
+
+
+# Logging 운영 설정
+logging:
+  level:
+    root: WARN
+    com.unicorn.phonebill: INFO
+    com.phonebill.common.security: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate: WARN
+    org.hibernate.resource.transaction: ERROR
+    org.hibernate.internal: ERROR
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/product-service.log
+    max-size: 500MB
+    max-history: 30
+    total-size-cap: 10GB
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+

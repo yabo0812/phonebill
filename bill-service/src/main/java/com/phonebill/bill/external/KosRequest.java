@@ -27,16 +27,22 @@ import java.time.LocalDateTime;
 public class KosRequest {
 
     /**
-     * 회선번호 (KOS 필드명: lineNum)
+     * 회선번호 (KOS 필드명: lineNumber)
      */
-    @JsonProperty("lineNum")
+    @JsonProperty("lineNumber")
     private String lineNumber;
 
     /**
-     * 조회월 (KOS 필드명: searchMonth, YYYY-MM 형식)
+     * 조회월 (KOS 필드명: billingMonth, YYYYMM 형식)
      */
-    @JsonProperty("searchMonth")
+    @JsonProperty("billingMonth")
     private String inquiryMonth;
+
+    /**
+     * 요청 ID (KOS 필드명: requestId)
+     */
+    @JsonProperty("requestId")
+    private String requestId;
 
     /**
      * 서비스 구분 코드 (KOS 필드명: svcDiv)
@@ -122,9 +128,14 @@ public class KosRequest {
      * @return KOS 요청 객체
      */
     public static KosRequest createBillInquiryRequest(String lineNumber, String inquiryMonth, String requestUserId) {
+        // YYYY-MM 형식을 YYYYMM 형식으로 변환
+        String billingMonth = inquiryMonth.replace("-", "");
+        String requestId = "REQ_" + java.time.LocalDateTime.now().format(java.time.format.DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+        
         return KosRequest.builder()
-                .lineNumber(lineNumber)
-                .inquiryMonth(inquiryMonth)
+                .lineNumber(lineNumber.replace("-", "")) // 하이픈 제거
+                .inquiryMonth(billingMonth)
+                .requestId(requestId)
                 .requestUserId(requestUserId)
                 .requestTime(LocalDateTime.now())
                 .requestSequenceNumber(generateSequenceNumber())

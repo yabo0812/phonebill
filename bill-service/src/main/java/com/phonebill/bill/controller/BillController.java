@@ -1,6 +1,8 @@
 package com.phonebill.bill.controller;
 
 import com.phonebill.bill.dto.*;
+import com.phonebill.kosmock.dto.KosCommonResponse;
+import com.phonebill.kosmock.dto.KosBillInquiryResponse;
 import com.phonebill.bill.service.BillInquiryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -32,7 +34,7 @@ import org.springframework.web.bind.annotation.*;
  */
 @Slf4j
 @RestController
-@RequestMapping("/bills")
+@RequestMapping("/api/v1/bills")
 @RequiredArgsConstructor
 @Validated
 @Tag(name = "Bill Inquiry", description = "요금조회 관련 API")
@@ -115,62 +117,21 @@ public class BillController {
             description = "KOS 시스템 장애 (Circuit Breaker Open)"
         )
     })
-    public ResponseEntity<ApiResponse<BillInquiryResponse>> inquireBill(
+    public ResponseEntity<KosCommonResponse<KosBillInquiryResponse>> inquireBill(
             @Valid @RequestBody BillInquiryRequest request) {
         log.info("요금조회 요청 - 회선번호: {}, 조회월: {}", 
                 request.getLineNumber(), request.getInquiryMonth());
         
-        BillInquiryResponse response = billInquiryService.inquireBill(request);
+        KosBillInquiryResponse response = billInquiryService.inquireBill(request);
         
-        if (response.getStatus() == BillInquiryResponse.ProcessStatus.COMPLETED) {
-            log.info("요금조회 완료 - 요청ID: {}, 회선: {}", 
-                    response.getRequestId(), request.getLineNumber());
-            return ResponseEntity.ok(
-                ApiResponse.success(response, "요금조회가 완료되었습니다")
-            );
-        } else {
-            log.info("요금조회 비동기 처리 - 요청ID: {}, 상태: {}", 
-                    response.getRequestId(), response.getStatus());
-            return ResponseEntity.accepted().body(
-                ApiResponse.success(response, "요금조회 요청이 접수되었습니다")
-            );
-        }
-    }
-
-    /**
-     * 요금조회 결과 확인
-     * 
-     * 비동기로 처리된 요금조회 결과를 확인합니다.
-     * requestId를 통해 조회 상태와 결과를 반환합니다.
-     */
-    @GetMapping("/inquiry/{requestId}")
-    @Operation(
-        summary = "요금조회 결과 확인",
-        description = "비동기로 처리된 요금조회의 상태와 결과를 확인합니다.",
-        security = @SecurityRequirement(name = "bearerAuth")
-    )
-    @ApiResponses(value = {
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "200",
-            description = "요금조회 결과 조회 성공"
-        ),
-        @io.swagger.v3.oas.annotations.responses.ApiResponse(
-            responseCode = "404",
-            description = "요청 ID를 찾을 수 없음"
-        )
-    })
-    public ResponseEntity<ApiResponse<BillInquiryResponse>> getBillInquiryResult(
-            @Parameter(description = "요금조회 요청 ID", example = "REQ_20240308_001")
-            @PathVariable String requestId) {
-        log.info("요금조회 결과 확인 - 요청ID: {}", requestId);
+        log.info("요금조회 완료 - 요청ID: {}, 회선: {}", 
+                response.getRequestId(), request.getLineNumber());
         
-        BillInquiryResponse response = billInquiryService.getBillInquiryResult(requestId);
-        
-        log.info("요금조회 결과 반환 - 요청ID: {}, 상태: {}", requestId, response.getStatus());
         return ResponseEntity.ok(
-            ApiResponse.success(response, "요금조회 결과를 조회했습니다")
+            KosCommonResponse.success(response, "요금 조회가 완료되었습니다")
         );
     }
+
 
     /**
      * 요금조회 이력 조회

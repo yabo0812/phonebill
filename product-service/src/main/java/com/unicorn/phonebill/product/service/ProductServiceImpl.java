@@ -3,8 +3,11 @@ package com.unicorn.phonebill.product.service;
 import com.unicorn.phonebill.product.dto.*;
 import com.unicorn.phonebill.product.domain.Product;
 import com.unicorn.phonebill.product.domain.ProductChangeHistory;
+import com.unicorn.phonebill.product.domain.ProductChangeResult;
 import com.unicorn.phonebill.product.repository.ProductRepository;
 import com.unicorn.phonebill.product.repository.ProductChangeHistoryRepository;
+import com.unicorn.phonebill.product.dto.kos.KosCommonResponse;
+import com.unicorn.phonebill.product.dto.kos.KosProductInquiryResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
@@ -41,49 +44,20 @@ public class ProductServiceImpl implements ProductService {
     private final ProductChangeHistoryRepository historyRepository;
     private final ProductValidationService validationService;
     private final ProductCacheService cacheService;
-    // TODO: KOS 연동 서비스 추가 예정
-    // private final KosClientService kosClientService;
+    private final KosClientService kosClientService;
 
     public ProductServiceImpl(ProductRepository productRepository,
                             ProductChangeHistoryRepository historyRepository,
                             ProductValidationService validationService,
-                            ProductCacheService cacheService) {
+                            ProductCacheService cacheService,
+                            KosClientService kosClientService) {
         this.productRepository = productRepository;
         this.historyRepository = historyRepository;
         this.validationService = validationService;
         this.cacheService = cacheService;
+        this.kosClientService = kosClientService;
     }
 
-    @Override
-    public ProductMenuResponse getProductMenu(String userId) {
-        logger.info("상품변경 메뉴 조회: userId={}", userId);
-
-        try {
-            // 캐시에서 메뉴 정보 조회
-            Object cachedMenu = cacheService.getMenuInfo(userId);
-            if (cachedMenu instanceof ProductMenuResponse) {
-                logger.debug("메뉴 정보 캐시 히트: userId={}", userId);
-                return (ProductMenuResponse) cachedMenu;
-            }
-
-            // 메뉴 정보 생성 (실제로는 사용자 권한에 따라 동적 생성)
-            ProductMenuResponse.MenuData menuData = createMenuData(userId);
-            ProductMenuResponse response = ProductMenuResponse.builder()
-                    .success(true)
-                    .data(menuData)
-                    .build();
-
-            // 캐시에 저장
-            cacheService.cacheMenuInfo(userId, response);
-
-            logger.info("상품변경 메뉴 조회 완료: userId={}", userId);
-            return response;
-
-        } catch (Exception e) {
-            logger.error("상품변경 메뉴 조회 중 오류: userId={}", userId, e);
-            throw new RuntimeException("메뉴 조회 중 오류가 발생했습니다", e);
-        }
-    }
 
     @Override
     public CustomerInfoResponse getCustomerInfo(String lineNumber) {
@@ -117,36 +91,36 @@ public class ProductServiceImpl implements ProductService {
     }
 
     @Override
-    public AvailableProductsResponse getAvailableProducts(String currentProductCode, String operatorCode) {
-        logger.info("가용 상품 목록 조회: currentProductCode={}, operatorCode={}", currentProductCode, operatorCode);
+    public AvailableProductsResponse getAvailableProducts(String currentProductCode) {
+        logger.info("가용 상품 목록 조회: currentProductCode={}", currentProductCode);
 
         try {
             // 캐시에서 상품 목록 조회
-            List<ProductInfoDto> cachedProducts = cacheService.getAvailableProducts(operatorCode);
+            List<ProductInfoDto> cachedProducts = cacheService.getAvailableProducts("all");
             if (cachedProducts != null && !cachedProducts.isEmpty()) {
-                logger.debug("상품 목록 캐시 히트: operatorCode={}, count={}", operatorCode, cachedProducts.size());
+                logger.debug("상품 목록 캐시 히트: count={}", cachedProducts.size());
                 List<ProductInfoDto> filteredProducts = filterProductsByCurrentProduct(cachedProducts, currentProductCode);
                 return AvailableProductsResponse.success(filteredProducts);
             }
 
             // 캐시 미스 시 실제 조회
-            List<Product> products = productRepository.findAvailableProductsByOperator(operatorCode);
+            List<Product> products = productRepository.findAvailableProducts();
             List<ProductInfoDto> productDtos = products.stream()
                     .map(this::convertToDto)
                     .collect(Collectors.toList());
 
             // 캐시에 저장
-            cacheService.cacheAvailableProducts(operatorCode, productDtos);
+            cacheService.cacheAvailableProducts("all", productDtos);
 
             // 현재 상품 기준 필터링
             List<ProductInfoDto> filteredProducts = filterProductsByCurrentProduct(productDtos, currentProductCode);
 
-            logger.info("가용 상품 목록 조회 완료: operatorCode={}, totalCount={}, filteredCount={}", 
-                       operatorCode, productDtos.size(), filteredProducts.size());
+            logger.info("가용 상품 목록 조회 완료: totalCount={}, filteredCount={}", 
+                       productDtos.size(), filteredProducts.size());
             return AvailableProductsResponse.success(filteredProducts);
 
         } catch (Exception e) {
-            logger.error("가용 상품 목록 조회 중 오류: operatorCode={}", operatorCode, e);
+            logger.error("가용 상품 목록 조회 중 오류", e);
             throw new RuntimeException("상품 목록 조회 중 오류가 발생했습니다", e);
         }
     }
@@ -191,12 +165,18 @@ public class ProductServiceImpl implements ProductService {
 
             // 4. 처리 결과에 따른 이력 업데이트
             if (changeResult.isSuccess()) {
-                // KOS 응답 데이터를 Map으로 변환
-                Map<String, Object> kosResponseData = Map.of(
-                    "resultCode", changeResult.getResultCode(),
-                    "resultMessage", changeResult.getResultMessage(),
-                    "processedAt", LocalDateTime.now().toString()
-                );
+                // KOS 응답 데이터 사용 (실제 응답 데이터 또는 기본 데이터)
+                Map<String, Object> kosResponseData = changeResult.getKosResponseData();
+                if (kosResponseData == null) {
+                    kosResponseData = Map.of(
+                        "resultCode", changeResult.getResultCode(),
+                        "resultMessage", changeResult.getResultMessage(),
+                        "kosOrderNumber", changeResult.getKosOrderNumber() != null ? changeResult.getKosOrderNumber() : "N/A",
+                        "effectiveDate", changeResult.getEffectiveDate() != null ? changeResult.getEffectiveDate() : "N/A",
+                        "processedAt", LocalDateTime.now().toString()
+                    );
+                }
+                
                 history = history.markAsCompleted(changeResult.getResultMessage(), kosResponseData);
                 
                 // 캐시 무효화
@@ -280,41 +260,6 @@ public class ProductServiceImpl implements ProductService {
         }
     }
 
-    @Override
-    public ProductChangeResultResponse getProductChangeResult(String requestId) {
-        logger.info("상품변경 결과 조회: requestId={}", requestId);
-
-        try {
-            // 캐시에서 결과 조회
-            ProductChangeResultResponse.ProductChangeResult cachedResult = cacheService.getProductChangeResult(requestId);
-            if (cachedResult != null) {
-                logger.debug("상품변경 결과 캐시 히트: requestId={}", requestId);
-                return ProductChangeResultResponse.success(cachedResult);
-            }
-
-            // 캐시 미스 시 DB에서 조회
-            Optional<ProductChangeHistory> historyOpt = historyRepository.findByRequestId(requestId);
-            if (!historyOpt.isPresent()) {
-                throw new RuntimeException("요청 정보를 찾을 수 없습니다: " + requestId);
-            }
-            
-            ProductChangeHistory history = historyOpt.get();
-
-            ProductChangeResultResponse.ProductChangeResult result = convertToResultDto(history);
-
-            // 완료된 결과만 캐시에 저장
-            if (history.getProcessStatus().equals("COMPLETED") || history.getProcessStatus().equals("FAILED")) {
-                cacheService.cacheProductChangeResult(requestId, result);
-            }
-
-            logger.info("상품변경 결과 조회 완료: requestId={}, status={}", requestId, history.getProcessStatus());
-            return ProductChangeResultResponse.success(result);
-
-        } catch (Exception e) {
-            logger.error("상품변경 결과 조회 중 오류: requestId={}", requestId, e);
-            throw new RuntimeException("상품변경 결과 조회 중 오류가 발생했습니다", e);
-        }
-    }
 
     @Override
     public ProductChangeHistoryResponse getProductChangeHistory(String lineNumber, String startDate, String endDate, Pageable pageable) {
@@ -365,49 +310,49 @@ public class ProductServiceImpl implements ProductService {
 
     // ========== Private Helper Methods ==========
 
-    /**
-     * 메뉴 데이터 생성
-     */
-    private ProductMenuResponse.MenuData createMenuData(String userId) {
-        // TODO: 실제로는 사용자 권한 및 고객 정보에 따라 동적 생성
-        return ProductMenuResponse.MenuData.builder()
-                .customerId("CUST001") // 임시값
-                .lineNumber("01012345678") // 임시값
-                .menuItems(Arrays.asList(
-                    ProductMenuResponse.MenuItem.builder()
-                        .menuId("MENU001")
-                        .menuName("상품변경")
-                        .available(true)
-                        .description("현재 이용 중인 상품을 다른 상품으로 변경합니다")
-                        .build()
-                ))
-                .build();
-    }
 
     /**
-     * 데이터소스에서 고객 정보 조회
+     * 데이터소스에서 고객 정보 조회 (KOS 연동)
      */
     private CustomerInfoResponse.CustomerInfo getCustomerInfoFromDataSource(String lineNumber) {
-        // TODO: 실제 KOS 연동 또는 DB 조회 구현
-        // 현재는 임시 데이터 반환
-        ProductInfoDto currentProduct = ProductInfoDto.builder()
-                .productCode("PLAN001")
-                .productName("5G 베이직 플랜")
-                .monthlyFee(new java.math.BigDecimal("45000"))
-                .dataAllowance("50GB")
-                .voiceAllowance("무제한")
-                .smsAllowance("기본 무료")
-                .isAvailable(true)
-                .operatorCode("MVNO001")
-                .build();
+        try {
+            logger.debug("KOS 시스템에서 고객 정보 조회: lineNumber={}", lineNumber);
+            
+            // KOS 시스템 호출
+            KosCommonResponse<KosProductInquiryResponse> kosResponse = kosClientService.getProductInquiry(lineNumber);
+            
+            if (kosResponse.getSuccess() && kosResponse.getData() != null) {
+                KosProductInquiryResponse kosData = kosResponse.getData();
+                
+                // KOS 응답을 내부 DTO로 변환
+                ProductInfoDto currentProduct = ProductInfoDto.builder()
+                        .productCode(kosData.getProductInfo().getCurrentProductCode())
+                        .productName(kosData.getProductInfo().getCurrentProductName())
+                        .monthlyFee(kosData.getProductInfo().getMonthlyFee())
+                        .dataAllowance(kosData.getProductInfo().getDataAllowance())
+                        .voiceAllowance(kosData.getProductInfo().getVoiceAllowance())
+                        .smsAllowance(kosData.getProductInfo().getSmsAllowance())
+                        .isAvailable("ACTIVE".equals(kosData.getProductInfo().getProductStatus()))
+                        .operatorCode(kosData.getCustomerInfo().getOperatorCode())
+                        .build();
 
-        return CustomerInfoResponse.CustomerInfo.builder()
-                .customerId("CUST001")
-                .lineNumber(lineNumber)
-                .customerName("홍길동")
-                .currentProduct(currentProduct)
-                .lineStatus("ACTIVE")
-                .build();
+                return CustomerInfoResponse.CustomerInfo.builder()
+                        .customerId(kosData.getCustomerInfo().getCustomerId())
+                        .lineNumber(lineNumber)
+                        .customerName(kosData.getCustomerInfo().getCustomerName())
+                        .currentProduct(currentProduct)
+                        .lineStatus(kosData.getCustomerInfo().getLineStatus())
+                        .build();
+            } else {
+                logger.error("KOS 시스템에서 고객 정보를 찾을 수 없습니다: lineNumber={}, resultCode={}, resultMessage={}", 
+                           lineNumber, kosResponse.getResultCode(), kosResponse.getResultMessage());
+                return null;
+            }
+            
+        } catch (Exception e) {
+            logger.error("KOS 연동 중 오류 발생: lineNumber={}", lineNumber, e);
+            throw new RuntimeException("고객 정보 조회 중 시스템 오류가 발생했습니다", e);
+        }
     }
 
     /**
@@ -444,7 +389,7 @@ public class ProductServiceImpl implements ProductService {
      */
     private ProductChangeHistory createProductChangeHistory(String requestId, ProductChangeRequest request, String userId) {
         return ProductChangeHistory.createNew(
-                requestId,
+                requestId, // UUID는 엔티티에서 자동 생성됨
                 request.getLineNumber(),
                 userId, // customerId로 사용
                 request.getCurrentProductCode(),
@@ -456,21 +401,71 @@ public class ProductServiceImpl implements ProductService {
      * KOS 연동 상품변경 처리 (임시 구현)
      */
     private ProductChangeResult processProductChangeWithKos(ProductChangeRequest request, String requestId) {
-        // TODO: 실제 KOS 연동 구현
-        // 현재는 임시 성공 결과 반환
+        logger.info("KOS 상품 변경 처리 시작: requestId={}, lineNumber={}", requestId, request.getLineNumber());
+
         try {
-            Thread.sleep(100); // 처리 시간 시뮬레이션
-            return ProductChangeResult.builder()
-                    .success(true)
-                    .resultCode("SUCCESS")
-                    .resultMessage("상품 변경이 완료되었습니다")
-                    .build();
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+            // KOS 상품변경 API 호출
+            Map<String, Object> kosResponse = kosClientService.changeProductInKos(
+                request.getLineNumber(), 
+                request.getCurrentProductCode(), 
+                request.getTargetProductCode()
+            );
+
+            // KOS 응답 분석
+            Boolean success = (Boolean) kosResponse.get("success");
+            String resultCode = (String) kosResponse.get("resultCode");
+            String resultMessage = (String) kosResponse.get("resultMessage");
+            
+            if (Boolean.TRUE.equals(success) && "0000".equals(resultCode)) {
+                logger.info("KOS 상품 변경 성공: requestId={}, lineNumber={}", requestId, request.getLineNumber());
+                
+                // data 섹션에서 상세 정보 추출
+                @SuppressWarnings("unchecked")
+                Map<String, Object> data = (Map<String, Object>) kosResponse.get("data");
+                if (data != null) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> changeInfo = (Map<String, Object>) data.get("changeInfo");
+                    if (changeInfo != null) {
+                        String kosOrderNumber = (String) changeInfo.get("kosOrderNumber");
+                        String effectiveDate = (String) changeInfo.get("effectiveDate");
+                        
+                        return ProductChangeResult.builder()
+                                .success(true)
+                                .resultCode(resultCode)
+                                .resultMessage(resultMessage)
+                                .kosOrderNumber(kosOrderNumber)
+                                .effectiveDate(effectiveDate)
+                                .kosResponseData(kosResponse)
+                                .build();
+                    }
+                }
+                
+                return ProductChangeResult.builder()
+                        .success(true)
+                        .resultCode(resultCode)
+                        .resultMessage(resultMessage)
+                        .kosResponseData(kosResponse)
+                        .build();
+                        
+            } else {
+                logger.error("KOS 상품 변경 실패: requestId={}, resultCode={}, resultMessage={}", 
+                           requestId, resultCode, resultMessage);
+                           
+                return ProductChangeResult.builder()
+                        .success(false)
+                        .resultCode(resultCode != null ? resultCode : "KOS_ERROR")
+                        .failureReason(resultMessage != null ? resultMessage : "KOS 시스템 오류")
+                        .kosResponseData(kosResponse)
+                        .build();
+            }
+
+        } catch (Exception e) {
+            logger.error("KOS 연동 중 예외 발생: requestId={}, lineNumber={}", requestId, request.getLineNumber(), e);
+            
             return ProductChangeResult.builder()
                     .success(false)
                     .resultCode("SYSTEM_ERROR")
-                    .failureReason("처리 중 시스템 오류 발생")
+                    .failureReason("KOS 시스템 연동 중 오류가 발생했습니다: " + e.getMessage())
                     .build();
         }
     }
@@ -531,45 +526,4 @@ public class ProductServiceImpl implements ProductService {
                 .build();
     }
 
-    /**
-     * 상품변경 결과 임시 클래스
-     */
-    private static class ProductChangeResult {
-        private final boolean success;
-        private final String resultCode;
-        private final String resultMessage;
-        private final String failureReason;
-
-        private ProductChangeResult(boolean success, String resultCode, String resultMessage, String failureReason) {
-            this.success = success;
-            this.resultCode = resultCode;
-            this.resultMessage = resultMessage;
-            this.failureReason = failureReason;
-        }
-
-        public static ProductChangeResultBuilder builder() {
-            return new ProductChangeResultBuilder();
-        }
-
-        public boolean isSuccess() { return success; }
-        public String getResultCode() { return resultCode; }
-        public String getResultMessage() { return resultMessage; }
-        public String getFailureReason() { return failureReason; }
-
-        public static class ProductChangeResultBuilder {
-            private boolean success;
-            private String resultCode;
-            private String resultMessage;
-            private String failureReason;
-
-            public ProductChangeResultBuilder success(boolean success) { this.success = success; return this; }
-            public ProductChangeResultBuilder resultCode(String resultCode) { this.resultCode = resultCode; return this; }
-            public ProductChangeResultBuilder resultMessage(String resultMessage) { this.resultMessage = resultMessage; return this; }
-            public ProductChangeResultBuilder failureReason(String failureReason) { this.failureReason = failureReason; return this; }
-
-            public ProductChangeResult build() {
-                return new ProductChangeResult(success, resultCode, resultMessage, failureReason);
-            }
-        }
-    }
 }

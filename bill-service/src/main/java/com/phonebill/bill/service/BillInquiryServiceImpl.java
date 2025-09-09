@@ -2,8 +2,12 @@ package com.phonebill.bill.service;
 
 import com.phonebill.bill.dto.*;
 import com.phonebill.bill.exception.BillInquiryException;
+import com.phonebill.common.security.UserPrincipal;
+import com.phonebill.kosmock.dto.KosBillInquiryResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -47,12 +51,11 @@ public class BillInquiryServiceImpl implements BillInquiryService {
         log.info("요금조회 메뉴 조회 시작");
 
         // 현재 인증된 사용자의 고객 정보 조회 (JWT에서 추출)
-        // TODO: SecurityContext에서 사용자 정보 추출 로직 구현
         String customerId = getCurrentCustomerId();
         String lineNumber = getCurrentLineNumber();
 
-        // 조회 가능한 월 목록 생성 (최근 12개월)
-        List<String> availableMonths = generateAvailableMonths();
+        // 실제 요금 데이터가 있는 월 목록 조회
+        List<String> availableMonths = getAvailableMonthsWithData(lineNumber);
         
         // 현재 월
         String currentMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
@@ -77,7 +80,7 @@ public class BillInquiryServiceImpl implements BillInquiryService {
      */
     @Override
     @Transactional
-    public BillInquiryResponse inquireBill(BillInquiryRequest request) {
+    public KosBillInquiryResponse inquireBill(BillInquiryRequest request) {
         log.info("요금조회 요청 처리 시작 - 회선: {}, 조회월: {}", 
                 request.getLineNumber(), request.getInquiryMonth());
 
@@ -87,125 +90,33 @@ public class BillInquiryServiceImpl implements BillInquiryService {
         // 조회월 기본값 설정 (미입력시 당월)
         String inquiryMonth = request.getInquiryMonth();
         if (inquiryMonth == null || inquiryMonth.trim().isEmpty()) {
-            inquiryMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyy-MM"));
+            inquiryMonth = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMM"));
         }
 
         try {
-            // 1단계: 캐시에서 데이터 확인 (Cache-Aside 패턴)
-            BillInquiryResponse cachedResponse = billCacheService.getCachedBillData(
+            // KOS Mock 서비스 직접 호출
+            KosBillInquiryResponse response = kosClientService.inquireBillFromKosDirect(
                 request.getLineNumber(), inquiryMonth
             );
 
-            if (cachedResponse != null) {
-                log.info("캐시에서 요금 데이터 조회 완료 - 요청ID: {}", requestId);
-                cachedResponse = BillInquiryResponse.builder()
-                        .requestId(requestId)
-                        .status(BillInquiryResponse.ProcessStatus.COMPLETED)
-                        .billInfo(cachedResponse.getBillInfo())
-                        .build();
-                
-                // 이력 저장 (비동기)
-                billHistoryService.saveInquiryHistoryAsync(requestId, request, cachedResponse);
-                return cachedResponse;
-            }
-
-            // 2단계: KOS 시스템 연동 (Circuit Breaker 적용)
-            CompletableFuture<BillInquiryResponse> kosResponseFuture = kosClientService.inquireBillFromKos(
-                request.getLineNumber(), inquiryMonth
-            );
-            BillInquiryResponse kosResponse;
-            try {
-                kosResponse = kosResponseFuture.get();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new BillInquiryException("요금조회 처리가 중단되었습니다", e);
-            } catch (Exception e) {
-                throw new BillInquiryException("요금조회 처리 중 오류가 발생했습니다", e);
-            }
-
-            if (kosResponse != null && kosResponse.getStatus() == BillInquiryResponse.ProcessStatus.COMPLETED) {
-                // 3단계: 캐시에 저장 (1시간 TTL)
-                billCacheService.cacheBillData(request.getLineNumber(), inquiryMonth, kosResponse);
-
-                // 응답 데이터 구성
-                BillInquiryResponse response = BillInquiryResponse.builder()
-                        .requestId(requestId)
-                        .status(BillInquiryResponse.ProcessStatus.COMPLETED)
-                        .billInfo(kosResponse.getBillInfo())
-                        .build();
-
-                // 이력 저장 (비동기)
-                billHistoryService.saveInquiryHistoryAsync(requestId, request, response);
-
-                log.info("KOS 연동을 통한 요금조회 완료 - 요청ID: {}", requestId);
-                return response;
-            } else {
-                // KOS에서 비동기 처리 중인 경우
-                BillInquiryResponse response = BillInquiryResponse.builder()
-                        .requestId(requestId)
-                        .status(BillInquiryResponse.ProcessStatus.PROCESSING)
-                        .build();
-
-                // 이력 저장 (처리 중 상태)
-                billHistoryService.saveInquiryHistoryAsync(requestId, request, response);
-
-                log.info("KOS 연동 비동기 처리 - 요청ID: {}", requestId);
-                return response;
-            }
+            log.info("KOS Mock 요금조회 완료 - 요청ID: {}, 상태: {}", 
+                    response.getRequestId(), response.getProcStatus());
+            return response;
 
         } catch (Exception e) {
-            log.error("요금조회 처리 중 오류 발생 - 요청ID: {}, 오류: {}", requestId, e.getMessage(), e);
+            log.error("KOS Mock 요금조회 실패 - 회선: {}, 오류: {}", 
+                    request.getLineNumber(), e.getMessage(), e);
             
-            // 실패 응답 생성
-            BillInquiryResponse errorResponse = BillInquiryResponse.builder()
+            // 실패 시 기본 응답 반환
+            return KosBillInquiryResponse.builder()
                     .requestId(requestId)
-                    .status(BillInquiryResponse.ProcessStatus.FAILED)
+                    .procStatus("FAILED")
+                    .resultCode("9999")
+                    .resultMessage("요금 조회 중 오류가 발생했습니다")
                     .build();
-            
-            // 이력 저장 (실패 상태)
-            billHistoryService.saveInquiryHistoryAsync(requestId, request, errorResponse);
-            
-            // 비즈니스 예외는 그대로 던지고, 시스템 예외는 래핑
-            if (e instanceof BillInquiryException) {
-                throw e;
-            } else {
-                throw new BillInquiryException("요금조회 처리 중 시스템 오류가 발생했습니다", e);
-            }
         }
     }
 
-    /**
-     * 요금조회 결과 확인
-     */
-    @Override
-    public BillInquiryResponse getBillInquiryResult(String requestId) {
-        log.info("요금조회 결과 확인 - 요청ID: {}", requestId);
-
-        // 이력에서 요청 정보 조회
-        BillInquiryResponse response = billHistoryService.getBillInquiryResult(requestId);
-        
-        if (response == null) {
-            throw BillInquiryException.billDataNotFound(requestId, "요청 ID");
-        }
-
-        // 처리 중인 경우 KOS에서 최신 상태 확인
-        if (response.getStatus() == BillInquiryResponse.ProcessStatus.PROCESSING) {
-            try {
-                BillInquiryResponse latestResponse = kosClientService.checkInquiryStatus(requestId);
-                if (latestResponse != null) {
-                    // 상태 업데이트
-                    billHistoryService.updateInquiryStatus(requestId, latestResponse);
-                    response = latestResponse;
-                }
-            } catch (Exception e) {
-                log.warn("KOS 상태 확인 중 오류 발생 - 요청ID: {}, 오류: {}", requestId, e.getMessage());
-                // 상태 확인 실패해도 기존 상태 그대로 반환
-            }
-        }
-
-        log.info("요금조회 결과 반환 - 요청ID: {}, 상태: {}", requestId, response.getStatus());
-        return response;
-    }
 
     /**
      * 요금조회 이력 조회
@@ -244,8 +155,21 @@ public class BillInquiryServiceImpl implements BillInquiryService {
      * 현재 인증된 사용자의 고객 ID 조회
      */
     private String getCurrentCustomerId() {
-        // TODO: SecurityContext에서 JWT 토큰을 파싱하여 고객 ID 추출
-        // 현재는 더미 데이터 반환
+        // JWT에서 인증된 사용자의 고객 ID 추출
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            String customerId = userPrincipal.getCustomerId();
+            
+            if (customerId != null && !customerId.trim().isEmpty()) {
+                log.debug("사용자 {}의 고객 ID: {}", userPrincipal.getUserId(), customerId);
+                return customerId;
+            }
+        }
+        
+        // 인증 정보가 없거나 고객 ID가 없는 경우 기본값 반환
+        log.warn("사용자의 고객 ID 정보를 찾을 수 없습니다. 기본값 사용");
         return "CUST001";
     }
 
@@ -253,8 +177,21 @@ public class BillInquiryServiceImpl implements BillInquiryService {
      * 현재 인증된 사용자의 회선번호 조회
      */
     private String getCurrentLineNumber() {
-        // TODO: SecurityContext에서 JWT 토큰을 파싱하여 회선번호 추출
-        // 현재는 더미 데이터 반환
+        // JWT에서 인증된 사용자의 회선번호 추출
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            String lineNumber = userPrincipal.getLineNumber();
+            
+            if (lineNumber != null && !lineNumber.trim().isEmpty()) {
+                log.debug("사용자 {}의 회선번호: {}", userPrincipal.getUserId(), lineNumber);
+                return lineNumber;
+            }
+        }
+        
+        // 인증 정보가 없거나 회선번호가 없는 경우 기본값 반환
+        log.warn("사용자의 회선번호 정보를 찾을 수 없습니다. 기본값 사용");
         return "010-1234-5678";
     }
 
@@ -262,22 +199,60 @@ public class BillInquiryServiceImpl implements BillInquiryService {
      * 현재 사용자의 모든 회선번호 목록 조회
      */
     private List<String> getCurrentUserLineNumbers() {
-        // TODO: 사용자 권한에 따른 회선번호 목록 조회
-        // 현재는 더미 데이터 반환
-        List<String> lineNumbers = new ArrayList<>();
-        lineNumbers.add("010-1234-5678");
-        return lineNumbers;
+        // JWT에서 인증된 사용자의 회선번호 추출
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        
+        if (authentication != null && authentication.getPrincipal() instanceof UserPrincipal) {
+            UserPrincipal userPrincipal = (UserPrincipal) authentication.getPrincipal();
+            String lineNumber = userPrincipal.getLineNumber();
+            
+            if (lineNumber != null) {
+                List<String> lineNumbers = new ArrayList<>();
+                lineNumbers.add(lineNumber);
+                log.debug("사용자 {}의 회선번호: {}", userPrincipal.getUserId(), lineNumber);
+                return lineNumbers;
+            }
+        }
+        
+        // 인증 정보가 없거나 회선번호가 없는 경우 빈 목록 반환
+        log.warn("사용자의 회선번호 정보를 찾을 수 없습니다");
+        return new ArrayList<>();
     }
 
     /**
-     * 조회 가능한 월 목록 생성 (최근 12개월)
+     * 실제 요금 데이터가 있는 월 목록 조회
      */
-    private List<String> generateAvailableMonths() {
+    private List<String> getAvailableMonthsWithData(String lineNumber) {
+        try {
+            log.info("회선 {}의 실제 요금 데이터가 있는 월 목록 조회", lineNumber);
+            
+            // KOS Mock 서비스를 통해 실제 데이터가 있는 월 목록 조회
+            List<String> availableMonths = kosClientService.getAvailableMonths(lineNumber);
+            
+            if (availableMonths == null || availableMonths.isEmpty()) {
+                log.warn("KOS에서 조회 가능한 월 정보가 없음. 기본 최근 3개월 반환");
+                return generateDefaultMonths(3);
+            }
+            
+            log.info("KOS에서 조회된 데이터 보유 월: {}", availableMonths);
+            return availableMonths;
+            
+        } catch (Exception e) {
+            log.error("KOS 시스템에서 조회 가능한 월 정보 조회 실패: {}", e.getMessage(), e);
+            // 실패 시 기본 최근 3개월 반환
+            return generateDefaultMonths(3);
+        }
+    }
+
+    /**
+     * 기본 월 목록 생성 (fallback용)
+     */
+    private List<String> generateDefaultMonths(int monthCount) {
         List<String> months = new ArrayList<>();
         LocalDate currentDate = LocalDate.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM");
 
-        for (int i = 0; i < 12; i++) {
+        for (int i = 0; i < monthCount; i++) {
             LocalDate monthDate = currentDate.minusMonths(i);
             months.add(monthDate.format(formatter));
         }

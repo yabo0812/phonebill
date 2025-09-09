@@ -1,5 +1,8 @@
 package com.unicorn.phonebill.product.domain;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -10,6 +13,7 @@ import java.math.BigDecimal;
  */
 @Getter
 @Builder
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class Product {
     
     private final String productCode;
@@ -21,6 +25,30 @@ public class Product {
     private final ProductStatus status;
     private final String operatorCode;
     private final String description;
+
+    /**
+     * Jackson 역직렬화를 위한 생성자
+     */
+    @JsonCreator
+    public Product(@JsonProperty("productCode") String productCode,
+                   @JsonProperty("productName") String productName,
+                   @JsonProperty("monthlyFee") BigDecimal monthlyFee,
+                   @JsonProperty("dataAllowance") String dataAllowance,
+                   @JsonProperty("voiceAllowance") String voiceAllowance,
+                   @JsonProperty("smsAllowance") String smsAllowance,
+                   @JsonProperty("status") ProductStatus status,
+                   @JsonProperty("operatorCode") String operatorCode,
+                   @JsonProperty("description") String description) {
+        this.productCode = productCode;
+        this.productName = productName;
+        this.monthlyFee = monthlyFee;
+        this.dataAllowance = dataAllowance;
+        this.voiceAllowance = voiceAllowance;
+        this.smsAllowance = smsAllowance;
+        this.status = status;
+        this.operatorCode = operatorCode;
+        this.description = description;
+    }
 
     /**
      * 다른 상품으로 변경 가능한지 확인

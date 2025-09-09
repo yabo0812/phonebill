@@ -33,8 +33,7 @@ public class ProductChangeHistoryRepositoryImpl implements ProductChangeHistoryR
         ProductChangeHistoryEntity entity = ProductChangeHistoryEntity.fromDomain(history);
         ProductChangeHistoryEntity savedEntity = jpaRepository.save(entity);
         
-        log.info("상품변경 이력 저장 완료: id={}, requestId={}", 
-                savedEntity.getId(), savedEntity.getRequestId());
+        log.info("상품변경 이력 저장 완료: id={}", savedEntity.getId());
         
         return savedEntity.toDomain();
     }
@@ -43,7 +42,7 @@ public class ProductChangeHistoryRepositoryImpl implements ProductChangeHistoryR
     public Optional<ProductChangeHistory> findByRequestId(String requestId) {
         log.debug("요청 ID로 이력 조회: requestId={}", requestId);
         
-        return jpaRepository.findByRequestId(requestId)
+        return jpaRepository.findById(requestId)
                 .map(ProductChangeHistoryEntity::toDomain);
     }
 
@@ -160,14 +159,14 @@ public class ProductChangeHistoryRepositoryImpl implements ProductChangeHistoryR
     public boolean existsByRequestId(String requestId) {
         log.debug("요청 ID 존재 여부 확인: requestId={}", requestId);
         
-        return jpaRepository.existsByRequestId(requestId);
+        return jpaRepository.existsById(requestId);
     }
 
     @Override
     public void deleteById(Long id) {
         log.info("상품변경 이력 삭제: id={}", id);
         
-        jpaRepository.deleteById(id);
+        jpaRepository.deleteById(id.toString());
     }
 
     @Override

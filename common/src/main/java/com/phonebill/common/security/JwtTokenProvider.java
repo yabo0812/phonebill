@@ -28,8 +28,8 @@ public class JwtTokenProvider {
     private final SecretKey secretKey;
     private final long tokenValidityInMilliseconds;
 
-    public JwtTokenProvider(@Value("${security.jwt.secret:}") String secret,
-                           @Value("${security.jwt.access-token-expiration:3600}") long tokenValidityInSeconds) {
+    public JwtTokenProvider(@Value("${jwt.secret:}") String secret,
+                           @Value("${jwt.access-token-validity:3600}") long tokenValidityInSeconds) {
         if (StringUtils.hasText(secret)) {
             this.secretKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         } else {
@@ -110,6 +110,32 @@ public class JwtTokenProvider {
             .getPayload();
         
         return claims.get("authority", String.class);
+    }
+
+    /**
+     * JWT 토큰에서 고객 ID 추출
+     */
+    public String getCustomerId(String token) {
+        Claims claims = Jwts.parser()
+            .verifyWith(secretKey)
+            .build()
+            .parseSignedClaims(token)
+            .getPayload();
+        
+        return claims.get("customerId", String.class);
+    }
+
+    /**
+     * JWT 토큰에서 회선번호 추출
+     */
+    public String getLineNumber(String token) {
+        Claims claims = Jwts.parser()
+            .verifyWith(secretKey)
+            .build()
+            .parseSignedClaims(token)
+            .getPayload();
+        
+        return claims.get("lineNumber", String.class);
     }
 
     /**

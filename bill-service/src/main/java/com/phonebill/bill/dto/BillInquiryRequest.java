@@ -1,5 +1,6 @@
 package com.phonebill.bill.dto;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Pattern;
 import lombok.AllArgsConstructor;
@@ -28,6 +29,7 @@ public class BillInquiryRequest {
      * 조회할 회선번호 (필수)
      * 010-XXXX-XXXX 형식만 허용
      */
+    @JsonProperty("lineNumber")
     @NotBlank(message = "회선번호는 필수입니다")
     @Pattern(
         regexp = "^010-\\d{4}-\\d{4}$", 
@@ -37,11 +39,12 @@ public class BillInquiryRequest {
 
     /**
      * 조회월 (선택)
-     * YYYY-MM 형식, 미입력시 당월 조회
+     * YYYYMM 형식, 미입력시 당월 조회
      */
+    @JsonProperty("inquiryMonth")
     @Pattern(
-        regexp = "^\\d{4}-\\d{2}$", 
-        message = "조회월은 YYYY-MM 형식이어야 합니다"
+        regexp = "^\\d{6}$", 
+        message = "조회월은 YYYYMM 형식이어야 합니다"
     )
     private String inquiryMonth;
 }

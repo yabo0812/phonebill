@@ -59,13 +59,13 @@ public class ProductValidationService {
                 failureReasonBuilder.append("변경 대상 상품이 판매중이 아닙니다. ");
             }
 
-            // 2. 사업자 일치 확인
-            boolean isOperatorMatch = validateOperatorMatch(request.getCurrentProductCode(), 
-                                                          request.getTargetProductCode(), validationDetails);
-            if (!isOperatorMatch) {
-                overallSuccess = false;
-                failureReasonBuilder.append("현재 상품과 변경 대상 상품의 사업자가 일치하지 않습니다. ");
-            }
+            // 2. 사업자 일치 확인 (제외됨)
+            // boolean isOperatorMatch = validateOperatorMatch(request.getCurrentProductCode(), 
+            //                                               request.getTargetProductCode(), validationDetails);
+            // if (!isOperatorMatch) {
+            //     overallSuccess = false;
+            //     failureReasonBuilder.append("현재 상품과 변경 대상 상품의 사업자가 일치하지 않습니다. ");
+            // }
 
             // 3. 회선 상태 확인
             boolean isLineStatusValid = validateLineStatus(request.getLineNumber(), validationDetails);

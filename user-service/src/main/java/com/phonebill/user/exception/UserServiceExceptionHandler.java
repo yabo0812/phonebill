@@ -157,6 +157,6 @@ public class UserServiceExceptionHandler {
      */
     private String getRequestPath() {
         // 실제 구현에서는 HttpServletRequest를 주입받아 사용
-        return "/api/auth";
+        return "/auth";
     }
 }

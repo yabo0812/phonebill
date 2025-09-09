@@ -2,6 +2,7 @@ package com.phonebill.kosmock.service;
 
 import com.phonebill.kosmock.config.MockConfig;
 import com.phonebill.kosmock.data.*;
+import com.phonebill.kosmock.data.MockDataService;
 import com.phonebill.kosmock.dto.*;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -72,6 +73,7 @@ public class KosMockService {
         // 성공 응답 생성
         KosBillInquiryResponse response = KosBillInquiryResponse.builder()
                 .requestId(request.getRequestId())
+                .procStatus("SUCCESS")
                 .resultCode("0000")
                 .resultMessage("정상 처리되었습니다")
                 .billInfo(KosBillInquiryResponse.BillInfo.builder()
@@ -158,10 +160,15 @@ public class KosMockService {
         // KOS 주문 번호 생성
         String kosOrderNumber = generateKosOrderNumber();
         
-        // 적용 일자 설정 (없으면 내일 사용)
-        String effectiveDate = request.getEffectiveDate();
-        if (effectiveDate == null || effectiveDate.isEmpty()) {
-            effectiveDate = LocalDateTime.now().plusDays(1).format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        // 적용 일자 설정 (현재 날짜로 자동 설정)
+        String effectiveDate = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"));
+        
+        // 실제 고객 데이터 업데이트
+        boolean updateSuccess = mockDataService.updateCustomerProduct(request.getLineNumber(), request.getTargetProductCode());
+        if (!updateSuccess) {
+            log.error("고객 상품 코드 업데이트 실패 - LineNumber: {}, TargetProduct: {}", 
+                    request.getLineNumber(), request.getTargetProductCode());
+            return createProductChangeErrorResponse(request.getRequestId(), "2099", "상품 변경 처리 중 오류가 발생했습니다");
         }
         
         // 성공 응답 생성
@@ -203,6 +210,161 @@ public class KosMockService {
     }
     
     /**
+     * 상품 목록 조회 (Mock)
+     */
+    public KosProductListResponse getProductList() {
+        log.info("KOS Mock 상품 목록 조회 요청 처리 시작");
+        
+        // Mock 응답 지연 시뮬레이션
+        simulateProcessingDelay();
+        
+        // Mock 실패 시뮬레이션
+        if (shouldSimulateFailure()) {
+            log.warn("KOS Mock 상품 목록 조회 실패 시뮬레이션");
+            throw new RuntimeException("KOS 시스템 일시적 오류");
+        }
+        
+        try {
+            // Mock 데이터에서 상품 목록 조회
+            java.util.List<MockProductData> productDataList = mockDataService.getAllProducts();
+            
+            // KosProductInfo 리스트로 변환
+            java.util.List<KosProductInfo> productInfoList = productDataList.stream()
+                    .map(this::convertToProductInfo)
+                    .collect(java.util.stream.Collectors.toList());
+            
+            log.info("KOS Mock 상품 목록 조회 완료 - 상품 수: {}", productInfoList.size());
+            
+            return KosProductListResponse.builder()
+                    .resultCode("0000")
+                    .resultMessage("상품 목록 조회가 완료되었습니다")
+                    .productCount(productInfoList.size())
+                    .products(productInfoList)
+                    .build();
+                    
+        } catch (Exception e) {
+            log.error("KOS Mock 상품 목록 조회 처리 중 오류 발생", e);
+            return KosProductListResponse.builder()
+                    .resultCode("9999")
+                    .resultMessage("시스템 오류가 발생했습니다")
+                    .productCount(0)
+                    .products(java.util.Collections.emptyList())
+                    .build();
+        }
+    }
+    
+    /**
+     * 가입상품 조회 처리 (Mock)
+     */
+    public KosProductInquiryResponse processProductInquiry(KosProductInquiryRequest request) {
+        log.info("KOS Mock 가입상품 조회 요청 처리 시작 - RequestId: {}, LineNumber: {}", 
+                request.getRequestId(), request.getLineNumber());
+        
+        // Mock 응답 지연 시뮬레이션
+        simulateProcessingDelay();
+        
+        // Mock 실패 시뮬레이션
+        if (shouldSimulateFailure()) {
+            log.warn("KOS Mock 가입상품 조회 실패 시뮬레이션 - RequestId: {}", request.getRequestId());
+            throw new RuntimeException("KOS 시스템 일시적 오류");
+        }
+        
+        // 고객 데이터 조회
+        MockCustomerData customerData = mockDataService.getCustomerData(request.getLineNumber());
+        if (customerData == null) {
+            log.warn("존재하지 않는 회선번호 - LineNumber: {}", request.getLineNumber());
+            return createProductInquiryErrorResponse(request.getRequestId(), "3001", "존재하지 않는 회선번호입니다");
+        }
+        
+        // 회선 상태 확인
+        if (!"ACTIVE".equals(customerData.getLineStatus())) {
+            log.warn("비활성 회선 - LineNumber: {}, Status: {}", 
+                    request.getLineNumber(), customerData.getLineStatus());
+            return createProductInquiryErrorResponse(request.getRequestId(), "3002", "비활성 상태의 회선입니다");
+        }
+        
+        // 현재 상품 정보 조회
+        MockProductData productData = mockDataService.getProductData(customerData.getCurrentProductCode());
+        if (productData == null) {
+            log.warn("존재하지 않는 상품 코드 - ProductCode: {}", customerData.getCurrentProductCode());
+            return createProductInquiryErrorResponse(request.getRequestId(), "3003", "상품 정보를 찾을 수 없습니다");
+        }
+        
+        // 성공 응답 생성
+        KosProductInquiryResponse response = KosProductInquiryResponse.builder()
+                .requestId(request.getRequestId())
+                .procStatus("SUCCESS")
+                .resultCode("0000")
+                .resultMessage("정상 처리되었습니다")
+                .productInfo(KosProductInquiryResponse.ProductInfo.builder()
+                        .lineNumber(customerData.getLineNumber())
+                        .currentProductCode(productData.getProductCode())
+                        .currentProductName(productData.getProductName())
+                        .monthlyFee(productData.getMonthlyFee())
+                        .dataAllowance(productData.getDataAllowance())
+                        .voiceAllowance(productData.getVoiceAllowance())
+                        .smsAllowance(productData.getSmsAllowance())
+                        .productStatus(productData.getStatus())
+                        .contractDate(customerData.getContractDate())
+                        .build())
+                .customerInfo(KosProductInquiryResponse.CustomerInfo.builder()
+                        .customerName(customerData.getCustomerName())
+                        .customerId(customerData.getCustomerId())
+                        .operatorCode(customerData.getOperatorCode())
+                        .lineStatus(customerData.getLineStatus())
+                        .build())
+                .build();
+        
+        log.info("KOS Mock 가입상품 조회 처리 완료 - RequestId: {}", request.getRequestId());
+        return response;
+    }
+    
+    /**
+     * 회선번호의 실제 요금 데이터가 있는 월 목록 조회 (Mock)
+     */
+    public KosAvailableMonthsResponse getAvailableMonths(String lineNumber) {
+        log.info("KOS Mock 데이터 보유 월 목록 조회 - LineNumber: {}", lineNumber);
+        
+        // Mock 응답 지연 시뮬레이션
+        simulateProcessingDelay();
+        
+        // 고객 데이터 조회
+        MockCustomerData customerData = mockDataService.getCustomerData(lineNumber);
+        if (customerData == null) {
+            log.warn("존재하지 않는 회선번호 - LineNumber: {}", lineNumber);
+            return KosAvailableMonthsResponse.builder()
+                    .resultCode("1001")
+                    .resultMessage("존재하지 않는 회선번호입니다")
+                    .availableMonths(java.util.Collections.emptyList())
+                    .build();
+        }
+        
+        // 회선 상태 확인
+        if (!"ACTIVE".equals(customerData.getLineStatus())) {
+            log.warn("비활성 회선 - LineNumber: {}, Status: {}", 
+                    lineNumber, customerData.getLineStatus());
+            return KosAvailableMonthsResponse.builder()
+                    .resultCode("1002")
+                    .resultMessage("비활성 상태의 회선입니다")
+                    .availableMonths(java.util.Collections.emptyList())
+                    .build();
+        }
+        
+        // Mock 데이터에서 실제 데이터가 있는 월 목록 조회
+        java.util.List<String> availableMonths = mockDataService.getAvailableMonths(lineNumber);
+        
+        log.info("KOS Mock 데이터 보유 월 목록 조회 완료 - LineNumber: {}, 월 수: {}", 
+                lineNumber, availableMonths.size());
+        
+        return KosAvailableMonthsResponse.builder()
+                .resultCode("0000")
+                .resultMessage("정상 처리되었습니다")
+                .lineNumber(lineNumber)
+                .availableMonths(availableMonths)
+                .build();
+    }
+    
+    /**
      * 처리 지연 시뮬레이션
      */
     private void simulateProcessingDelay() {
@@ -235,6 +397,7 @@ public class KosMockService {
     private KosBillInquiryResponse createBillInquiryErrorResponse(String requestId, String errorCode, String errorMessage) {
         return KosBillInquiryResponse.builder()
                 .requestId(requestId)
+                .procStatus("FAILED")
                 .resultCode(errorCode)
                 .resultMessage(errorMessage)
                 .build();
@@ -249,5 +412,77 @@ public class KosMockService {
                 .resultCode(errorCode)
                 .resultMessage(errorMessage)
                 .build();
+    }
+    
+    /**
+     * 가입상품 조회 오류 응답 생성
+     */
+    private KosProductInquiryResponse createProductInquiryErrorResponse(String requestId, String errorCode, String errorMessage) {
+        return KosProductInquiryResponse.builder()
+                .requestId(requestId)
+                .procStatus("FAILED")
+                .resultCode(errorCode)
+                .resultMessage(errorMessage)
+                .build();
+    }
+    
+    /**
+     * MockProductData를 KosProductInfo로 변환
+     */
+    private KosProductInfo convertToProductInfo(MockProductData productData) {
+        return KosProductInfo.builder()
+                .productCode(productData.getProductCode())
+                .productName(productData.getProductName())
+                .productType(productData.getPlanType())
+                .monthlyFee(productData.getMonthlyFee().intValue())
+                .dataAllowance(parseDataAllowance(productData.getDataAllowance()))
+                .voiceAllowance(parseVoiceAllowance(productData.getVoiceAllowance()))
+                .smsAllowance(parseSmsAllowance(productData.getSmsAllowance()))
+                .networkType(productData.getNetworkType())
+                .status(productData.getStatus())
+                .description(productData.getDescription())
+                .build();
+    }
+    
+    /**
+     * 데이터 허용량을 정수로 변환 (GB 단위)
+     */
+    private Integer parseDataAllowance(String dataAllowance) {
+        if (dataAllowance == null || "무제한".equals(dataAllowance)) {
+            return -1; // 무제한을 -1로 표현
+        }
+        try {
+            return Integer.parseInt(dataAllowance.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+    
+    /**
+     * 음성 허용량을 정수로 변환 (분 단위)
+     */
+    private Integer parseVoiceAllowance(String voiceAllowance) {
+        if (voiceAllowance == null || "무제한".equals(voiceAllowance)) {
+            return -1; // 무제한을 -1로 표현
+        }
+        try {
+            return Integer.parseInt(voiceAllowance.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+    
+    /**
+     * SMS 허용량을 정수로 변환 (건 단위)
+     */
+    private Integer parseSmsAllowance(String smsAllowance) {
+        if (smsAllowance == null || "무제한".equals(smsAllowance)) {
+            return -1; // 무제한을 -1로 표현
+        }
+        try {
+            return Integer.parseInt(smsAllowance.replaceAll("[^0-9]", ""));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
     }
 }

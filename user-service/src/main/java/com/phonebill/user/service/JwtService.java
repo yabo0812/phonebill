@@ -123,7 +123,7 @@ public class JwtService {
     }
     
     /**
-     * 토큰 유효성 검증
+     * 토큰 유효성 검증 (JWT 자체만 검증, 블랙리스트는 AuthService에서 확인)
      * @param token JWT 토큰
      * @return 유효성 여부
      */

@@ -108,7 +108,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Map<String, String>>builder()
                         .success(false)
                         .data(errors)
-                        .message("입력값이 올바르지 않습니다")
+                        .resultMessage("입력값이 올바르지 않습니다")
                         .timestamp(LocalDateTime.now())
                         .build());
     }
@@ -129,7 +129,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Map<String, String>>builder()
                         .success(false)
                         .data(errors)
-                        .message("입력값이 올바르지 않습니다")
+                        .resultMessage("입력값이 올바르지 않습니다")
                         .timestamp(LocalDateTime.now())
                         .build());
     }
@@ -152,7 +152,7 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.<Map<String, String>>builder()
                         .success(false)
                         .data(errors)
-                        .message("입력값이 올바르지 않습니다")
+                        .resultMessage("입력값이 올바르지 않습니다")
                         .timestamp(LocalDateTime.now())
                         .build());
     }

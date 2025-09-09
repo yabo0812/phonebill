@@ -29,6 +29,16 @@ public class UserPrincipal {
     private final String authority;
     
     /**
+     * 고객 ID
+     */
+    private final String customerId;
+    
+    /**
+     * 회선번호
+     */
+    private final String lineNumber;
+    
+    /**
      * 사용자 ID 반환 (별칭)
      */
     public String getName() {

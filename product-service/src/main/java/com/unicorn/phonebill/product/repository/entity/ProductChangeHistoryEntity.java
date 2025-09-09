@@ -7,15 +7,12 @@ import lombok.AccessLevel;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.hibernate.annotations.JdbcTypeCode;
-import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
-import java.util.Map;
+import java.util.UUID;
 
 /**
- * 상품변경 이력 엔티티
- * 모든 상품변경 요청 및 처리 이력을 관리
+ * 상품변경 이력 엔티티 (실제 DB 스키마에 맞춘 버전)
  */
 @Entity
 @Table(name = "pc_product_change_history")
@@ -24,105 +21,94 @@ import java.util.Map;
 public class ProductChangeHistoryEntity extends BaseTimeEntity {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    @Column(name = "request_id", nullable = false, unique = true, length = 50)
-    private String requestId;
+    @Column(name = "id", nullable = false, unique = true, length = 100)
+    private String id;
 
     @Column(name = "line_number", nullable = false, length = 20)
     private String lineNumber;
 
-    @Column(name = "customer_id", nullable = false, length = 50)
+    @Column(name = "customer_id", nullable = false, length = 100)
     private String customerId;
 
-    @Column(name = "current_product_code", nullable = false, length = 20)
+    @Column(name = "old_product_code", length = 50)
     private String currentProductCode;
 
-    @Column(name = "target_product_code", nullable = false, length = 20)
+    @Column(name = "new_product_code", nullable = false, length = 50)
     private String targetProductCode;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "process_status", nullable = false, length = 20)
+    @Column(name = "change_status", length = 20)
     private ProcessStatus processStatus;
 
-    @Column(name = "validation_result", columnDefinition = "TEXT")
-    private String validationResult;
+    @Column(name = "change_reason", length = 255)
+    private String changeReason;
 
-    @Column(name = "process_message", columnDefinition = "TEXT")
-    private String processMessage;
+    @Column(name = "change_method", length = 50)
+    private String changeMethod;
 
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "kos_request_data", columnDefinition = "jsonb")
-    private Map<String, Object> kosRequestData;
-
-    @JdbcTypeCode(SqlTypes.JSON)
-    @Column(name = "kos_response_data", columnDefinition = "jsonb")
-    private Map<String, Object> kosResponseData;
-
-    @Column(name = "requested_at", nullable = false)
+    @Column(name = "request_time", nullable = false)
     private LocalDateTime requestedAt;
 
-    @Column(name = "validated_at")
-    private LocalDateTime validatedAt;
+    @Column(name = "approval_time")
+    private LocalDateTime approvalTime;
 
-    @Column(name = "processed_at")
-    private LocalDateTime processedAt;
+    @Column(name = "completion_time")
+    private LocalDateTime completionTime;
 
-    @Version
-    @Column(name = "version", nullable = false)
-    private Long version = 0L;
+    @Column(name = "approver_id", length = 50)
+    private String approverId;
+
+    @Column(name = "processor_id", length = 50)
+    private String processorId;
+
+    @Column(name = "kos_request_id", length = 100)
+    private String kosRequestId;
+
+    @Column(name = "kos_response_code", length = 20)
+    private String kosResponseCode;
+
+    @Column(name = "error_message", columnDefinition = "TEXT")
+    private String errorMessage;
+
+    @Column(name = "retry_count")
+    private Integer retryCount;
 
     @Builder
     public ProductChangeHistoryEntity(
-            String requestId,
+            String id,
             String lineNumber,
             String customerId,
             String currentProductCode,
             String targetProductCode,
             ProcessStatus processStatus,
-            String validationResult,
-            String processMessage,
-            Map<String, Object> kosRequestData,
-            Map<String, Object> kosResponseData,
-            LocalDateTime requestedAt,
-            LocalDateTime validatedAt,
-            LocalDateTime processedAt) {
-        this.requestId = requestId;
+            String changeReason,
+            String changeMethod,
+            LocalDateTime requestedAt) {
+        this.id = id;
         this.lineNumber = lineNumber;
         this.customerId = customerId;
         this.currentProductCode = currentProductCode;
         this.targetProductCode = targetProductCode;
         this.processStatus = processStatus != null ? processStatus : ProcessStatus.REQUESTED;
-        this.validationResult = validationResult;
-        this.processMessage = processMessage;
-        this.kosRequestData = kosRequestData;
-        this.kosResponseData = kosResponseData;
+        this.changeReason = changeReason;
+        this.changeMethod = changeMethod != null ? changeMethod : "API";
         this.requestedAt = requestedAt != null ? requestedAt : LocalDateTime.now();
-        this.validatedAt = validatedAt;
-        this.processedAt = processedAt;
+        this.retryCount = 0;
     }
 
     /**
-     * 도메인 모델로 변환
+     * 도메인 모델로 변환 (간소화)
      */
     public ProductChangeHistory toDomain() {
         return ProductChangeHistory.builder()
-                .id(this.id)
-                .requestId(this.requestId)
+                .id(null) // Long type을 위해 null 처리
+                .requestId(this.id)
                 .lineNumber(this.lineNumber)
                 .customerId(this.customerId)
                 .currentProductCode(this.currentProductCode)
                 .targetProductCode(this.targetProductCode)
                 .processStatus(this.processStatus)
-                .validationResult(this.validationResult)
-                .processMessage(this.processMessage)
-                .kosRequestData(this.kosRequestData)
-                .kosResponseData(this.kosResponseData)
                 .requestedAt(this.requestedAt)
-                .validatedAt(this.validatedAt)
-                .processedAt(this.processedAt)
-                .version(this.version)
                 .build();
     }
 
@@ -131,30 +117,22 @@ public class ProductChangeHistoryEntity extends BaseTimeEntity {
      */
     public static ProductChangeHistoryEntity fromDomain(ProductChangeHistory domain) {
         return ProductChangeHistoryEntity.builder()
-                .requestId(domain.getRequestId())
+                .id(UUID.randomUUID().toString()) // 새로운 UUID 생성
                 .lineNumber(domain.getLineNumber())
                 .customerId(domain.getCustomerId())
                 .currentProductCode(domain.getCurrentProductCode())
                 .targetProductCode(domain.getTargetProductCode())
                 .processStatus(domain.getProcessStatus())
-                .validationResult(domain.getValidationResult())
-                .processMessage(domain.getProcessMessage())
-                .kosRequestData(domain.getKosRequestData())
-                .kosResponseData(domain.getKosResponseData())
                 .requestedAt(domain.getRequestedAt())
-                .validatedAt(domain.getValidatedAt())
-                .processedAt(domain.getProcessedAt())
                 .build();
     }
 
     /**
      * 상태를 완료로 변경
      */
-    public void markAsCompleted(String message, Map<String, Object> kosResponseData) {
+    public void markAsCompleted(String message) {
         this.processStatus = ProcessStatus.COMPLETED;
-        this.processMessage = message;
-        this.kosResponseData = kosResponseData;
-        this.processedAt = LocalDateTime.now();
+        this.completionTime = LocalDateTime.now();
     }
 
     /**
@@ -162,37 +140,14 @@ public class ProductChangeHistoryEntity extends BaseTimeEntity {
      */
     public void markAsFailed(String message) {
         this.processStatus = ProcessStatus.FAILED;
-        this.processMessage = message;
-        this.processedAt = LocalDateTime.now();
+        this.errorMessage = message;
+        this.completionTime = LocalDateTime.now();
     }
 
     /**
-     * 검증 완료로 상태 변경
-     */
-    public void markAsValidated(String validationResult) {
-        this.processStatus = ProcessStatus.VALIDATED;
-        this.validationResult = validationResult;
-        this.validatedAt = LocalDateTime.now();
-    }
-
-    /**
-     * 처리 중으로 상태 변경
+     * 상태를 처리중으로 변경
      */
     public void markAsProcessing() {
         this.processStatus = ProcessStatus.PROCESSING;
-    }
-
-    /**
-     * KOS 요청 데이터 설정
-     */
-    public void setKosRequestData(Map<String, Object> kosRequestData) {
-        this.kosRequestData = kosRequestData;
-    }
-
-    /**
-     * 처리 메시지 업데이트
-     */
-    public void updateProcessMessage(String message) {
-        this.processMessage = message;
     }
 }

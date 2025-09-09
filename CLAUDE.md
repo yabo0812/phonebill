@@ -501,13 +501,31 @@ QA Engineer
 - **컴파일**: 최상위 루트에서 `./gradlew {service-name}:compileJava` 명령 사용
 - **서버 시작**: AI가 직접 서버를 시작하지 말고 반드시 사람에게 요청할것
 
+## JSON 데이터 바인딩 문제  
+- **문제**: DTO에서 JSON 요청 데이터가 바인딩되지 않아 모든 필드가 "필수입니다" 검증 오류 발생
+- **원인**: Jackson JSON 직렬화/역직렬화 시 명시적 프로퍼티 매핑 누락
+- **해결책**: DTO 필드에 `@JsonProperty("fieldName")` 어노테이션 추가 필수
+- **적용**: UserRegistrationRequest, LoginRequest 등 모든 Request DTO에 적용
+
 ## 실행 프로파일 작성 경험
 - **Gradle 실행 프로파일**: Spring Boot가 아닌 Gradle 실행 프로파일 사용 필수
 - **환경변수 매핑**: `<entry key="..." value="..." />` 형태로 환경변수 설정
 - **컴포넌트 스캔 이슈**: common 모듈의 @Component가 인식되지 않는 경우 발생
 - **의존성 주입 오류**: JwtTokenProvider 빈을 찾을 수 없는 오류 확인됨
 
+## Authorization Header 문제
+- **문제**: Swagger UI에서 생성된 curl 명령에 Authorization 헤더 누락
+- **원인**: SwaggerConfig의 SecurityRequirement 이름과 Controller의 @SecurityRequirement 이름 불일치
+- **해결책**: SwaggerConfig의 "Bearer Authentication"을 "bearerAuth"로 통일
+- **적용**: bill-service, product-service 모두 수정 완료
+
 ## 백킹서비스 연결 정보
 - **LoadBalancer External IP**: kubectl 명령으로 실제 IP 확인 후 환경변수 설정
 - **DB 연결정보**: 각 서비스별 별도 DB 사용 (auth, bill_inquiry, product_change)
 - **Redis 공유**: 모든 서비스가 동일한 Redis 인스턴스 사용
+
+## 쿠버네티스 DB 접근 방법
+- **패스워드 확인**: `kubectl get secret -n {namespace} {secret-name} -o jsonpath='{.data.postgres-password}' | base64 -d`
+- **환경변수 확인**: `kubectl exec -n {namespace} {pod-name} -c postgresql -- env | grep POSTGRES`
+- **SQL 실행**: `kubectl exec -n {namespace} {pod-name} -c postgresql -- bash -c 'PGPASSWORD="$POSTGRES_POSTGRES_PASSWORD" psql -U postgres -d {database} -c "{SQL}"'`
+- **예시**: `kubectl exec -n phonebill-dev product-change-postgres-dev-postgresql-0 -c postgresql -- bash -c 'PGPASSWORD="$POSTGRES_POSTGRES_PASSWORD" psql -U postgres -d product_change_db -c "ALTER TABLE product_change.pc_product_change_history ALTER COLUMN customer_id TYPE VARCHAR(100);"'`

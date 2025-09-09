@@ -13,10 +13,12 @@ import java.time.LocalDateTime;
  * 
  * 모든 API 응답에 대한 공통 구조를 제공
  * - success: 성공/실패 여부
+ * - resultCode: 결과 코드
+ * - resultMessage: 결과 메시지
  * - data: 실제 응답 데이터 (성공시)
  * - error: 오류 정보 (실패시)  
- * - message: 응답 메시지
  * - timestamp: 응답 시간
+ * - traceId: 추적 ID
  * 
  * @param <T> 응답 데이터 타입
  * @author 이개발(백엔더)
@@ -36,6 +38,16 @@ public class ApiResponse<T> {
     private boolean success;
 
     /**
+     * 결과 코드
+     */
+    private String resultCode;
+
+    /**
+     * 결과 메시지
+     */
+    private String resultMessage;
+
+    /**
      * 응답 데이터 (성공시에만 포함)
      */
     private T data;
@@ -46,15 +58,15 @@ public class ApiResponse<T> {
     private ErrorDetail error;
 
     /**
-     * 응답 메시지
-     */
-    private String message;
-
-    /**
      * 응답 시간
      */
     @Builder.Default
     private LocalDateTime timestamp = LocalDateTime.now();
+
+    /**
+     * 추적 ID
+     */
+    private String traceId;
 
     /**
      * 성공 응답 생성
@@ -67,8 +79,9 @@ public class ApiResponse<T> {
     public static <T> ApiResponse<T> success(T data, String message) {
         return ApiResponse.<T>builder()
                 .success(true)
+                .resultCode("0000")
+                .resultMessage(message)
                 .data(data)
-                .message(message)
                 .build();
     }
 
@@ -93,8 +106,9 @@ public class ApiResponse<T> {
     public static ApiResponse<Void> failure(ErrorDetail error, String message) {
         return ApiResponse.<Void>builder()
                 .success(false)
+                .resultCode(error.getCode())
+                .resultMessage(message)
                 .error(error)
-                .message(message)
                 .build();
     }
 
@@ -110,7 +124,12 @@ public class ApiResponse<T> {
                 .code(code)
                 .message(message)
                 .build();
-        return failure(error, message);
+        return ApiResponse.<Void>builder()
+                .success(false)
+                .resultCode(code)
+                .resultMessage(message)
+                .error(error)
+                .build();
     }
 }
 

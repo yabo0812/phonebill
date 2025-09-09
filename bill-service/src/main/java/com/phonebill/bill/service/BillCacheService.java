@@ -55,7 +55,7 @@ public class BillCacheService {
      * @param inquiryMonth 조회월
      * @return 캐시된 요금 데이터 (없으면 null)
      */
-    @Cacheable(value = "billData", key = "#lineNumber + ':' + #inquiryMonth")
+    @Cacheable(value = "billData", key = "#lineNumber + ':' + #inquiryMonth", unless = "#result == null")
     public BillInquiryResponse getCachedBillData(String lineNumber, String inquiryMonth) {
         log.debug("요금 데이터 캐시 조회 - 회선: {}, 조회월: {}", lineNumber, inquiryMonth);
 
@@ -89,6 +89,12 @@ public class BillCacheService {
      */
     public void cacheBillData(String lineNumber, String inquiryMonth, BillInquiryResponse billData) {
         log.debug("요금 데이터 캐시 저장 - 회선: {}, 조회월: {}", lineNumber, inquiryMonth);
+
+        // null 값은 캐시하지 않음
+        if (billData == null) {
+            log.debug("요금 데이터가 null이므로 캐시 저장을 건너뜀 - 회선: {}, 조회월: {}", lineNumber, inquiryMonth);
+            return;
+        }
 
         String cacheKey = BILL_DATA_PREFIX + lineNumber + ":" + inquiryMonth;
         

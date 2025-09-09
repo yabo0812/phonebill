@@ -42,8 +42,9 @@ public class JwtConfig {
      */
     @Bean
     public JwtTokenProvider jwtTokenProvider(
-            @Value("${security.jwt.secret:phonebill-jwt-secret-key-2025-dev}") String secret,
-            @Value("${security.jwt.access-token-expiration:3600}") long tokenValidityInSeconds) {
+            @Value("${jwt.secret}") String secret,
+            @Value("${jwt.access-token-validity}") long tokenValidityInMilliseconds) {
+        long tokenValidityInSeconds = tokenValidityInMilliseconds / 1000;
         return new JwtTokenProvider(secret, tokenValidityInSeconds);
     }
 }

@@ -19,7 +19,8 @@ public class AuthUserSessionEntity extends BaseTimeEntity {
     
     @Id
     @Column(name = "session_id", length = 100)
-    private String sessionId;
+    @Builder.Default
+    private String sessionId = java.util.UUID.randomUUID().toString();
     
     @Column(name = "user_id", nullable = false, length = 50)
     private String userId;

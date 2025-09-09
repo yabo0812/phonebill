@@ -1,27 +1,6 @@
-spring:
-  data:
-    redis:
-      host: ${REDIS_HOST:localhost}
-      port: ${REDIS_PORT:6379}
-      password: ${REDIS_PASSWORD:}
-      timeout: 2000ms
-      lettuce:
-        pool:
-          max-active: 20
-          max-idle: 10
-          min-idle: 5
-          
-# Mock 응답 시간 (실제 KOS 시스템을 모방)
-kos:
-  mock:
-    response-delay: 1000  # milliseconds (1초)
-    failure-rate: 0.05    # 5% 실패율
-    
-# 로깅 레벨 (운영환경)
+# 로깅 레벨
 logging:
   level:
     com.phonebill.kosmock: INFO
     org.springframework.web: WARN
     org.springframework.data.redis: WARN
-  file:
-    name: /var/log/kos-mock-service.log

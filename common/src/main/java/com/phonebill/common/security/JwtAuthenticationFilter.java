@@ -37,6 +37,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             String userId = jwtTokenProvider.getUserId(token);
             String username = null;
             String authority = null;
+            String customerId = null;
+            String lineNumber = null;
             
             try {
                 username = jwtTokenProvider.getUsername(token);
@@ -50,12 +52,26 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 log.debug("JWT에 authority 클레임이 없음: {}", e.getMessage());
             }
             
+            try {
+                customerId = jwtTokenProvider.getCustomerId(token);
+            } catch (Exception e) {
+                log.debug("JWT에 customerId 클레임이 없음: {}", e.getMessage());
+            }
+            
+            try {
+                lineNumber = jwtTokenProvider.getLineNumber(token);
+            } catch (Exception e) {
+                log.debug("JWT에 lineNumber 클레임이 없음: {}", e.getMessage());
+            }
+            
             if (StringUtils.hasText(userId)) {
                 // UserPrincipal 객체 생성 (username과 authority가 없어도 동작)
                 UserPrincipal userPrincipal = UserPrincipal.builder()
                     .userId(userId)
                     .username(username != null ? username : "unknown")
                     .authority(authority != null ? authority : "USER")
+                    .customerId(customerId)
+                    .lineNumber(lineNumber)
                     .build();
                 
                 UsernamePasswordAuthenticationToken authentication = 

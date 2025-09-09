@@ -1,7 +1,10 @@
 package com.phonebill.bill.config;
 
+import com.phonebill.common.security.JwtAuthenticationFilter;
+import com.phonebill.common.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
@@ -21,6 +24,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * Spring Security 설정
@@ -42,6 +46,11 @@ import java.util.Arrays;
 @RequiredArgsConstructor
 public class SecurityConfig {
 
+    private final JwtTokenProvider jwtTokenProvider;
+
+    @Value("${cors.allowed-origins")
+    private String allowedOrigins;
+
     /**
      * 보안 필터 체인 구성
      * 
@@ -53,76 +62,55 @@ public class SecurityConfig {
         log.info("Security Filter Chain 구성 시작");
 
         http
-            // CSRF 비활성화 (REST API는 CSRF 불필요)
-            .csrf(AbstractHttpConfigurer::disable)
+            // CSRF 비활성화 (JWT 사용으로 불필요)
+            .csrf(csrf -> csrf.disable())
             
-            // CORS 설정 활성화
+            // CORS 설정
             .cors(cors -> cors.configurationSource(corsConfigurationSource()))
             
-            // 세션 관리 - Stateless (JWT 사용)
+            // 세션 비활성화 (JWT 기반 Stateless)
             .sessionManagement(session -> 
                 session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             
-            // 요청별 인증/인가 설정
-            .authorizeHttpRequests(auth -> auth
-                // 공개 엔드포인트 - 인증 불필요
+            // 권한 설정
+            .authorizeHttpRequests(authz -> authz
+                // Public endpoints (인증 불필요)
                 .requestMatchers(
-                    // Health Check
-                    "/actuator/**",
-                    // Swagger UI
-                    "/swagger-ui/**",
+                    "/actuator/health",
+                    "/actuator/info",
+                    "/actuator/prometheus",
                     "/v3/api-docs/**",
+                    "/api-docs/**",
+                    "/swagger-ui/**",
+                    "/swagger-ui.html",
                     "/swagger-resources/**",
-                    "/webjars/**",
-                    // 정적 리소스
-                    "/favicon.ico",
-                    "/error"
+                    "/webjars/**"
                 ).permitAll()
                 
                 // OPTIONS 요청은 모두 허용 (CORS Preflight)
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+
+                // Actuator endpoints (관리용)
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 
-                // 요금 조회 API - 인증 필요
-                .requestMatchers("/api/bills/**").authenticated()
-                
-                // 나머지 모든 요청 - 인증 필요
+                // 나머지 모든 요청 인증 필요
                 .anyRequest().authenticated()
             )
             
-            // JWT 인증 필터 추가
-            // TODO: JWT 필터 구현 후 활성화
-            // .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
+            // JWT 필터 추가
+            .addFilterBefore(jwtAuthenticationFilter(), UsernamePasswordAuthenticationFilter.class)
             
-            // 예외 처리
-            .exceptionHandling(exception -> exception
-                // 인증 실패 시 처리
+            // Exception 처리
+            .exceptionHandling(exceptions -> exceptions
                 .authenticationEntryPoint((request, response, authException) -> {
-                    log.warn("인증 실패 - URI: {}, 오류: {}", 
-                        request.getRequestURI(), authException.getMessage());
                     response.setStatus(401);
                     response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("""
-                        {
-                          "success": false,
-                          "message": "인증이 필요합니다",
-                          "timestamp": "%s"
-                        }
-                        """.formatted(java.time.LocalDateTime.now()));
+                    response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"UNAUTHORIZED\",\"message\":\"인증이 필요합니다.\",\"details\":\"유효한 토큰이 필요합니다.\"}}");
                 })
-                
-                // 권한 부족 시 처리
                 .accessDeniedHandler((request, response, accessDeniedException) -> {
-                    log.warn("접근 거부 - URI: {}, 오류: {}", 
-                        request.getRequestURI(), accessDeniedException.getMessage());
                     response.setStatus(403);
                     response.setContentType("application/json;charset=UTF-8");
-                    response.getWriter().write("""
-                        {
-                          "success": false,
-                          "message": "접근 권한이 없습니다",
-                          "timestamp": "%s"
-                        }
-                        """.formatted(java.time.LocalDateTime.now()));
+                    response.getWriter().write("{\"success\":false,\"error\":{\"code\":\"ACCESS_DENIED\",\"message\":\"접근이 거부되었습니다.\",\"details\":\"권한이 부족합니다.\"}}");
                 })
             );
 
@@ -130,99 +118,37 @@ public class SecurityConfig {
         return http.build();
     }
 
-    /**
-     * CORS 설정
-     * 
-     * @return CORS 설정 소스
-     */
+    @Bean
+    public JwtAuthenticationFilter jwtAuthenticationFilter() {
+        return new JwtAuthenticationFilter(jwtTokenProvider);
+    }
+    
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
-        log.debug("CORS 설정 구성 시작");
-
         CorsConfiguration configuration = new CorsConfiguration();
-        
-        // 허용할 Origin 설정 (개발환경)
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-            "http://localhost:*",
-            "https://localhost:*",
-            "http://127.0.0.1:*",
-            "https://127.0.0.1:*"
-            // TODO: 운영환경 도메인 추가
-        ));
-        
-        // 허용할 HTTP 메소드
-        configuration.setAllowedMethods(Arrays.asList(
-            "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
-        ));
-        
-        // 허용할 헤더
-        configuration.setAllowedHeaders(Arrays.asList(
-            "Authorization",
-            "Content-Type",
-            "X-Requested-With",
-            "Accept",
-            "Origin",
-            "Access-Control-Request-Method",
-            "Access-Control-Request-Headers"
-        ));
-        
-        // 자격 증명 허용 (쿠키, Authorization 헤더 등)
-        configuration.setAllowCredentials(true);
-        
-        // Preflight 요청 캐시 시간 (초)
-        configuration.setMaxAge(3600L);
 
+        // 환경변수에서 허용할 Origin 패턴 설정
+        String[] origins = allowedOrigins.split(",");
+        configuration.setAllowedOriginPatterns(Arrays.asList(origins));
+
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(Arrays.asList("*"));
+        configuration.setAllowCredentials(true);
+        configuration.setMaxAge(3600L);
+        
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
         source.registerCorsConfiguration("/**", configuration);
-
-        log.debug("CORS 설정 구성 완료");
         return source;
     }
 
-    /**
-     * 비밀번호 인코더 구성
-     * 
-     * @return BCrypt 패스워드 인코더
-     */
     @Bean
     public PasswordEncoder passwordEncoder() {
-        log.debug("Password Encoder 구성 - BCrypt 사용");
-        return new BCryptPasswordEncoder();
+        return new BCryptPasswordEncoder(12); // 기본 설정에서 강도 12 사용
     }
 
-    /**
-     * 인증 매니저 구성
-     * 
-     * @param config 인증 설정
-     * @return 인증 매니저
-     */
     @Bean
     public AuthenticationManager authenticationManager(AuthenticationConfiguration config) throws Exception {
-        log.debug("Authentication Manager 구성");
         return config.getAuthenticationManager();
     }
 
-    /**
-     * JWT 인증 필터 구성
-     * 
-     * TODO: JWT 토큰 검증 필터 구현
-     * 
-     * @return JWT 인증 필터
-     */
-    // @Bean
-    // public JwtAuthenticationFilter jwtAuthenticationFilter() {
-    //     return new JwtAuthenticationFilter();
-    // }
-
-    /**
-     * JWT 토큰 제공자 구성
-     * 
-     * TODO: JWT 토큰 생성/검증 서비스 구현
-     * 
-     * @return JWT 토큰 제공자
-     */
-    // @Bean
-    // public JwtTokenProvider jwtTokenProvider() {
-    //     return new JwtTokenProvider();
-    // }
 }

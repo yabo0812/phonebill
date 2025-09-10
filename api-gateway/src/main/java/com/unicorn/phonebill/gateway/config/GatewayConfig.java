@@ -18,10 +18,10 @@ import java.util.Arrays;
  * 마이크로서비스별 라우팅 규칙과 CORS 정책을 정의합니다.
  * 
  * 라우팅 구성:
- * - /auth/** -> auth-service (인증 서비스)
- * - /bills/** -> bill-service (요금조회 서비스) 
- * - /products/** -> product-service (상품변경 서비스)
- * - /kos/** -> kos-mock (KOS 목업 서비스)
+ * - /api/auth/** -> user-service (인증 서비스)
+ * - /api/bills/** -> bill-service (요금조회 서비스) 
+ * - /api/products/** -> product-service (상품변경 서비스)
+ * - /api/kos/** -> kos-mock (KOS 목업 서비스)
  * 
  * @author 이개발(백엔더)
  * @version 1.0.0
@@ -75,8 +75,9 @@ public class GatewayConfig {
                 
                 // Bill-Inquiry Service 라우팅 (인증 필요)
                 .route("bill-service", r -> r
-                        .path("/api/v1/bills/**")
+                        .path("/api/bills/**")
                         .filters(f -> f
+                                .rewritePath("/api/bills/(?<segment>.*)", "/api/v1/bills/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
                                         .setName("bill-service-cb")
@@ -89,8 +90,9 @@ public class GatewayConfig {
                 
                 // Product-Change Service 라우팅 (인증 필요)
                 .route("product-service", r -> r
-                        .path("/products/**")
+                        .path("/api/products/**")
                         .filters(f -> f
+                                .rewritePath("/api/products/(?<segment>.*)", "/products/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
                                         .setName("product-service-cb")
@@ -100,6 +102,20 @@ public class GatewayConfig {
                                         .setBackoff(java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10), 2, true))
                                 )
                         .uri("lb://product-service"))
+                
+                // KOS Mock Service 라우팅 (인증 불필요 - 목업용)
+                .route("kos-mock-service", r -> r
+                        .path("/api/kos/**")
+                        .filters(f -> f
+                                .rewritePath("/api/kos/(?<segment>.*)", "/kos/${segment}")
+                                .circuitBreaker(cb -> cb
+                                        .setName("kos-mock-cb")
+                                        .setFallbackUri("forward:/fallback/kos"))
+                                .retry(retry -> retry
+                                        .setRetries(2)
+                                        .setBackoff(java.time.Duration.ofSeconds(1), java.time.Duration.ofSeconds(5), 2, true))
+                        )
+                        .uri("lb://kos-mock"))
 
                 // 주의: Gateway 자체 엔드포인트는 라우팅하지 않음
                 // Health Check와 Swagger UI는 Spring Boot에서 직접 제공

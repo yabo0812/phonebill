@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm-kos-mock
+  namespace: phonebill-dev
+data:
+  SERVER_PORT: "8084"

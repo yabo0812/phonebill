@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cm-api-gateway
+  namespace: phonebill-dev
+data:
+  SERVER_PORT: "8080"
+  BILL_SERVICE_URL: "http://bill-service:80"
+  KOS_MOCK_URL: "http://kos-mock:80"
+  PRODUCT_SERVICE_URL: "http://product-service:80"
+  USER_SERVICE_URL: "http://user-service:80"

@@ -32,7 +32,7 @@ jar {
 }
 
 bootJar {
-    archiveBaseName = 'user-service'
+    archiveFileName = 'user-service.jar'
 }
 
 // Spring Boot 실행 설정

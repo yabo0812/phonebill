@@ -91,7 +91,7 @@ jar {
 }
 
 bootJar {
+    archiveFileName = 'bill-service.jar'
     enabled = true
-    archiveBaseName = 'bill-service'
     archiveClassifier = ''
 }

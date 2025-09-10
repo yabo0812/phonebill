@@ -56,7 +56,7 @@ jar {
 }
 
 bootJar {
-    archiveBaseName = 'api-gateway'
+    archiveFileName = 'api-gateway.jar'
     
     // 빌드 정보 추가
     manifest {

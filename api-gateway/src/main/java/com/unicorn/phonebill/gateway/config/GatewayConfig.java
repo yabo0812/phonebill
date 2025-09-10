@@ -18,10 +18,10 @@ import java.util.Arrays;
  * 마이크로서비스별 라우팅 규칙과 CORS 정책을 정의합니다.
  * 
  * 라우팅 구성:
- * - /api/auth/** -> user-service (인증 서비스)
- * - /api/bills/** -> bill-service (요금조회 서비스) 
- * - /api/products/** -> product-service (상품변경 서비스)
- * - /api/kos/** -> kos-mock (KOS 목업 서비스)
+ * - /api/auth/** -> /api/v1/auth/** (user-service)
+ * - /api/bills/** -> /api/v1/bills/** (bill-service) 
+ * - /api/products/** -> /products/** (product-service)
+ * - /api/kos/** -> /kos/** (kos-mock)
  * 
  * @author 이개발(백엔더)
  * @version 1.0.0
@@ -56,14 +56,14 @@ public class GatewayConfig {
                         .path("/api/auth/login", "/api/auth/refresh")
                         .and()
                         .method("POST")
-                        .filters(f -> f.rewritePath("/api/auth/(?<segment>.*)", "/auth/${segment}"))
+                        .filters(f -> f.rewritePath("/api/auth/(?<segment>.*)", "/api/v1/auth/${segment}"))
                         .uri("lb://user-service"))
                 
                 // Auth Service 라우팅 (인증 필요)
                 .route("user-service-authenticated", r -> r
                         .path("/api/auth/**")
                         .filters(f -> f
-                                .rewritePath("/api/auth/(?<segment>.*)", "/auth/${segment}")
+                                .rewritePath("/api/auth/(?<segment>.*)", "/api/v1/auth/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
                                         .setName("user-service-cb")

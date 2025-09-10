@@ -8,6 +8,7 @@
           <entry key="JWT_ACCESS_TOKEN_VALIDITY" value="18000000" />
           <entry key="JWT_REFRESH_TOKEN_VALIDITY" value="86400000" />
           <entry key="JWT_SECRET" value="nwe5Yo9qaJ6FBD/Thl2/j6/SFAfNwUorAY1ZcWO2KI7uA4bmVLOCPxE9hYuUpRCOkgV2UF2DdHXtqHi3+BU/ecbz2zpHyf/720h48UbA3XOMYOX1sdM+dQ==" />
+          <entry key="KOS_MOCK_URL" value="http://localhost:8084" />
           <entry key="PRODUCT_SERVICE_URL" value="http://localhost:8083" />
           <entry key="SERVER_PORT" value="8080" />
           <entry key="SPRING_PROFILES_ACTIVE" value="dev" />

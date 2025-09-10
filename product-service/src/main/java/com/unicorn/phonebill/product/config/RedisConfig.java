@@ -37,17 +37,9 @@ import java.util.Map;
 public class RedisConfig {
 
     /**
-     * Redis 연결 팩토리 (기본값 사용)
-     */
-    @Bean
-    @Primary
-    public RedisConnectionFactory redisConnectionFactory() {
-        return new LettuceConnectionFactory();
-    }
-
-    /**
      * RedisTemplate 설정
      * String-Object 형태의 데이터 처리
+     * Spring Boot 자동 설정으로 생성된 RedisConnectionFactory를 주입받아 사용
      */
     @Bean
     @Primary

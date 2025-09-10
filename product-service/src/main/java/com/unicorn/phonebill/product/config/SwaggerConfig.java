@@ -50,7 +50,7 @@ public class SwaggerConfig {
         return GroupedOpenApi.builder()
                 .group("product")
                 .displayName("Product Service")
-                .pathsToMatch("/products/**", "/product/**")
+                .pathsToMatch("/api/v1/products/**", "/product/**")
                 .build();
     }
 

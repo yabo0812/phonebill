@@ -35,7 +35,7 @@ import java.time.LocalDate;
  * - 상품변경 이력 조회
  */
 @RestController
-@RequestMapping("/products")
+@RequestMapping("/api/v1/products")
 @Validated
 @Tag(name = "Product Change Service", description = "상품변경 서비스 API")
 @SecurityRequirement(name = "bearerAuth")

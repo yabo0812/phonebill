@@ -32,8 +32,20 @@ public class GatewayConfig {
 
     private final JwtAuthenticationGatewayFilterFactory jwtAuthFilter;
 
-    @Value("${cors.allowed-origins")
+    @Value("${cors.allowed-origins}")
     private String allowedOrigins;
+    
+    @Value("${services.user-service.url}")
+    private String userServiceUrl;
+    
+    @Value("${services.bill-service.url}")
+    private String billServiceUrl;
+    
+    @Value("${services.product-service.url}")
+    private String productServiceUrl;
+    
+    @Value("${services.kos-mock.url}")
+    private String kosMockUrl;
 
     public GatewayConfig(JwtAuthenticationGatewayFilterFactory jwtAuthFilter) {
         this.jwtAuthFilter = jwtAuthFilter;
@@ -53,17 +65,15 @@ public class GatewayConfig {
         return builder.routes()
                 // Auth Service 라우팅 (인증 불필요)
                 .route("user-service-login", r -> r
-                        .path("/api/auth/login", "/api/auth/refresh")
+                        .path("/api/v1/auth/login", "/api/v1/auth/refresh")
                         .and()
                         .method("POST")
-                        .filters(f -> f.rewritePath("/api/auth/(?<segment>.*)", "/api/v1/auth/${segment}"))
-                        .uri("lb://user-service"))
+                        .uri(userServiceUrl))
                 
                 // Auth Service 라우팅 (인증 필요)
                 .route("user-service-authenticated", r -> r
-                        .path("/api/auth/**")
+                        .path("/api/v1/auth/**", "/api/v1/users/**")
                         .filters(f -> f
-                                .rewritePath("/api/auth/(?<segment>.*)", "/api/v1/auth/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
                                         .setName("user-service-cb")
@@ -71,13 +81,12 @@ public class GatewayConfig {
                                 .retry(retry -> retry
                                         .setRetries(3)
                                         .setBackoff(java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10), 2, true)))
-                        .uri("lb://user-service"))
+                        .uri(userServiceUrl))
                 
                 // Bill-Inquiry Service 라우팅 (인증 필요)
                 .route("bill-service", r -> r
-                        .path("/api/bills/**")
+                        .path("/api/v1/bills/**")
                         .filters(f -> f
-                                .rewritePath("/api/bills/(?<segment>.*)", "/api/v1/bills/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
                                         .setName("bill-service-cb")
@@ -86,13 +95,12 @@ public class GatewayConfig {
                                         .setRetries(3)
                                         .setBackoff(java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10), 2, true))
                                 )
-                        .uri("lb://bill-service"))
+                        .uri(billServiceUrl))
                 
                 // Product-Change Service 라우팅 (인증 필요)
                 .route("product-service", r -> r
-                        .path("/api/products/**")
+                        .path("/api/v1/products/**")
                         .filters(f -> f
-                                .rewritePath("/api/products/(?<segment>.*)", "/products/${segment}")
                                 .filter(jwtAuthFilter.apply(new JwtAuthenticationGatewayFilterFactory.Config()))
                                 .circuitBreaker(cb -> cb
                                         .setName("product-service-cb")
@@ -101,13 +109,12 @@ public class GatewayConfig {
                                         .setRetries(3)
                                         .setBackoff(java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10), 2, true))
                                 )
-                        .uri("lb://product-service"))
+                        .uri(productServiceUrl))
                 
                 // KOS Mock Service 라우팅 (인증 불필요 - 목업용)
                 .route("kos-mock-service", r -> r
-                        .path("/api/kos/**")
+                        .path("/api/v1/kos/**")
                         .filters(f -> f
-                                .rewritePath("/api/kos/(?<segment>.*)", "/kos/${segment}")
                                 .circuitBreaker(cb -> cb
                                         .setName("kos-mock-cb")
                                         .setFallbackUri("forward:/fallback/kos"))
@@ -115,7 +122,7 @@ public class GatewayConfig {
                                         .setRetries(2)
                                         .setBackoff(java.time.Duration.ofSeconds(1), java.time.Duration.ofSeconds(5), 2, true))
                         )
-                        .uri("lb://kos-mock"))
+                        .uri(kosMockUrl))
 
                 // 주의: Gateway 자체 엔드포인트는 라우팅하지 않음
                 // Health Check와 Swagger UI는 Spring Boot에서 직접 제공

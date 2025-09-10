@@ -128,16 +128,16 @@ docker login acrdigitalgarage01.azurecr.io -u acrdigitalgarage01 -p {암호}
 SERVER_PORT=8080
 
 docker run -d --name api-gateway --rm -p ${SERVER_PORT}:${SERVER_PORT} \
--e BILL_SERVICE_URL=http://localhost:8082 \
+-e BILL_SERVICE_URL=http://4.230.5.6:8082 \
 -e CORS_ALLOWED_ORIGINS="http://localhost:3000,http://4.230.5.6:3000" \
 -e JWT_ACCESS_TOKEN_VALIDITY=18000000 \
 -e JWT_REFRESH_TOKEN_VALIDITY=86400000 \
 -e JWT_SECRET="nwe5Yo9qaJ6FBD/Thl2/j6/SFAfNwUorAY1ZcWO2KI7uA4bmVLOCPxE9hYuUpRCOkgV2UF2DdHXtqHi3+BU/ecbz2zpHyf/720h48UbA3XOMYOX1sdM+dQ==" \
--e KOS_MOCK_URL=http://localhost:8084 \
--e PRODUCT_SERVICE_URL=http://localhost:8083 \
+-e KOS_MOCK_URL=http://4.230.5.6:8084 \
+-e PRODUCT_SERVICE_URL=http://4.230.5.6:8083 \
 -e SERVER_PORT=${SERVER_PORT} \
 -e SPRING_PROFILES_ACTIVE=dev \
--e USER_SERVICE_URL=http://localhost:8081 \
+-e USER_SERVICE_URL=http://4.230.5.6:8081 \
 acrdigitalgarage01.azurecr.io/phonebill/api-gateway:latest
 ```
 
@@ -146,7 +146,6 @@ acrdigitalgarage01.azurecr.io/phonebill/api-gateway:latest
 SERVER_PORT=8081
 
 docker run -d --name user-service --rm -p ${SERVER_PORT}:${SERVER_PORT} \
--e BILL_INQUIRY_URL=http://localhost:8082 \
 -e CORS_ALLOWED_ORIGINS="http://localhost:3000,http://4.230.5.6:3000" \
 -e DB_HOST=20.249.70.6 \
 -e DB_KIND=postgresql \
@@ -189,7 +188,7 @@ docker run -d --name bill-service --rm -p ${SERVER_PORT}:${SERVER_PORT} \
 -e JWT_ACCESS_TOKEN_VALIDITY=18000000 \
 -e JWT_REFRESH_TOKEN_VALIDITY=86400000 \
 -e JWT_SECRET="nwe5Yo9qaJ6FBD/Thl2/j6/SFAfNwUorAY1ZcWO2KI7uA4bmVLOCPxE9hYuUpRCOkgV2UF2DdHXtqHi3+BU/ecbz2zpHyf/720h48UbA3XOMYOX1sdM+dQ==" \
--e KOS_BASE_URL=http://localhost:8084 \
+-e KOS_BASE_URL=http://4.230.5.6:8084 \
 -e LOG_FILE_NAME=logs/bill-service.log \
 -e REDIS_DATABASE=1 \
 -e REDIS_HOST=20.249.193.103 \
@@ -222,7 +221,7 @@ docker run -d --name product-service --rm -p ${SERVER_PORT}:${SERVER_PORT} \
 -e JWT_REFRESH_TOKEN_VALIDITY=86400000 \
 -e JWT_SECRET="nwe5Yo9qaJ6FBD/Thl2/j6/SFAfNwUorAY1ZcWO2KI7uA4bmVLOCPxE9hYuUpRCOkgV2UF2DdHXtqHi3+BU/ecbz2zpHyf/720h48UbA3XOMYOX1sdM+dQ==" \
 -e KOS_API_KEY=dev-api-key \
--e KOS_BASE_URL=http://localhost:8084 \
+-e KOS_BASE_URL=http://4.230.5.6:8084 \
 -e KOS_CLIENT_ID=product-service-dev \
 -e KOS_MOCK_ENABLED=true \
 -e REDIS_DATABASE=2 \

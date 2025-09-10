@@ -116,8 +116,6 @@ configure(subprojects.findAll { it.name == 'api-gateway' }) {
         implementation "io.jsonwebtoken:jjwt-impl:${jjwtVersion}"
         implementation "io.jsonwebtoken:jjwt-jackson:${jjwtVersion}"
         
-        // API Documentation for WebFlux
-        implementation "org.springdoc:springdoc-openapi-starter-webflux-ui:${springdocVersion}"
         
         // Testing (WebFlux specific)
         testImplementation 'org.springframework.boot:spring-boot-starter-test'

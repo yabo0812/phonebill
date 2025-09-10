@@ -166,40 +166,6 @@ logging:
     file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
     console: "%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan([%X{traceId:-},%X{spanId:-}]) %logger{36} - %msg%n"
 
-# OpenAPI 설정
-springdoc:
-  api-docs:
-    enabled: true
-    path: /v3/api-docs
-  swagger-ui:
-    enabled: true
-    path: /swagger-ui.html
-    disable-swagger-default-url: true
-    # HTTP 431 오류 방지를 위한 설정
-    config-url: /v3/api-docs/swagger-config
-    use-root-path: true
-    # 큰 헤더 처리를 위한 설정
-    csrf:
-      enabled: false
-    # 서비스별 URL 등록 (Gateway 통합 순서)
-    urls:
-      - name: "📱 User Service (인증)"
-        url: "/v3/api-docs/user"
-        display-name: "User Service API"
-      - name: "💰 Bill Service (요금조회)"
-        url: "/v3/api-docs/bill"
-        display-name: "Bill Inquiry API"
-      - name: "📦 Product Service (상품변경)"
-        url: "/v3/api-docs/product"
-        display-name: "Product Change API"
-      - name: "🔧 KOS Mock Service (외부연동)"
-        url: "/v3/api-docs/kos"
-        display-name: "KOS Mock API"
-      - name: "🌐 Gateway API (게이트웨이)"
-        url: "/v3/api-docs/gateway"
-        display-name: "API Gateway"
-  use-management-port: false
-  show-actuator: false
 
 # 애플리케이션 정보
 info:

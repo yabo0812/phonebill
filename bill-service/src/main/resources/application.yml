@@ -84,49 +84,22 @@ server:
     include-stacktrace: on_param
     include-exception: false
 
-# 액추에이터 설정 (모니터링)
+# Actuator
 management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,prometheus,env,beans
+        include: health,info,metrics,prometheus
       base-path: /actuator
-      path-mapping:
-        health: health
-    enabled-by-default: false
   endpoint:
     health:
-      enabled: true
       show-details: always
       show-components: always
-      probes:
-        enabled: true
-    info:
-      enabled: true
-    metrics:
-      enabled: true
-    prometheus:
-      enabled: true
   health:
-    redis:
+    livenessState:
       enabled: true
-    db:
+    readinessState:
       enabled: true
-    diskspace:
-      enabled: true
-    ping:
-      enabled: true
-  metrics:
-    export:
-      prometheus:
-        enabled: true
-    distribution:
-      percentiles-histogram:
-        http.server.requests: true
-      percentiles:
-        http.server.requests: 0.5, 0.95, 0.99
-      sla:
-        http.server.requests: 100ms, 300ms, 500ms
 
 # KOS 시스템 연동 설정
 kos:

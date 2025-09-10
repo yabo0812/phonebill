@@ -76,9 +76,7 @@ public class SecurityConfig {
             .authorizeHttpRequests(authz -> authz
                 // Public endpoints (인증 불필요)
                 .requestMatchers(
-                    "/actuator/health",
-                    "/actuator/info",
-                    "/actuator/prometheus",
+                    "/actuator/**",
                     "/v3/api-docs/**",
                     "/api-docs/**",
                     "/swagger-ui/**",

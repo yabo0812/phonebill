@@ -3,7 +3,6 @@
     <ExternalSystemSettings>
       <option name="env">
         <map>
-          <entry key="AUTH_SERVICE_URL" value="http://localhost:8081" />
           <entry key="BILL_SERVICE_URL" value="http://localhost:8082" />
           <entry key="CORS_ALLOWED_ORIGINS" value="http://localhost:3000" />
           <entry key="JWT_ACCESS_TOKEN_VALIDITY" value="18000000" />
@@ -12,6 +11,7 @@
           <entry key="PRODUCT_SERVICE_URL" value="http://localhost:8083" />
           <entry key="SERVER_PORT" value="8080" />
           <entry key="SPRING_PROFILES_ACTIVE" value="dev" />
+          <entry key="USER_SERVICE_URL" value="http://localhost:8081" />
         </map>
       </option>
       <option name="executionName" />

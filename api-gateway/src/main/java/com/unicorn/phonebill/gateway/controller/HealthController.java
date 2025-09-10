@@ -1,16 +1,17 @@
 package com.unicorn.phonebill.gateway.controller;
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.redis.core.ReactiveRedisTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * API Gateway 헬스체크 컨트롤러
@@ -19,9 +20,10 @@ import java.util.Map;
  * 
  * 주요 기능:
  * - Gateway 자체 상태 확인
- * - Redis 연결 상태 확인
  * - 각 마이크로서비스 연결 상태 확인
  * - 전체 시스템 상태 요약
+ * 
+ * Note: Redis는 API Gateway에서 사용하지 않으므로 Redis health check 제거
  * 
  * @author 이개발(백엔더)
  * @version 1.0.0
@@ -30,11 +32,21 @@ import java.util.Map;
 @RestController
 public class HealthController {
 
-    private final ReactiveRedisTemplate<String, Object> redisTemplate;
+    private final WebClient webClient;
+    
+    @Value("${services.auth-service.url:http://localhost:8081}")
+    private String authServiceUrl;
+    
+    @Value("${services.bill-service.url:http://localhost:8082}")
+    private String billServiceUrl;
+    
+    @Value("${services.product-service.url:http://localhost:8083}")
+    private String productServiceUrl;
 
-    @Autowired
-    public HealthController(ReactiveRedisTemplate<String, Object> redisTemplate) {
-        this.redisTemplate = redisTemplate;
+    public HealthController() {
+        this.webClient = WebClient.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024)) // 1MB
+                .build();
     }
 
     /**
@@ -71,16 +83,13 @@ public class HealthController {
     public Mono<ResponseEntity<Map<String, Object>>> detailedHealth() {
         return Mono.zip(
                 checkGatewayHealth(),
-                checkRedisHealth(),
                 checkDownstreamServices()
         ).map(tuple -> {
             Map<String, Object> gatewayHealth = tuple.getT1();
-            Map<String, Object> redisHealth = tuple.getT2();
-            Map<String, Object> servicesHealth = tuple.getT3();
+            Map<String, Object> servicesHealth = tuple.getT2();
             
             boolean allHealthy = 
                 "UP".equals(gatewayHealth.get("status")) &&
-                "UP".equals(redisHealth.get("status")) &&
                 "UP".equals(servicesHealth.get("status"));
             
             Map<String, Object> response = Map.of(
@@ -88,7 +97,6 @@ public class HealthController {
                 "timestamp", Instant.now().toString(),
                 "components", Map.of(
                     "gateway", gatewayHealth,
-                    "redis", redisHealth,
                     "services", servicesHealth
                 )
             );
@@ -126,24 +134,17 @@ public class HealthController {
      * @return 시스템 상태
      */
     private Mono<Map<String, Object>> checkSystemHealth() {
-        return Mono.zip(
-                checkGatewayHealth(),
-                checkRedisHealth()
-        ).map(tuple -> {
-            Map<String, Object> gatewayHealth = tuple.getT1();
-            Map<String, Object> redisHealth = tuple.getT2();
-            
-            boolean allHealthy = 
-                "UP".equals(gatewayHealth.get("status")) &&
-                "UP".equals(redisHealth.get("status"));
-            
-            return Map.<String, Object>of(
-                "status", allHealthy ? "UP" : "DOWN",
-                "timestamp", Instant.now().toString(),
-                "version", "1.0.0",
-                "uptime", getUptime()
-            );
-        });
+        return checkGatewayHealth()
+                .map(gatewayHealth -> {
+                    boolean allHealthy = "UP".equals(gatewayHealth.get("status"));
+                    
+                    return Map.<String, Object>of(
+                        "status", allHealthy ? "UP" : "DOWN",
+                        "timestamp", Instant.now().toString(),
+                        "version", "1.0.0",
+                        "uptime", getUptime()
+                    );
+                });
     }
 
     /**
@@ -173,27 +174,6 @@ public class HealthController {
         });
     }
 
-    /**
-     * Redis 연결 상태 점검
-     * 
-     * @return Redis 상태
-     */
-    private Mono<Map<String, Object>> checkRedisHealth() {
-        return redisTemplate.hasKey("health:check")
-                .timeout(Duration.ofSeconds(3))
-                .map(result -> Map.<String, Object>of(
-                    "status", "UP",
-                    "connection", "OK",
-                    "response_time", "< 3s",
-                    "timestamp", Instant.now().toString()
-                ))
-                .onErrorReturn(Map.<String, Object>of(
-                    "status", "DOWN",
-                    "connection", "FAILED",
-                    "error", "Connection timeout or error",
-                    "timestamp", Instant.now().toString()
-                ));
-    }
 
     /**
      * 다운스트림 서비스 상태 점검
@@ -201,19 +181,88 @@ public class HealthController {
      * @return 서비스 상태
      */
     private Mono<Map<String, Object>> checkDownstreamServices() {
-        // 실제 구현에서는 Circuit Breaker 상태를 확인하거나
-        // 각 서비스에 대한 간단한 health check를 수행할 수 있습니다.
-        return Mono.fromCallable(() -> Map.<String, Object>of(
-            "status", "UP",
-            "services", Map.<String, Object>of(
-                "auth-service", "UNKNOWN",
-                "bill-service", "UNKNOWN", 
-                "product-service", "UNKNOWN",
-                "kos-mock-service", "UNKNOWN"
-            ),
-            "note", "Service health checks not implemented yet",
-            "timestamp", Instant.now().toString()
-        ));
+        // 모든 서비스의 health check를 병렬로 수행
+        Mono<Map<String, Object>> authCheck = checkServiceHealth("auth-service", authServiceUrl);
+        Mono<Map<String, Object>> billCheck = checkServiceHealth("bill-service", billServiceUrl);
+        Mono<Map<String, Object>> productCheck = checkServiceHealth("product-service", productServiceUrl);
+        
+        return Mono.zip(authCheck, billCheck, productCheck)
+                .map(tuple -> {
+                    Map<String, Object> authResult = tuple.getT1();
+                    Map<String, Object> billResult = tuple.getT2();
+                    Map<String, Object> productResult = tuple.getT3();
+                    
+                    // 전체 서비스 상태 계산
+                    boolean anyServiceDown = 
+                        "DOWN".equals(authResult.get("status")) ||
+                        "DOWN".equals(billResult.get("status")) ||
+                        "DOWN".equals(productResult.get("status"));
+                    
+                    Map<String, Object> services = new ConcurrentHashMap<>();
+                    services.put("auth-service", authResult);
+                    services.put("bill-service", billResult);
+                    services.put("product-service", productResult);
+                    
+                    return Map.<String, Object>of(
+                        "status", anyServiceDown ? "DEGRADED" : "UP",
+                        "services", services,
+                        "timestamp", Instant.now().toString(),
+                        "summary", String.format("Total services: 3, Up: %d, Down: %d", 
+                            countServicesByStatus(services, "UP"),
+                            countServicesByStatus(services, "DOWN"))
+                    );
+                })
+                .onErrorReturn(Map.of(
+                    "status", "DOWN",
+                    "error", "Failed to check downstream services",
+                    "timestamp", Instant.now().toString()
+                ));
+    }
+
+    /**
+     * 개별 서비스 health check
+     * 
+     * @param serviceName 서비스 이름
+     * @param serviceUrl 서비스 URL
+     * @return 서비스 상태
+     */
+    private Mono<Map<String, Object>> checkServiceHealth(String serviceName, String serviceUrl) {
+        return webClient.get()
+                .uri(serviceUrl + "/actuator/health")
+                .retrieve()
+                .bodyToMono(Map.class)
+                .timeout(Duration.ofSeconds(3))
+                .map(response -> {
+                    String status = (String) response.getOrDefault("status", "UNKNOWN");
+                    return Map.<String, Object>of(
+                        "status", "UP".equals(status) ? "UP" : "DOWN",
+                        "url", serviceUrl,
+                        "response_time", "< 3s",
+                        "details", response,
+                        "timestamp", Instant.now().toString()
+                    );
+                })
+                .onErrorReturn(Map.of(
+                    "status", "DOWN",
+                    "url", serviceUrl,
+                    "error", "Connection failed or timeout",
+                    "timestamp", Instant.now().toString()
+                ));
+    }
+
+    /**
+     * 서비스 상태별 개수 계산
+     * 
+     * @param services 서비스 맵
+     * @param status 확인할 상태
+     * @return 해당 상태의 서비스 개수
+     */
+    private long countServicesByStatus(Map<String, Object> services, String status) {
+        return services.values().stream()
+                .filter(service -> service instanceof Map)
+                .map(service -> (Map<String, Object>) service)
+                .filter(service -> status.equals(service.get("status")))
+                .count();
     }
 
     /**

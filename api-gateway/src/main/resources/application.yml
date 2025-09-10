@@ -8,6 +8,9 @@ server:
     idle-timeout: ${SERVER_NETTY_IDLE_TIMEOUT:60s}
   http2:
     enabled: true
+  # HTTP 헤더 크기 제한 설정
+  max-http-header-size: 64KB
+  max-http-request-header-size: 64KB
 
 spring:
   application:
@@ -19,6 +22,14 @@ spring:
   # Spring Cloud Gateway 설정
   cloud:
     gateway:
+      # HTTP 관련 설정
+      httpclient:
+        pool:
+          max-connections: 1000
+          max-idle-time: 30s
+        response-timeout: 60s
+        connect-timeout: 5000
+      
       default-filters:
         - name: AddRequestHeader
           args:
@@ -50,7 +61,6 @@ spring:
         locator:
           enabled: false
 
-
   # JSON 설정
   jackson:
     default-property-inclusion: non_null
@@ -66,19 +76,19 @@ cors:
 # JWT 토큰 설정
 jwt:
   secret: ${JWT_SECRET:}
-  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:1800}
-  refresh-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:86400}
+  access-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:180000}
+  refresh-token-validity: ${JWT_ACCESS_TOKEN_VALIDITY:86400000}
 
 # 서비스 URL 설정
 services:
-  auth-service:
-    url: ${AUTH_SERVICE_URL:http://localhost:8081}
+  user-service:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
   bill-service:
     url: ${BILL_SERVICE_URL:http://localhost:8082}
   product-service:
     url: ${PRODUCT_SERVICE_URL:http://localhost:8083}
-  kos-mock-service:
-    url: ${KOS_MOCK_SERVICE_URL:http://localhost:8084}
+  kos-mock:
+    url: ${KOS_MOCK_URL:http://localhost:8084}
 
 # Circuit Breaker 설정
 resilience4j:
@@ -132,7 +142,7 @@ management:
       enabled: true
   health:
     redis:
-      enabled: true
+      enabled: false
     circuitbreakers:
       enabled: true
   info:
@@ -164,13 +174,27 @@ springdoc:
   swagger-ui:
     enabled: true
     path: /swagger-ui.html
+    disable-swagger-default-url: true
+    # HTTP 431 오류 방지를 위한 설정
+    config-url: /v3/api-docs/swagger-config
+    use-root-path: true
+    # 큰 헤더 처리를 위한 설정
+    csrf:
+      enabled: false
+    # 서비스별 URL 등록
     urls:
-      - name: Auth Service
-        url: /v3/api-docs/auth
-      - name: Bill Service  
-        url: /v3/api-docs/bills
-      - name: Product Service
-        url: /v3/api-docs/products
+      - name: "Gateway API"
+        url: "/v3/api-docs/gateway"
+      - name: "User Service"
+        url: "/v3/api-docs/user"
+      - name: "Bill Service"
+        url: "/v3/api-docs/bill"
+      - name: "Product Service"
+        url: "/v3/api-docs/product"
+      - name: "KOS Mock Service"
+        url: "/v3/api-docs/kos"
+  use-management-port: false
+  show-actuator: false
 
 # 애플리케이션 정보
 info:

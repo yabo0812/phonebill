@@ -8,11 +8,19 @@ ext {
 }
 
 dependencies {
-    // Common module dependency
-    implementation project(':common')
+    // Common module dependency (exclude WebMVC, Security, and non-reactive Redis for WebFlux)
+    implementation(project(':common')) {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-web'
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-security'
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-data-jpa'
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-data-redis'
+    }
     
     // Spring Cloud Gateway (api-gateway specific)
     implementation 'org.springframework.cloud:spring-cloud-starter-gateway'
+    
+    // Redis for health checks and caching
+    implementation 'org.springframework.boot:spring-boot-starter-data-redis-reactive'
     
     // Circuit Breaker (api-gateway specific)
     implementation 'org.springframework.cloud:spring-cloud-starter-circuitbreaker-reactor-resilience4j'

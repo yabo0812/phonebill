@@ -1,3 +1,9 @@
+server:
+  port: ${SERVER_PORT:8081}
+  # HTTP 헤더 크기 제한 설정
+  max-http-header-size: 64KB
+  max-http-request-header-size: 64KB
+
 spring:
   application:
     name: user-service
@@ -54,10 +60,6 @@ spring:
     redis:
       time-to-live: 1800000 # 30분
       cache-null-values: false
-      
-# 서버 설정
-server:
-  port: ${SERVER_PORT:8081}
 
 # CORS
 cors:

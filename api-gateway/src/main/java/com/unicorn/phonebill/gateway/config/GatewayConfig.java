@@ -100,28 +100,9 @@ public class GatewayConfig {
                                         .setBackoff(java.time.Duration.ofSeconds(2), java.time.Duration.ofSeconds(10), 2, true))
                                 )
                         .uri("lb://product-service"))
-                
-                // KOS Mock Service 라우팅 (내부 서비스용)
-                .route("kos-mock-service", r -> r
-                        .path("/kos/**")
-                        .filters(f -> f
-                                .circuitBreaker(cb -> cb
-                                        .setName("kos-mock-cb")
-                                        .setFallbackUri("forward:/fallback/kos"))
-                                .retry(retry -> retry
-                                        .setRetries(5)
-                                        .setBackoff(java.time.Duration.ofSeconds(1), java.time.Duration.ofSeconds(5), 2, true)))
-                        .uri("lb://kos-mock-service"))
-                
-                // Health Check 라우팅 (인증 불필요)
-                .route("health-check", r -> r
-                        .path("/health", "/actuator/health")
-                        .uri("http://localhost:8080"))
-                
-                // Swagger UI 라우팅 (개발환경에서만 사용)
-                .route("swagger-ui", r -> r
-                        .path("/swagger-ui/**", "/v3/api-docs/**")
-                        .uri("http://localhost:8080"))
+
+                // 주의: Gateway 자체 엔드포인트는 라우팅하지 않음
+                // Health Check와 Swagger UI는 Spring Boot에서 직접 제공
                 
                 .build();
     }

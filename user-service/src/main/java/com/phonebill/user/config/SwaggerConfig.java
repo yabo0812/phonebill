@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -39,9 +40,18 @@ public class SwaggerConfig {
                                 .addServerVariable("port", new io.swagger.v3.oas.models.servers.ServerVariable()
                                         ._default("8081")
                                         .description("Server port"))))
-                .addSecurityItem(new SecurityRequirement().addList("Bearer Authentication"))
+                .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .components(new Components()
-                        .addSecuritySchemes("Bearer Authentication", createAPIKeyScheme()));
+                        .addSecuritySchemes("bearerAuth", createAPIKeyScheme()));
+    }
+
+    @Bean
+    public GroupedOpenApi userApi() {
+        return GroupedOpenApi.builder()
+                .group("user")
+                .displayName("User Service")
+                .pathsToMatch("/api/v1/auth/**", "/api/v1/users/**")
+                .build();
     }
 
     private Info apiInfo() {

@@ -7,6 +7,7 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.security.SecurityRequirement;
 import io.swagger.v3.oas.models.security.SecurityScheme;
 import io.swagger.v3.oas.models.servers.Server;
+import org.springdoc.core.models.GroupedOpenApi;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -42,6 +43,15 @@ public class SwaggerConfig {
                 .addSecurityItem(new SecurityRequirement().addList("bearerAuth"))
                 .components(new Components()
                         .addSecuritySchemes("bearerAuth", createAPIKeyScheme()));
+    }
+
+    @Bean
+    public GroupedOpenApi productApi() {
+        return GroupedOpenApi.builder()
+                .group("product")
+                .displayName("Product Service")
+                .pathsToMatch("/products/**", "/product/**")
+                .build();
     }
 
     private Info apiInfo() {

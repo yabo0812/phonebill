@@ -54,6 +54,9 @@ spring:
 # Server 개발 설정
 server:
   port: ${SERVER_PORT:8083}
+  # HTTP 헤더 크기 제한 설정
+  max-http-header-size: 64KB
+  max-http-request-header-size: 64KB
   error:
     include-stacktrace: always
     include-message: always
@@ -117,7 +120,7 @@ management:
 springdoc:
   api-docs:
     enabled: true
-    path: /api-docs
+    path: /v3/api-docs
   swagger-ui:
     enabled: true
     path: /swagger-ui.html

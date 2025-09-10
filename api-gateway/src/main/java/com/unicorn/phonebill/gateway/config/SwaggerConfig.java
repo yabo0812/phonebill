@@ -7,13 +7,13 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.web.reactive.function.server.RouterFunction;
 import org.springframework.web.reactive.function.server.RouterFunctions;
 import org.springframework.web.reactive.function.server.ServerResponse;
+import org.springframework.web.reactive.function.client.WebClient;
 import org.springdoc.core.models.GroupedOpenApi;
 import org.springdoc.core.properties.SwaggerUiConfigParameters;
 import reactor.core.publisher.Mono;
+import org.springframework.http.HttpStatus;
 
 import java.net.URI;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * Swagger 통합 문서화 설정
@@ -34,9 +34,9 @@ import java.util.List;
 @Configuration
 @Profile("!prod") // 운영환경에서는 비활성화
 public class SwaggerConfig {
-
-    @Value("${services.auth-service.url:http://localhost:8081}")
-    private String authServiceUrl;
+    
+    @Value("${services.user-service.url:http://localhost:8081}")
+    private String userServiceUrl;
     
     @Value("${services.bill-service.url:http://localhost:8082}")
     private String billServiceUrl;
@@ -44,33 +44,29 @@ public class SwaggerConfig {
     @Value("${services.product-service.url:http://localhost:8083}")
     private String productServiceUrl;
     
-    @Value("${services.kos-mock-service.url:http://localhost:8084}")
-    private String kosMockServiceUrl;
+    @Value("${services.kos-mock.url:http://localhost:8084}")
+    private String kosMockUrl;
+    
+    private final WebClient webClient;
+    
+    public SwaggerConfig() {
+        this.webClient = WebClient.builder()
+                .codecs(configurer -> configurer.defaultCodecs().maxInMemorySize(1024 * 1024))
+                .build();
+    }
 
     /**
      * Swagger UI 설정 파라미터
+     * 
+     * SpringDoc WebFlux에서는 기본 설정을 사용하고 필요시 커스터마이징합니다.
      * 
      * @return SwaggerUiConfigParameters
      */
     @Bean
     public SwaggerUiConfigParameters swaggerUiConfigParameters() {
-        // Spring Boot 3.x에서는 SwaggerUiConfigParameters 생성자가 변경됨
-        SwaggerUiConfigParameters parameters = new SwaggerUiConfigParameters(
+        return new SwaggerUiConfigParameters(
             new org.springdoc.core.properties.SwaggerUiConfigProperties()
         );
-        
-        // 각 마이크로서비스의 OpenAPI 문서 URL 설정
-        List<String> urls = new ArrayList<>();
-        urls.add("Gateway::/v3/api-docs");
-        urls.add("Auth Service::" + authServiceUrl + "/v3/api-docs");
-        urls.add("Bill Service::" + billServiceUrl + "/v3/api-docs");
-        urls.add("Product Service::" + productServiceUrl + "/v3/api-docs");
-        urls.add("KOS Mock::" + kosMockServiceUrl + "/v3/api-docs");
-        
-        // Spring Boot 3.x 호환성을 위한 설정
-        System.setProperty("springdoc.swagger-ui.urls", String.join(",", urls));
-        
-        return parameters;
     }
 
     /**
@@ -131,19 +127,25 @@ public class SwaggerConfig {
                 .GET("/api-docs", request -> 
                     ServerResponse.temporaryRedirect(URI.create("/swagger-ui.html")).build())
                 
-                // 서비스별 API 문서 프록시
-                .GET("/v3/api-docs/auth", request -> 
-                    proxyApiDocs(authServiceUrl + "/v3/api-docs"))
+                // Gateway API 문서 직접 제공
+                .GET("/v3/api-docs/gateway", request -> 
+                    ServerResponse.ok()
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .bodyValue(getGatewayApiDoc()))
                 
-                .GET("/v3/api-docs/bills", request -> 
+                // 서비스별 API 문서 프록시
+                .GET("/v3/api-docs/user", request -> 
+                    proxyApiDocs(userServiceUrl + "/v3/api-docs"))
+                
+                .GET("/v3/api-docs/bill", request -> 
                     proxyApiDocs(billServiceUrl + "/v3/api-docs"))
                 
-                .GET("/v3/api-docs/products", request -> 
+                .GET("/v3/api-docs/product", request -> 
                     proxyApiDocs(productServiceUrl + "/v3/api-docs"))
                 
                 .GET("/v3/api-docs/kos", request -> 
-                    proxyApiDocs(kosMockServiceUrl + "/v3/api-docs"))
-                
+                    proxyApiDocs(kosMockUrl + "/v3/api-docs"))
+
                 .build();
     }
 
@@ -156,30 +158,117 @@ public class SwaggerConfig {
      * @return ServerResponse
      */
     private Mono<ServerResponse> proxyApiDocs(String apiDocsUrl) {
-        // 실제 구현에서는 WebClient를 사용하여 마이크로서비스의 API 문서를 가져와야 합니다.
-        // 현재는 임시로 빈 문서를 반환합니다.
-        return ServerResponse.ok()
-                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
-                .bodyValue("{\n" +
-                          "  \"openapi\": \"3.0.1\",\n" +
-                          "  \"info\": {\n" +
-                          "    \"title\": \"Service API\",\n" +
-                          "    \"version\": \"1.0.0\",\n" +
-                          "    \"description\": \"마이크로서비스 API 문서\\n\\n" +
-                          "실제 서비스가 시작되면 상세한 API 문서가 표시됩니다.\"\n" +
-                          "  },\n" +
-                          "  \"paths\": {\n" +
-                          "    \"/status\": {\n" +
-                          "      \"get\": {\n" +
-                          "        \"summary\": \"서비스 상태 확인\",\n" +
-                          "        \"responses\": {\n" +
-                          "          \"200\": {\n" +
-                          "            \"description\": \"서비스 정상\"\n" +
-                          "          }\n" +
-                          "        }\n" +
-                          "      }\n" +
-                          "    }\n" +
-                          "  }\n" +
-                          "}");
+        return webClient.get()
+                .uri(apiDocsUrl)
+                .retrieve()
+                .onStatus(status -> status.isError(), clientResponse -> 
+                    Mono.error(new RuntimeException("Service unavailable")))
+                .bodyToMono(String.class)
+                .onErrorReturn(getDefaultApiDoc(apiDocsUrl))
+                .flatMap(body -> 
+                    ServerResponse.ok()
+                        .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                        .bodyValue(body)
+                );
+    }
+    
+    /**
+     * Gateway API 문서 생성
+     * 
+     * Gateway 자체의 OpenAPI 문서를 생성합니다.
+     * 
+     * @return Gateway API 문서 JSON
+     */
+    private String getGatewayApiDoc() {
+        return "{\n" +
+                "  \"openapi\": \"3.0.1\",\n" +
+                "  \"info\": {\n" +
+                "    \"title\": \"PhoneBill API Gateway\",\n" +
+                "    \"version\": \"1.0.0\",\n" +
+                "    \"description\": \"통신요금 관리 서비스 API Gateway\\n\\n" +
+                "이 문서는 API Gateway의 헬스체크 및 관리 기능을 설명합니다.\"\n" +
+                "  },\n" +
+                "  \"paths\": {\n" +
+                "    \"/health\": {\n" +
+                "      \"get\": {\n" +
+                "        \"summary\": \"헬스 체크\",\n" +
+                "        \"description\": \"API Gateway 서비스 상태를 확인합니다.\",\n" +
+                "        \"responses\": {\n" +
+                "          \"200\": {\n" +
+                "            \"description\": \"서비스 정상\",\n" +
+                "            \"content\": {\n" +
+                "              \"application/json\": {\n" +
+                "                \"schema\": {\n" +
+                "                  \"type\": \"object\",\n" +
+                "                  \"properties\": {\n" +
+                "                    \"status\": { \"type\": \"string\" }\n" +
+                "                  }\n" +
+                "                }\n" +
+                "              }\n" +
+                "            }\n" +
+                "          }\n" +
+                "        }\n" +
+                "      }\n" +
+                "    },\n" +
+                "    \"/actuator/health\": {\n" +
+                "      \"get\": {\n" +
+                "        \"summary\": \"Actuator 헬스 체크\",\n" +
+                "        \"description\": \"Spring Boot Actuator 헬스 체크 엔드포인트\",\n" +
+                "        \"responses\": {\n" +
+                "          \"200\": {\n" +
+                "            \"description\": \"헬스 체크 결과\"\n" +
+                "          }\n" +
+                "        }\n" +
+                "      }\n" +
+                "    }\n" +
+                "  },\n" +
+                "  \"components\": {\n" +
+                "    \"securitySchemes\": {\n" +
+                "      \"bearerAuth\": {\n" +
+                "        \"type\": \"http\",\n" +
+                "        \"scheme\": \"bearer\",\n" +
+                "        \"bearerFormat\": \"JWT\",\n" +
+                "        \"description\": \"JWT 토큰을 Authorization 헤더에 포함시켜 주세요.\\nFormat: Authorization: Bearer {token}\"\n" +
+                "      }\n" +
+                "    }\n" +
+                "  }\n" +
+                "}";
+    }
+    
+    /**
+     * 기본 API 문서 생성
+     * 
+     * 서비스에 접근할 수 없을 때 반환할 기본 문서를 생성합니다.
+     * 
+     * @param apiDocsUrl API 문서 URL
+     * @return 기본 API 문서 JSON
+     */
+    private String getDefaultApiDoc(String apiDocsUrl) {
+        String serviceName = extractServiceName(apiDocsUrl);
+        return "{\n" +
+                "  \"openapi\": \"3.0.1\",\n" +
+                "  \"info\": {\n" +
+                "    \"title\": \"" + serviceName + " API\",\n" +
+                "    \"version\": \"1.0.0\",\n" +
+                "    \"description\": \"" + serviceName + " 마이크로서비스 API 문서\\n\\n" +
+                "서비스가 시작되지 않았거나 연결할 수 없습니다.\"\n" +
+                "  },\n" +
+                "  \"paths\": {},\n" +
+                "  \"components\": {}\n" +
+                "}";
+    }
+    
+    /**
+     * URL에서 서비스명 추출
+     * 
+     * @param apiDocsUrl API 문서 URL
+     * @return 서비스명
+     */
+    private String extractServiceName(String apiDocsUrl) {
+        if (apiDocsUrl.contains("8081")) return "User Service";
+        if (apiDocsUrl.contains("8082")) return "Bill Service";
+        if (apiDocsUrl.contains("8083")) return "Product Service";
+        if (apiDocsUrl.contains("8084")) return "KOS Mock Service";
+        return "Unknown Service";
     }
 }

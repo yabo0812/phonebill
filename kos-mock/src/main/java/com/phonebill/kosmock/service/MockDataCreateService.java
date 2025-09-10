@@ -60,7 +60,7 @@ public class MockDataCreateService {
         CustomerEntity customer = createCustomer(request, selectedProduct);
         customerRepository.save(customer);
         
-        // 4. 요금 정보 생성 (최근 3개월)
+        // 4. 요금 정보 생성 (최근 6개월)
         List<BillEntity> bills = createBills(customer, selectedProduct);
         billRepository.saveAll(bills);
         
@@ -115,13 +115,13 @@ public class MockDataCreateService {
     }
     
     /**
-     * 요금 정보 생성 (최근 3개월)
+     * 요금 정보 생성 (최근 6개월)
      */
     private List<BillEntity> createBills(CustomerEntity customer, ProductEntity product) {
         List<BillEntity> bills = new ArrayList<>();
         Random random = new Random();
         
-        for (int month = 0; month < 3; month++) {
+        for (int month = 0; month < 6; month++) {
             LocalDateTime billDate = LocalDateTime.now().minusMonths(month);
             String billingMonth = billDate.format(DateTimeFormatter.ofPattern("yyyyMM"));
             
@@ -241,7 +241,7 @@ public class MockDataCreateService {
             return null;
         }
         
-        // 최근 3개월 요금 정보 조회
+        // 최근 6개월 요금 정보 조회
         List<BillEntity> bills = billRepository.findByLineNumberOrderByBillingMonthDesc(lineNumber);
         
         if (bills.isEmpty()) {

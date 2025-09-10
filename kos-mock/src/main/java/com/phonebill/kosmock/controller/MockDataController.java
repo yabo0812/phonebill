@@ -21,7 +21,7 @@ import org.springframework.web.bind.annotation.*;
  * Mock 데이터 생성 및 조회 API 컨트롤러
  */
 @RestController
-@RequestMapping("/api/v1/mock-datas")
+@RequestMapping("/api/v1/kos/mock-datas")
 @RequiredArgsConstructor
 @Tag(name = "Mock Data Management", description = "Mock 데이터 생성, 조회 및 관리 API")
 public class MockDataController {

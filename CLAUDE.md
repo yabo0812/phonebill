@@ -524,6 +524,13 @@ QA Engineer
 - **DB 연결정보**: 각 서비스별 별도 DB 사용 (auth, bill_inquiry, product_change)
 - **Redis 공유**: 모든 서비스가 동일한 Redis 인스턴스 사용
 
+## CORS 중복 헤더 방지
+- **문제**: API Gateway + 백엔드 서비스에서 동시에 CORS 헤더 추가 시 브라우저 에러 발생
+- **원인**: 동일한 CORS 헤더(Access-Control-Allow-Origin 등)가 중복되면 브라우저가 거부
+- **해결책**: GlobalFilter + ServerHttpResponseDecorator 사용하여 백엔드 CORS 헤더 제거
+- **구현**: `new HttpHeaders()` → `originalHeaders.forEach()` → CORS 헤더만 제외하고 복사
+- **주의사항**: ReadOnlyHttpHeaders 직접 수정 불가, ResponseDecorator로 감싸서 처리 필요
+
 ## 쿠버네티스 DB 접근 방법
 - **패스워드 확인**: `kubectl get secret -n {namespace} {secret-name} -o jsonpath='{.data.postgres-password}' | base64 -d`
 - **환경변수 확인**: `kubectl exec -n {namespace} {pod-name} -c postgresql -- env | grep POSTGRES`

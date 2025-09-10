@@ -70,14 +70,23 @@ public class ProductController {
     public ResponseEntity<CustomerInfoResponse> getCustomerInfo(
             @Parameter(description = "고객 회선번호", example = "01012345678")
             @RequestParam("lineNumber")
-            @Pattern(regexp = "^010[0-9]{8}$", message = "회선번호는 010으로 시작하는 11자리 숫자여야 합니다")
             String lineNumber) {
         
         String userId = getCurrentUserId();
-        logger.info("고객 정보 조회 요청: lineNumber={}, userId={}", lineNumber, userId);
+        
+        // 회선번호에서 대시 제거
+        String normalizedLineNumber = lineNumber.replaceAll("-", "");
+        
+        // 정규화된 회선번호 유효성 검증
+        if (!normalizedLineNumber.matches("^010[0-9]{8}$")) {
+            throw new IllegalArgumentException("회선번호는 010으로 시작하는 11자리 숫자여야 합니다");
+        }
+        
+        logger.info("고객 정보 조회 요청: lineNumber={} (original: {}), userId={}", 
+                   normalizedLineNumber, lineNumber, userId);
 
         try {
-            CustomerInfoResponse response = productService.getCustomerInfo(lineNumber);
+            CustomerInfoResponse response = productService.getCustomerInfo(normalizedLineNumber);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("고객 정보 조회 실패: lineNumber={}, userId={}", lineNumber, userId, e);
@@ -204,7 +213,6 @@ public class ProductController {
     public ResponseEntity<ProductChangeHistoryResponse> getProductChangeHistory(
             @Parameter(description = "회선번호 (미입력시 로그인 고객 기준)")
             @RequestParam(required = false) 
-            @Pattern(regexp = "^010[0-9]{8}$", message = "회선번호는 010으로 시작하는 11자리 숫자여야 합니다")
             String lineNumber,
             @Parameter(description = "조회 시작일 (YYYY-MM-DD)")
             @RequestParam(required = false) String startDate,
@@ -216,8 +224,20 @@ public class ProductController {
             @RequestParam(defaultValue = "10") int size) {
         
         String userId = getCurrentUserId();
-        logger.info("상품변경 이력 조회 요청: lineNumber={}, startDate={}, endDate={}, page={}, size={}, userId={}", 
-                   lineNumber, startDate, endDate, page, size, userId);
+        
+        // 회선번호 정규화 (입력된 경우에만)
+        String normalizedLineNumber = null;
+        if (lineNumber != null && !lineNumber.trim().isEmpty()) {
+            normalizedLineNumber = lineNumber.replaceAll("-", "");
+            
+            // 정규화된 회선번호 유효성 검증
+            if (!normalizedLineNumber.matches("^010[0-9]{8}$")) {
+                throw new IllegalArgumentException("회선번호는 010으로 시작하는 11자리 숫자여야 합니다");
+            }
+        }
+        
+        logger.info("상품변경 이력 조회 요청: lineNumber={} (original: {}), startDate={}, endDate={}, page={}, size={}, userId={}", 
+                   normalizedLineNumber, lineNumber, startDate, endDate, page, size, userId);
 
         try {
             // 페이지 번호를 0-based로 변환
@@ -227,7 +247,7 @@ public class ProductController {
             validateDateRange(startDate, endDate);
             
             ProductChangeHistoryResponse response = productService.getProductChangeHistory(
-                lineNumber, startDate, endDate, pageable);
+                normalizedLineNumber, startDate, endDate, pageable);
             return ResponseEntity.ok(response);
         } catch (Exception e) {
             logger.error("상품변경 이력 조회 실패: lineNumber={}, userId={}", lineNumber, userId, e);

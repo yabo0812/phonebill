@@ -155,7 +155,6 @@ public class BillController {
     public ResponseEntity<ApiResponse<BillHistoryResponse>> getBillHistory(
             @Parameter(description = "회선번호 (미입력시 인증된 사용자의 모든 회선)")
             @RequestParam(required = false)
-            @Pattern(regexp = "^010-\\d{4}-\\d{4}$", message = "회선번호 형식이 올바르지 않습니다")
             String lineNumber,
             
             @Parameter(description = "조회 시작일 (YYYY-MM-DD)")
@@ -177,11 +176,22 @@ public class BillController {
             @Parameter(description = "처리 상태 필터")
             @RequestParam(required = false) BillInquiryResponse.ProcessStatus status) {
         
-        log.info("요금조회 이력 조회 - 회선: {}, 기간: {} ~ {}, 페이지: {}/{}", 
-                lineNumber, startDate, endDate, page, size);
+        // 회선번호 정규화 (입력된 경우에만)
+        String normalizedLineNumber = null;
+        if (lineNumber != null && !lineNumber.trim().isEmpty()) {
+            normalizedLineNumber = lineNumber.replaceAll("-", "");
+            
+            // 유효성 검증
+            if (!normalizedLineNumber.matches("^010\\d{8}$")) {
+                throw new IllegalArgumentException("회선번호는 010으로 시작하는 11자리 숫자이거나 010-XXXX-XXXX 형식이어야 합니다");
+            }
+        }
+        
+        log.info("요금조회 이력 조회 - 회선: {} (original: {}), 기간: {} ~ {}, 페이지: {}/{}", 
+                normalizedLineNumber, lineNumber, startDate, endDate, page, size);
         
         BillHistoryResponse historyData = billInquiryService.getBillHistory(
-            lineNumber, startDate, endDate, page, size, status
+            normalizedLineNumber, startDate, endDate, page, size, status
         );
         
         log.info("요금조회 이력 조회 완료 - 총 {}건, 페이지: {}/{}",

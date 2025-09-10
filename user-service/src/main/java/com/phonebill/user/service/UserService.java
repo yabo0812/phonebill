@@ -89,54 +89,6 @@ public class UserService {
     }
     
     /**
-     * 고객 ID로 사용자 정보 조회
-     * @param customerId 고객 ID
-     * @return 사용자 정보
-     */
-    public UserInfoResponse getUserInfoByCustomerId(String customerId) {
-        AuthUserEntity user = authUserRepository.findByCustomerId(customerId)
-                .orElseThrow(() -> UserNotFoundException.byCustomerId(customerId));
-        
-        // 사용자 권한 목록 조회
-        List<String> permissions = authUserPermissionRepository.findPermissionCodesByUserId(user.getUserId());
-        
-        return UserInfoResponse.builder()
-                .userId(user.getUserId())
-                .customerId(user.getCustomerId())
-                .lineNumber(user.getLineNumber())
-                .userName(user.getUserName())
-                .accountStatus(user.getAccountStatus().name())
-                .lastLoginAt(user.getLastLoginAt())
-                .lastPasswordChangedAt(user.getLastPasswordChangedAt())
-                .permissions(permissions)
-                .build();
-    }
-    
-    /**
-     * 회선번호로 사용자 정보 조회
-     * @param lineNumber 회선번호
-     * @return 사용자 정보
-     */
-    public UserInfoResponse getUserInfoByLineNumber(String lineNumber) {
-        AuthUserEntity user = authUserRepository.findByLineNumber(lineNumber)
-                .orElseThrow(() -> UserNotFoundException.byLineNumber(lineNumber));
-        
-        // 사용자 권한 목록 조회
-        List<String> permissions = authUserPermissionRepository.findPermissionCodesByUserId(user.getUserId());
-        
-        return UserInfoResponse.builder()
-                .userId(user.getUserId())
-                .customerId(user.getCustomerId())
-                .lineNumber(user.getLineNumber())
-                .userName(user.getUserName())
-                .accountStatus(user.getAccountStatus().name())
-                .lastLoginAt(user.getLastLoginAt())
-                .lastPasswordChangedAt(user.getLastPasswordChangedAt())
-                .permissions(permissions)
-                .build();
-    }
-    
-    /**
      * 권한 부여
      * @param userId 사용자 ID
      * @param permissionCode 권한 코드
@@ -231,45 +183,53 @@ public class UserService {
     }
     
     /**
-     * 사용자 등록
+     * 사용자 등록 또는 업데이트 (Upsert)
      * @param request 사용자 등록 요청
-     * @return 등록된 사용자 정보
+     * @return 등록/업데이트된 사용자 정보
      */
     @Transactional
     public UserRegistrationResponse registerUser(UserRegistrationRequest request) {
-        log.info("사용자 등록 요청: userId={}, customerId={}", request.getUserId(), request.getCustomerId());
-        
-        // 중복 검사
-        validateUserUniqueness(request);
+        log.info("사용자 등록/업데이트 요청: userId={}, customerId={}", request.getUserId(), request.getCustomerId());
         
         // 권한 코드 유효성 검증
         validatePermissionCodes(request.getPermissions());
         
-        // 사용자 엔티티 생성
-        AuthUserEntity user = createUserEntity(request);
+        // 기존 사용자 확인
+        Optional<AuthUserEntity> existingUser = authUserRepository.findById(request.getUserId());
         
-        // 사용자 저장
-        AuthUserEntity savedUser = authUserRepository.save(user);
+        AuthUserEntity savedUser;
+        boolean isUpdate = false;
         
-        // 권한 부여
-        grantUserPermissions(savedUser.getUserId(), request.getPermissions());
+        if (existingUser.isPresent()) {
+            // 업데이트 로직
+            savedUser = updateExistingUser(existingUser.get(), request);
+            isUpdate = true;
+            log.info("기존 사용자 업데이트: userId={}", request.getUserId());
+        } else {
+            // 새 사용자 등록 전 유니크 검사
+            validateUserUniquenessForNewUser(request);
+            
+            // 사용자 엔티티 생성
+            AuthUserEntity user = createUserEntity(request);
+            
+            // 사용자 저장
+            savedUser = authUserRepository.save(user);
+            log.info("신규 사용자 등록: userId={}", request.getUserId());
+        }
+        
+        // 권한 부여/업데이트
+        updateUserPermissions(savedUser.getUserId(), request.getPermissions());
         
         // 응답 생성
-        UserRegistrationResponse response = buildRegistrationResponse(savedUser, request.getPermissions(), request.getUserName());
+        UserRegistrationResponse response = buildRegistrationResponse(savedUser, request.getPermissions(), request.getUserName(), isUpdate);
         
-        log.info("사용자 등록 완료: userId={}", savedUser.getUserId());
         return response;
     }
     
     /**
-     * 사용자 유니크 필드 중복 검사
+     * 신규 사용자 등록 시 유니크 필드 중복 검사
      */
-    private void validateUserUniqueness(UserRegistrationRequest request) {
-        // 사용자 ID 중복 확인
-        if (authUserRepository.existsByUserId(request.getUserId())) {
-            throw new RuntimeException("이미 존재하는 사용자 ID입니다: " + request.getUserId());
-        }
-        
+    private void validateUserUniquenessForNewUser(UserRegistrationRequest request) {
         // 고객 ID 중복 확인
         if (authUserRepository.existsByCustomerId(request.getCustomerId())) {
             throw new RuntimeException("이미 존재하는 고객 ID입니다: " + request.getCustomerId());
@@ -279,6 +239,67 @@ public class UserService {
         if (authUserRepository.findByLineNumber(request.getLineNumber()).isPresent()) {
             throw new RuntimeException("이미 존재하는 회선번호입니다: " + request.getLineNumber());
         }
+    }
+    
+    /**
+     * 기존 사용자 정보 업데이트
+     */
+    private AuthUserEntity updateExistingUser(AuthUserEntity existingUser, UserRegistrationRequest request) {
+        // 다른 사용자가 같은 customerId나 lineNumber를 사용하는지 확인
+        validateUniqueFieldsForUpdate(existingUser.getUserId(), request);
+        
+        // Salt 생성 (UUID 기반)
+        String salt = java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 16);
+        
+        // password + salt 결합 후 해시
+        String saltedPassword = request.getPassword() + salt;
+        String hashedPassword = passwordEncoder.encode(saltedPassword);
+        
+        // 기존 엔티티 업데이트 (Builder 패턴 사용을 위해 새 엔티티 생성)
+        AuthUserEntity updatedUser = AuthUserEntity.builder()
+                .userId(existingUser.getUserId())
+                .customerId(request.getCustomerId())
+                .lineNumber(request.getLineNumber())
+                .userName(request.getUserName())
+                .passwordHash(hashedPassword)
+                .passwordSalt(salt)
+                .accountStatus(existingUser.getAccountStatus())
+                .failedLoginCount(existingUser.getFailedLoginCount())
+                .lastFailedLoginAt(existingUser.getLastFailedLoginAt())
+                .accountLockedUntil(existingUser.getAccountLockedUntil())
+                .lastLoginAt(existingUser.getLastLoginAt())
+                .lastPasswordChangedAt(existingUser.getLastPasswordChangedAt())
+                .build();
+        
+        return authUserRepository.save(updatedUser);
+    }
+    
+    /**
+     * 업데이트 시 다른 사용자와의 유니크 필드 중복 검사
+     */
+    private void validateUniqueFieldsForUpdate(String userId, UserRegistrationRequest request) {
+        // 현재 사용자가 아닌 다른 사용자가 같은 customerId를 사용하는지 확인
+        Optional<AuthUserEntity> existingCustomer = authUserRepository.findByCustomerId(request.getCustomerId());
+        if (existingCustomer.isPresent() && !existingCustomer.get().getUserId().equals(userId)) {
+            throw new RuntimeException("이미 다른 사용자가 사용하는 고객 ID입니다: " + request.getCustomerId());
+        }
+        
+        // 현재 사용자가 아닌 다른 사용자가 같은 lineNumber를 사용하는지 확인
+        Optional<AuthUserEntity> existingLine = authUserRepository.findByLineNumber(request.getLineNumber());
+        if (existingLine.isPresent() && !existingLine.get().getUserId().equals(userId)) {
+            throw new RuntimeException("이미 다른 사용자가 사용하는 회선번호입니다: " + request.getLineNumber());
+        }
+    }
+    
+    /**
+     * 사용자 권한 업데이트 (기존 권한 모두 제거 후 새로 추가)
+     */
+    private void updateUserPermissions(String userId, List<String> permissionCodes) {
+        // 기존 권한 모두 철회
+        authUserPermissionRepository.deleteAllByUserId(userId);
+        
+        // 새 권한 부여
+        grantUserPermissions(userId, permissionCodes);
     }
     
     /**
@@ -332,9 +353,9 @@ public class UserService {
     }
     
     /**
-     * 사용자 등록 응답 생성
+     * 사용자 등록/업데이트 응답 생성
      */
-    private UserRegistrationResponse buildRegistrationResponse(AuthUserEntity user, List<String> permissions, String userName) {
+    private UserRegistrationResponse buildRegistrationResponse(AuthUserEntity user, List<String> permissions, String userName, boolean isUpdate) {
         UserRegistrationResponse.UserData userData = UserRegistrationResponse.UserData.builder()
                 .userId(user.getUserId())
                 .customerId(user.getCustomerId())
@@ -345,9 +366,11 @@ public class UserService {
                 .permissions(permissions)
                 .build();
         
+        String message = isUpdate ? "사용자 정보가 성공적으로 업데이트되었습니다." : "사용자가 성공적으로 등록되었습니다.";
+        
         return UserRegistrationResponse.builder()
                 .success(true)
-                .message("사용자가 성공적으로 등록되었습니다.")
+                .message(message)
                 .data(userData)
                 .build();
     }

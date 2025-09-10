@@ -30,7 +30,7 @@ import java.util.List;
 public class SecurityConfig {
     
     private final JwtTokenProvider jwtTokenProvider;
-    @Value("${cors.allowed-origins")
+    @Value("${cors.allowed-origins}")
     private String allowedOrigins;
 
     @Bean

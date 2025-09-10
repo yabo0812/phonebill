@@ -6,11 +6,6 @@ import org.springframework.cloud.gateway.route.RouteLocator;
 import org.springframework.cloud.gateway.route.builder.RouteLocatorBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.web.cors.CorsConfiguration;
-import org.springframework.web.cors.reactive.CorsWebFilter;
-import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
-
-import java.util.Arrays;
 
 /**
  * Spring Cloud Gateway 라우팅 및 CORS 설정
@@ -32,8 +27,6 @@ public class GatewayConfig {
 
     private final JwtAuthenticationGatewayFilterFactory jwtAuthFilter;
 
-    @Value("${cors.allowed-origins}")
-    private String allowedOrigins;
     
     @Value("${services.user-service.url}")
     private String userServiceUrl;
@@ -123,7 +116,7 @@ public class GatewayConfig {
                                         .setBackoff(java.time.Duration.ofSeconds(1), java.time.Duration.ofSeconds(5), 2, true))
                         )
                         .uri(kosMockUrl))
-
+                
                 // 주의: Gateway 자체 엔드포인트는 라우팅하지 않음
                 // Health Check와 Swagger UI는 Spring Boot에서 직접 제공
                 
@@ -131,51 +124,8 @@ public class GatewayConfig {
     }
 
     /**
-     * CORS 설정
-     * 
-     * 프론트엔드에서 API Gateway로의 크로스 오리진 요청을 허용합니다.
-     * 개발/운영 환경에 따라 허용 오리진을 다르게 설정합니다.
-     * 
-     * @return CorsWebFilter
+     * CORS 설정은 application.yml의 globalcors에서 관리
+     * add-to-simple-url-handler-mapping: true 설정으로
+     * 라우트 predicate와 매치되지 않는 OPTIONS 요청도 처리
      */
-    @Bean
-    public CorsWebFilter corsWebFilter() {
-        CorsConfiguration corsConfig = new CorsConfiguration();
-
-        // 환경변수에서 허용할 Origin 패턴 설정
-        String[] origins = allowedOrigins.split(",");
-        corsConfig.setAllowedOriginPatterns(Arrays.asList(origins));
-
-        // 허용할 HTTP 메서드
-        corsConfig.setAllowedMethods(Arrays.asList(
-                "GET", "POST", "PUT", "DELETE", "OPTIONS", "HEAD"
-        ));
-        
-        // 허용할 헤더
-        corsConfig.setAllowedHeaders(Arrays.asList(
-                "Authorization", 
-                "Content-Type", 
-                "X-Requested-With",
-                "X-Request-ID",
-                "X-User-Agent"
-        ));
-        
-        // 노출할 헤더 (클라이언트가 접근 가능한 헤더)
-        corsConfig.setExposedHeaders(Arrays.asList(
-                "X-Request-ID",
-                "X-Response-Time",
-                "X-Rate-Limit-Remaining"
-        ));
-        
-        // 자격 증명 허용 (쿠키, Authorization 헤더 등)
-        corsConfig.setAllowCredentials(true);
-        
-        // Preflight 요청 캐시 시간 (초)
-        corsConfig.setMaxAge(3600L);
-        
-        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", corsConfig);
-        
-        return new CorsWebFilter(source);
-    }
 }

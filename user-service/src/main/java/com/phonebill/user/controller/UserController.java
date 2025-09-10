@@ -80,60 +80,6 @@ public class UserController {
     }
     
     /**
-     * 고객 ID로 사용자 정보 조회
-     * @param customerId 고객 ID
-     * @return 사용자 정보
-     */
-    @Operation(
-        summary = "고객 ID로 사용자 정보 조회",
-        description = "고객 ID로 해당 고객의 사용자 정보를 조회합니다."
-    )
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "조회 성공"),
-        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
-    })
-    @GetMapping("/by-customer/{customerId}")
-    public ResponseEntity<UserInfoResponse> getUserInfoByCustomerId(
-            @Parameter(description = "고객 ID", required = true)
-            @PathVariable String customerId
-    ) {
-        log.info("고객 ID로 사용자 정보 조회 요청: customerId={}", customerId);
-        
-        UserInfoResponse response = userService.getUserInfoByCustomerId(customerId);
-        
-        log.info("고객 ID로 사용자 정보 조회 성공: customerId={}", customerId);
-        return ResponseEntity.ok(response);
-    }
-    
-    /**
-     * 회선번호로 사용자 정보 조회
-     * @param lineNumber 회선번호
-     * @return 사용자 정보
-     */
-    @Operation(
-        summary = "회선번호로 사용자 정보 조회",
-        description = "회선번호로 해당 회선의 사용자 정보를 조회합니다."
-    )
-    @ApiResponses(value = {
-        @ApiResponse(responseCode = "200", description = "조회 성공"),
-        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음"),
-        @ApiResponse(responseCode = "500", description = "서버 내부 오류")
-    })
-    @GetMapping("/by-line/{lineNumber}")
-    public ResponseEntity<UserInfoResponse> getUserInfoByLineNumber(
-            @Parameter(description = "회선번호", required = true)
-            @PathVariable String lineNumber
-    ) {
-        log.info("회선번호로 사용자 정보 조회 요청: lineNumber={}", lineNumber);
-        
-        UserInfoResponse response = userService.getUserInfoByLineNumber(lineNumber);
-        
-        log.info("회선번호로 사용자 정보 조회 성공: lineNumber={}", lineNumber);
-        return ResponseEntity.ok(response);
-    }
-    
-    /**
      * 권한 부여
      * @param userId 사용자 ID
      * @param permissionCode 권한 코드

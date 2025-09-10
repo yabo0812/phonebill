@@ -17,11 +17,4 @@ public class UserNotFoundException extends RuntimeException {
         return new UserNotFoundException("사용자를 찾을 수 없습니다. userId: " + userId);
     }
     
-    public static UserNotFoundException byCustomerId(String customerId) {
-        return new UserNotFoundException("사용자를 찾을 수 없습니다. customerId: " + customerId);
-    }
-    
-    public static UserNotFoundException byLineNumber(String lineNumber) {
-        return new UserNotFoundException("사용자를 찾을 수 없습니다. lineNumber: " + lineNumber);
-    }
 }

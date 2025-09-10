@@ -58,7 +58,7 @@ public class GatewayConfig {
         return builder.routes()
                 // Auth Service 라우팅 (인증 불필요)
                 .route("user-service-login", r -> r
-                        .path("/api/v1/auth/login", "/api/v1/auth/refresh")
+                        .path("/api/v1/auth/login", "/api/v1/auth/register", "/api/v1/auth/refresh")
                         .and()
                         .method("POST")
                         .uri(userServiceUrl))
@@ -116,7 +116,7 @@ public class GatewayConfig {
                                         .setBackoff(java.time.Duration.ofSeconds(1), java.time.Duration.ofSeconds(5), 2, true))
                         )
                         .uri(kosMockUrl))
-                
+
                 // 주의: Gateway 자체 엔드포인트는 라우팅하지 않음
                 // Health Check와 Swagger UI는 Spring Boot에서 직접 제공
                 

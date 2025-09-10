@@ -3,7 +3,6 @@
     <ExternalSystemSettings>
       <option name="env">
         <map>
-          <entry key="BILL_INQUIRY_URL" value="http://localhost:8082" />
           <entry key="CORS_ALLOWED_ORIGINS" value="http://localhost:3000" />
           <entry key="DB_HOST" value="20.249.70.6" />
           <entry key="DB_KIND" value="postgresql" />

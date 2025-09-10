@@ -79,10 +79,6 @@ Desktop.ini
 # Spring Boot
 *.pid
 
-# Database
-*.db
-*.sqlite
-
 # Claude downloads
 claude/
 

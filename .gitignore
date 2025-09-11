@@ -99,3 +99,6 @@ debug/
 *.key
 *.crt
 
+#h2 db
+*.db
+

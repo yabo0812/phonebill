@@ -44,52 +44,7 @@ dependencyManagement {
     }
 }
 
-// 추가 테스트 설정 (루트에서 기본 설정됨)
-tasks.named('test') {
-    systemProperty 'spring.profiles.active', 'test'
-}
-
-// JAR 파일명 설정
-jar {
-    archiveBaseName = 'api-gateway'
-    enabled = false
-}
-
 bootJar {
     archiveFileName = 'api-gateway.jar'
-    
-    // 빌드 정보 추가
-    manifest {
-        attributes(
-            'Implementation-Title': 'PhoneBill API Gateway',
-            'Implementation-Version': "${version}",
-            'Built-By': System.getProperty('user.name'),
-            'Built-JDK': System.getProperty('java.version'),
-            'Build-Time': new Date().format('yyyy-MM-dd HH:mm:ss')
-        )
-    }
-}
 
-// 개발 환경 실행 설정
-if (project.hasProperty('dev')) {
-    bootRun {
-        systemProperty 'spring.profiles.active', 'dev'
-        jvmArgs = ['-Dspring.devtools.restart.enabled=true']
-    }
-}
-
-// 프로덕션 환경 실행 설정  
-if (project.hasProperty('prod')) {
-    bootRun {
-        systemProperty 'spring.profiles.active', 'prod'
-        jvmArgs = [
-            '-server',
-            '-Xms512m',
-            '-Xmx1024m',
-            '-XX:+UseG1GC',
-            '-XX:G1HeapRegionSize=16m',
-            '-XX:+UseStringDeduplication',
-            '-XX:+OptimizeStringConcat'
-        ]
-    }
 }

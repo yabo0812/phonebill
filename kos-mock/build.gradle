@@ -1,12 +1,6 @@
 // kos-mock 모듈
 // 루트 build.gradle의 subprojects 블록에서 공통 설정 적용됨
 
-configurations {
-    compileOnly {
-        extendsFrom annotationProcessor
-    }
-}
-
 dependencies {
     // Spring Boot
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -39,17 +33,6 @@ dependencies {
     
     // Configuration Processor
     annotationProcessor 'org.springframework.boot:spring-boot-configuration-processor'
-}
-
-tasks.named('test') {
-    useJUnitPlatform()
-}
-
-// JAR 파일 이름 설정 (다른 모듈에서 참조할 수 있도록 enabled = true)
-jar {
-    archiveBaseName = 'kos-mock-service'
-    archiveVersion = version
-    enabled = true
 }
 
 bootJar {

@@ -26,16 +26,6 @@ dependencies {
 // 추가 테스트 설정 (루트에서 기본 설정됨)
 
 // JAR 파일명 설정
-jar {
-    archiveBaseName = 'user-service'
-    enabled = false
-}
-
 bootJar {
     archiveFileName = 'user-service.jar'
-}
-
-// Spring Boot 실행 설정
-springBoot {
-    mainClass = 'com.phonebill.user.UserServiceApplication'
 }

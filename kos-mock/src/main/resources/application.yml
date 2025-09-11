@@ -82,5 +82,3 @@ springdoc:
     operations-sorter: alpha
   show-actuator: true
   paths-to-exclude: /actuator/**
-cors:
-  allowed-origins: "http://localhost:3000,http://phonebill.20.214.196.128.nip.io,http://phonebill-front.20.214.196.128.nip.io"

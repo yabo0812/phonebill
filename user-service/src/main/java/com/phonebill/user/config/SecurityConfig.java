@@ -59,8 +59,7 @@ public class SecurityConfig {
                     "/swagger-ui/**",
                     "/swagger-ui.html",
                     "/swagger-resources/**",
-                    "/webjars/**",
-                    "/actuator/**"
+                    "/webjars/**"
                 ).permitAll()
                 
                 // Protected endpoints (인증 필요)

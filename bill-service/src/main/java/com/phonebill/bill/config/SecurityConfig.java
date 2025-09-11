@@ -88,9 +88,6 @@ public class SecurityConfig {
                 // OPTIONS 요청은 모두 허용 (CORS Preflight)
                 .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                // Actuator endpoints (관리용)
-                .requestMatchers("/actuator/**").hasRole("ADMIN")
-                
                 // 나머지 모든 요청 인증 필요
                 .anyRequest().authenticated()
             )

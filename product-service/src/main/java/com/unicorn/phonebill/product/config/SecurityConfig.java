@@ -64,10 +64,7 @@ public class SecurityConfig {
                 
                 // Protected endpoints (인증 필요)
                 .requestMatchers("/products/**").authenticated()
-                
-                // Actuator endpoints (관리용)
-                .requestMatchers("/actuator/**").hasRole("ADMIN")
-                
+
                 // 나머지 모든 요청 인증 필요
                 .anyRequest().authenticated()
             )

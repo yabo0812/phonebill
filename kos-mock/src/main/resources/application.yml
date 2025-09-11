@@ -24,7 +24,7 @@ spring:
     console:
       enabled: true
       path: /h2-console
-    
+
 server:
   port: ${SERVER_PORT:8084}
   # HTTP 헤더 크기 제한 설정

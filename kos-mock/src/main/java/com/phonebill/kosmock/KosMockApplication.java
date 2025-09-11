@@ -12,7 +12,6 @@ import org.springframework.cache.annotation.EnableCaching;
  * KOS Mock Service 메인 애플리케이션 클래스
  */
 @SpringBootApplication
-@EnableCaching
 @RequiredArgsConstructor
 @Slf4j
 public class KosMockApplication implements CommandLineRunner {

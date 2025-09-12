@@ -4,16 +4,30 @@ kind: Kustomization
 namespace: phonebill-staging
 
 resources:
-- ../../base
+  - ../../base
+
+patchesStrategicMerge:
+  - configmap-common-patch.yaml
+  - deployment-patch.yaml
+  - ingress-patch.yaml
+  - secret-common-patch.yaml
+  - secret-user-service-patch.yaml
+  - secret-bill-service-patch.yaml
+  - secret-product-service-patch.yaml
+
+images:
+  - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
+    newTag: staging-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
+    newTag: staging-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
+    newTag: staging-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/product-service
+    newTag: staging-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
+    newTag: staging-latest
+
+namePrefix: staging-
 
 commonLabels:
-  env: staging
-  
-patchesStrategicMerge:
-- configmap-common-patch.yaml
-- secret-common-patch.yaml
-- ingress-patch.yaml
-- replica-patch.yaml
-- secret-user-service-patch.yaml
-- secret-bill-service-patch.yaml
-- secret-product-service-patch.yaml
+  environment: staging

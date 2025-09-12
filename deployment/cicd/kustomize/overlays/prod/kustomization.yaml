@@ -4,10 +4,30 @@ kind: Kustomization
 namespace: phonebill-prod
 
 resources:
-- ../../base
+  - ../../base
+
+patchesStrategicMerge:
+  - configmap-common-patch.yaml
+  - deployment-patch.yaml
+  - ingress-patch.yaml
+  - secret-common-patch.yaml
+  - secret-user-service-patch.yaml
+  - secret-bill-service-patch.yaml
+  - secret-product-service-patch.yaml
+
+images:
+  - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
+    newTag: prod-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
+    newTag: prod-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
+    newTag: prod-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/product-service
+    newTag: prod-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
+    newTag: prod-latest
+
+namePrefix: prod-
 
 commonLabels:
-  env: prod
-  
-patchesStrategicMerge:
-- env-patches.yaml
+  environment: prod

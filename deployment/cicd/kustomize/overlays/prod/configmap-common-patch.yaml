@@ -3,6 +3,9 @@ kind: ConfigMap
 metadata:
   name: cm-common
 data:
-  CORS_ALLOWED_ORIGINS: "https://phonebill.example.com,https://phonebill-app.example.com"
+  CORS_ALLOWED_ORIGINS: "https://phonebill.20.214.196.128.nip.io"
+  JWT_ACCESS_TOKEN_VALIDITY: "3600000"  # 1시간
+  JWT_REFRESH_TOKEN_VALIDITY: "86400000"
+  REDIS_PORT: "6379"
   SPRING_PROFILES_ACTIVE: "prod"
   DDL_AUTO: "validate"

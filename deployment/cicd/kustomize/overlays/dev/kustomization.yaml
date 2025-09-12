@@ -4,16 +4,30 @@ kind: Kustomization
 namespace: phonebill-dev
 
 resources:
-- ../../base
+  - ../../base
+
+patchesStrategicMerge:
+  - configmap-common-patch.yaml
+  - deployment-patch.yaml
+  - ingress-patch.yaml
+  - secret-common-patch.yaml
+  - secret-user-service-patch.yaml
+  - secret-bill-service-patch.yaml
+  - secret-product-service-patch.yaml
+
+images:
+  - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/product-service
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
+    newTag: dev-latest
+
+namePrefix: dev-
 
 commonLabels:
-  env: dev
-  
-patchesStrategicMerge:
-- configmap-common-patch.yaml
-- secret-common-patch.yaml
-- ingress-patch.yaml
-- replica-patch.yaml
-- secret-user-service-patch.yaml
-- secret-bill-service-patch.yaml
-- secret-product-service-patch.yaml
+  environment: dev

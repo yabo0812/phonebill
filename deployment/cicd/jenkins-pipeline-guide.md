@@ -1,423 +1,424 @@
-# Jenkins CI/CD Pipeline 구축 가이드
+# Jenkins CI/CD 파이프라인 구축 가이드
 
 ## 📋 개요
 
-phonebill 마이크로서비스를 위한 Jenkins CI/CD 파이프라인 구축 가이드입니다.
-Azure Kubernetes Service(AKS)와 Azure Container Registry(ACR)를 활용한 자동화된 배포 시스템을 구성합니다.
+이 가이드는 통신요금 관리 서비스(phonebill)를 위한 Jenkins + Kustomize 기반 CI/CD 파이프라인 구축 방법을 제공합니다.
 
-## 🏗️ 아키텍처
+### 🎯 주요 특징
+- **환경별 배포**: dev, staging, prod 환경 분리 관리
+- **Kustomize 기반**: 환경별 매니페스트 관리 및 배포
+- **SonarQube 연동**: 코드 품질 분석 및 Quality Gate 적용
+- **Azure 통합**: ACR, AKS와 완전 통합
+- **Health Check**: 배포 후 서비스 상태 자동 확인
 
-### 시스템 구성요소
-- **Jenkins**: CI/CD 오케스트레이션
-- **Azure Container Registry (ACR)**: 컨테이너 이미지 저장소
-- **Azure Kubernetes Service (AKS)**: 컨테이너 오케스트레이션
-- **SonarQube**: 코드 품질 분석
-- **Gradle**: 빌드 도구
-- **Kustomize**: Kubernetes 매니페스트 관리
+---
 
-### 배포 환경
-- **Development** (`phonebill-dev`)
-- **Staging** (`phonebill-staging`)
-- **Production** (`phonebill-prod`)
+## 🏗️ 시스템 아키텍처
 
-## 🚀 파이프라인 워크플로우
+### 서비스 구성
+- **시스템명**: phonebill
+- **서비스 목록**:
+  - api-gateway (API 게이트웨이)
+  - user-service (사용자 서비스)
+  - bill-service (요금 조회 서비스)
+  - product-service (상품 변경 서비스)
+  - kos-mock (KOS Mock 서비스)
 
-```mermaid
-graph LR
-    A[Code Commit] --> B[Jenkins Trigger]
-    B --> C[Build & Test]
-    C --> D[SonarQube Analysis]
-    D --> E[Quality Gate]
-    E --> F[Container Build]
-    F --> G[Push to ACR]
-    G --> H[Deploy to AKS]
-    H --> I[Health Check]
-    I --> J[Notification]
+### Azure 리소스 정보
+- **ACR**: acrdigitalgarage01.azurecr.io
+- **리소스 그룹**: rg-digitalgarage-01
+- **AKS 클러스터**: aks-digitalgarage-01
+
+---
+
+## 🛠️ Jenkins 서버 환경 구성
+
+### 1. 필수 플러그인 설치
+
+Jenkins 관리 > 플러그인 관리에서 다음 플러그인들을 설치하세요:
+
+```
+📦 필수 플러그인 목록:
+- Kubernetes
+- Pipeline Utility Steps
+- Docker Pipeline
+- GitHub
+- SonarQube Scanner
+- Azure Credentials
 ```
 
-### 주요 단계
+### 2. Jenkins Credentials 등록
 
-1. **Initialize**: 환경별 설정 로드 및 파라미터 설정
-2. **Checkout & Prepare**: 소스 코드 체크아웃 및 빌드 태그 생성
-3. **Build & Test**: Gradle을 이용한 빌드 및 단위 테스트
-4. **SonarQube Analysis**: 코드 품질 분석
-5. **Quality Gate**: 품질 기준 검증
-6. **Container Build & Push**: 컨테이너 이미지 빌드 및 ACR 푸시
-7. **Deploy to Kubernetes**: AKS 클러스터에 배포
-8. **Health Check**: 배포된 서비스 상태 확인
+Manage Jenkins > Credentials > Add Credentials에서 다음 정보들을 등록하세요:
 
-## 📂 파일 구조
+#### Azure Service Principal
+```yaml
+Kind: Microsoft Azure Service Principal
+ID: azure-credentials
+Subscription ID: {구독ID}
+Client ID: {클라이언트ID}
+Client Secret: {클라이언트시크릿}
+Tenant ID: {테넌트ID}
+Azure Environment: Azure
+```
 
+#### ACR Credentials
+```yaml
+Kind: Username with password
+ID: acr-credentials
+Username: acrdigitalgarage01
+Password: {ACR패스워드}
+```
+
+#### SonarQube Token
+```yaml
+Kind: Secret text
+ID: sonarqube-token
+Secret: {SonarQube토큰}
+```
+
+---
+
+## 📂 Kustomize 구조
+
+### 디렉토리 구조
 ```
 deployment/cicd/
-├── Jenkinsfile                           # Jenkins 파이프라인 정의
-├── config/
-│   ├── deploy_env_vars_dev              # 개발 환경 설정
-│   ├── deploy_env_vars_staging          # 스테이징 환경 설정
-│   └── deploy_env_vars_prod             # 운영 환경 설정
-├── scripts/
-│   └── deploy.sh                        # 수동 배포 스크립트
-└── jenkins-pipeline-guide.md            # 이 가이드 문서
+├── kustomize/
+│   ├── base/                    # 기본 매니페스트
+│   │   ├── common/              # 공통 리소스
+│   │   ├── api-gateway/         # API Gateway 리소스
+│   │   ├── user-service/        # User Service 리소스
+│   │   ├── bill-service/        # Bill Service 리소스
+│   │   ├── product-service/     # Product Service 리소스
+│   │   ├── kos-mock/           # KOS Mock 리소스
+│   │   └── kustomization.yaml  # Base Kustomization
+│   └── overlays/               # 환경별 오버레이
+│       ├── dev/                # 개발 환경
+│       ├── staging/            # 스테이징 환경
+│       └── prod/               # 운영 환경
+├── config/                     # 환경별 설정
+├── scripts/                    # 배포 스크립트
+└── Jenkinsfile                 # Jenkins 파이프라인
 ```
 
-## 🔧 Jenkins 구성
+### 환경별 특성
 
-### 1. Jenkins 플러그인 설치
+#### 🔧 DEV 환경
+- **네임스페이스**: phonebill-dev
+- **도메인**: phonebill-api.20.214.196.128.nip.io (HTTP)
+- **프로파일**: dev
+- **DDL**: update (테이블 자동 생성/수정)
+- **JWT 토큰**: 5시간 유효
+- **Replica**: 모든 서비스 1개
+- **리소스**: requests(256m CPU, 256Mi Memory), limits(1024m CPU, 1024Mi Memory)
 
-필수 플러그인 목록:
-```bash
-# Kubernetes 관련
-Kubernetes Plugin
-Pipeline: Kubernetes Steps
+#### 🔄 STAGING 환경
+- **네임스페이스**: phonebill-staging
+- **도메인**: phonebill-staging.20.214.196.128.nip.io (HTTPS)
+- **프로파일**: staging
+- **DDL**: validate (스키마 검증만)
+- **JWT 토큰**: 5시간 유효
+- **Replica**: 모든 서비스 2개
+- **리소스**: requests(512m CPU, 512Mi Memory), limits(2048m CPU, 2048Mi Memory)
 
-# Azure 관련
-Azure CLI Plugin
-Azure Container Registry Plugin
+#### 🚀 PROD 환경
+- **네임스페이스**: phonebill-prod
+- **도메인**: phonebill.20.214.196.128.nip.io (HTTPS + SSL 강화)
+- **프로파일**: prod
+- **DDL**: validate (스키마 검증만)
+- **JWT 토큰**: 1시간 유효 (보안 강화)
+- **Replica**: 모든 서비스 3개
+- **리소스**: requests(1024m CPU, 1024Mi Memory), limits(4096m CPU, 4096Mi Memory)
 
-# 빌드 도구
-Gradle Plugin
-Pipeline: Gradle Plugin
-
-# 코드 품질
-SonarQube Scanner Plugin
-Pipeline: SonarQube Plugin
-
-# 알림
-Slack Notification Plugin
-Email Extension Plugin
-
-# Git 관련
-Git Plugin
-GitHub Plugin
-Pipeline: GitHub Plugin
-
-# 기타
-Pipeline Plugin
-Pipeline: Stage View Plugin
-Blue Ocean Plugin
-```
-
-### 2. 글로벌 설정
-
-#### Azure Service Principal 설정
-```bash
-# Jenkins 관리 > 시스템 설정 > Global properties
-# Environment variables 추가
-AZURE_TENANT_ID=<your-tenant-id>
-AZURE_SUBSCRIPTION_ID=<your-subscription-id>
-```
-
-#### Credentials 설정
-Jenkins 관리 > Manage Credentials에서 다음 설정:
-
-1. **azure-service-principal** (Azure Service Principal)
-   - ID: `azure-service-principal`
-   - Type: Microsoft Azure Service Principal
-   - Tenant ID: Azure 테넌트 ID
-   - Client ID: 서비스 프린시pal 클라이언트 ID
-   - Client Secret: 서비스 프린시pal 시크릿
-
-2. **acr-credentials** (ACR 인증 정보)
-   - ID: `acr-credentials`
-   - Type: Username with password
-   - Username: ACR 사용자명
-   - Password: ACR 패스워드
-
-3. **sonarqube-token** (SonarQube 토큰)
-   - ID: `sonarqube-token`
-   - Type: Secret text
-   - Secret: SonarQube 액세스 토큰
-
-4. **slack-token** (Slack 토큰)
-   - ID: `slack-token`
-   - Type: Secret text
-   - Secret: Slack Bot 토큰
-
-### 3. Kubernetes Agent 설정
-
-Jenkins가 Kubernetes 클러스터에서 빌드 에이전트를 실행할 수 있도록 설정:
-
-#### ServiceAccount 및 RBAC 생성
-```yaml
-# jenkins-rbac.yaml
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: jenkins-agent
-  namespace: jenkins
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: jenkins-agent
-rules:
-- apiGroups: [\"\"]
-  resources: [\"pods\", \"pods/exec\", \"pods/log\", \"persistentvolumeclaims\"]
-  verbs: [\"*\"]
-- apiGroups: [\"apps\"]
-  resources: [\"deployments\", \"replicasets\"]
-  verbs: [\"*\"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: jenkins-agent
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: jenkins-agent
-subjects:
-- kind: ServiceAccount
-  name: jenkins-agent
-  namespace: jenkins
-```
 
-#### Gradle Cache PVC 생성
+## 🔄 CI/CD 파이프라인 단계
+
+### Pipeline 단계 설명
+
+1. **Get Source** 📥
+   - Git 소스 코드 체크아웃
+   - 환경별 설정 파일 로딩
+
+2. **Setup AKS** ⚙️
+   - Azure Service Principal로 로그인
+   - AKS 클러스터 연결 설정
+   - 네임스페이스 생성
+
+3. **Build & SonarQube Analysis** 🔍
+   - Gradle 빌드 실행
+   - 각 서비스별 단위 테스트
+   - SonarQube 코드 품질 분석
+   - 테스트 커버리지 리포트 생성
+
+4. **Quality Gate** 🚪
+   - SonarQube Quality Gate 검증
+   - 품질 기준 미달 시 파이프라인 중단
+
+5. **Build & Push Images** 🐳
+   - 각 서비스별 컨테이너 이미지 빌드
+   - ACR에 이미지 푸시
+   - 환경별 이미지 태그 적용
+
+6. **Update Kustomize & Deploy** 🚀
+   - Kustomize를 통한 매니페스트 생성
+   - 이미지 태그 업데이트
+   - Kubernetes 클러스터에 배포
+   - 배포 완료 대기
+
+7. **Health Check** 🔍
+   - API Gateway Health Check
+   - 서비스 정상 동작 확인
+
+### SonarQube Quality Gate 기준
+
 ```yaml
-# gradle-cache-pvc.yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: jenkins-gradle-cache
-  namespace: jenkins
-spec:
-  accessModes:
-    - ReadWriteOnce
-  resources:
-    requests:
-      storage: 10Gi
-  storageClassName: managed-premium
+품질 기준:
+- Coverage: >= 80%
+- Duplicated Lines: <= 3%
+- Maintainability Rating: <= A
+- Reliability Rating: <= A
+- Security Rating: <= A
 ```
 
-적용:
-```bash
-kubectl apply -f jenkins-rbac.yaml
-kubectl apply -f gradle-cache-pvc.yaml
-```
+---
 
-### 4. SonarQube 설정
-
-#### SonarQube Server 구성
-Jenkins 관리 > Configure System > SonarQube servers:
-- Name: `SonarQube`
-- Server URL: `http://sonarqube.example.com`
-- Server authentication token: `sonarqube-token` credential 선택
-
-## 🔨 파이프라인 생성
+## 🚀 Jenkins Pipeline Job 생성
 
 ### 1. 새 Pipeline Job 생성
-1. Jenkins 대시보드에서 \"New Item\" 클릭
-2. Job 이름: `phonebill-pipeline`
-3. Type: \"Pipeline\" 선택
-4. OK 클릭
+
+1. Jenkins 웹 UI에서 **New Item** 클릭
+2. **Pipeline** 선택 후 프로젝트명 입력
+3. **OK** 클릭
 
 ### 2. Pipeline 설정
-1. **General** 탭:
-   - Description: \"phonebill microservices CI/CD pipeline\"
-   - \"GitHub project\" 체크하고 프로젝트 URL 입력
 
-2. **Build Triggers** 탭:
-   - \"GitHub hook trigger for GITScm polling\" 체크 (GitHub Webhook 사용 시)
-   - \"Poll SCM\" 설정: `H/5 * * * *` (5분마다 폴링)
+#### Source Code Management
+```yaml
+SCM: Git
+Repository URL: {Git저장소URL}
+Branch: main (또는 develop)
+Script Path: deployment/cicd/Jenkinsfile
+```
 
-3. **Pipeline** 탭:
-   - Definition: \"Pipeline script from SCM\"
-   - SCM: Git
-   - Repository URL: GitHub 저장소 URL
-   - Credentials: GitHub 인증 정보
-   - Branch: `*/main`
-   - Script Path: `deployment/cicd/Jenkinsfile`
+#### Pipeline Parameters
+```yaml
+ENVIRONMENT: 
+  - Type: Choice Parameter
+  - Choices: dev, staging, prod
+  - Default: dev
 
-### 3. 환경별 파이프라인 생성
-동일한 방식으로 환경별 파이프라인 생성:
-- `phonebill-dev-pipeline`
-- `phonebill-staging-pipeline`
-- `phonebill-prod-pipeline`
+IMAGE_TAG:
+  - Type: String Parameter  
+  - Default: latest
+```
 
-## 🧪 파이프라인 실행
+---
 
-### 1. 수동 실행
-1. Jenkins에서 파이프라인 Job 선택
-2. \"Build with Parameters\" 클릭
-3. 파라미터 설정:
-   - **ENVIRONMENT**: `dev` / `staging` / `prod`
-   - **SERVICES_TO_BUILD**: `all` 또는 특정 서비스
-   - **SKIP_TESTS**: 테스트 스킵 여부
-   - **SKIP_SONAR**: SonarQube 분석 스킵 여부
-   - **FORCE_DEPLOY**: 강제 배포 여부
-4. \"Build\" 클릭
+## 📦 배포 실행 방법
 
-### 2. 자동 실행 (Webhook)
-GitHub에서 코드 푸시 시 자동으로 파이프라인이 트리거됩니다.
+### 1. Jenkins UI를 통한 배포
 
-#### GitHub Webhook 설정
-1. GitHub 저장소 > Settings > Webhooks
-2. Add webhook:
-   - Payload URL: `http://jenkins.example.com/github-webhook/`
-   - Content type: `application/json`
-   - Secret: 설정한 시크릿
-   - Events: \"Just the push event\"
+1. Jenkins > {프로젝트명} > **Build with Parameters** 클릭
+2. **ENVIRONMENT** 선택 (dev/staging/prod)
+3. **IMAGE_TAG** 입력 (선택사항, 기본값: latest)
+4. **Build** 클릭
 
-## 📊 모니터링 및 알림
+### 2. 수동 배포 스크립트 사용
 
-### 1. 빌드 상태 모니터링
-- Jenkins Blue Ocean 인터페이스 활용
-- 파이프라인 실행 상태 실시간 확인
-- 로그 및 아티팩트 확인
+```bash
+# 개발 환경 배포
+./deployment/cicd/scripts/deploy.sh dev latest
 
-### 2. 알림 설정
-파이프라인 실행 결과를 다음 채널로 알림:
-- **Slack**: 지정된 채널에 빌드 상태 알림
-- **Email**: 담당자에게 결과 메일 발송
+# 스테이징 환경 배포  
+./deployment/cicd/scripts/deploy.sh staging v1.2.0
 
-### 3. 메트릭 수집
-- 빌드 시간 추적
-- 성공/실패율 모니터링
-- 배포 빈도 측정
+# 운영 환경 배포
+./deployment/cicd/scripts/deploy.sh prod v1.2.0
+```
 
-## 🔍 트러블슈팅
+### 3. 배포 상태 확인
+
+```bash
+# Pod 상태 확인
+kubectl get pods -n phonebill-{환경}
+
+# 서비스 상태 확인
+kubectl get services -n phonebill-{환경}
+
+# Ingress 상태 확인
+kubectl get ingress -n phonebill-{환경}
+
+# 로그 확인
+kubectl logs -n phonebill-{환경} deployment/{환경}-api-gateway
+```
+
+---
+
+## 🔄 롤백 방법
+
+### 1. Kubernetes 기본 롤백
+
+```bash
+# 이전 버전으로 롤백
+kubectl rollout undo deployment/{환경}-{서비스명} -n phonebill-{환경}
+
+# 특정 리비전으로 롤백
+kubectl rollout undo deployment/{환경}-{서비스명} -n phonebill-{환경} --to-revision=2
+
+# 롤백 상태 확인
+kubectl rollout status deployment/{환경}-{서비스명} -n phonebill-{환경}
+```
+
+### 2. 이미지 태그 기반 롤백
+
+```bash
+# 안정 버전 태그로 수동 배포
+./deployment/cicd/scripts/deploy.sh prod {이전안정버전태그}
+```
+
+---
+
+## 🔧 트러블슈팅
 
 ### 일반적인 문제 해결
 
-#### 1. Azure 인증 실패
+#### 1. 파이프라인 실패 시
 ```bash
-# 서비스 프린시pal 권한 확인
-az role assignment list --assignee <service-principal-client-id>
-
-# 필요한 권한 할당
-az role assignment create \
-  --assignee <service-principal-client-id> \
-  --role \"AKS Cluster Admin\" \
-  --scope /subscriptions/<subscription-id>/resourceGroups/<rg-name>
+# Jenkins 콘솔 로그 확인
+# SonarQube Quality Gate 상태 확인
+# Kubernetes 이벤트 확인
+kubectl get events -n phonebill-{환경} --sort-by='.lastTimestamp'
 ```
 
-#### 2. ACR 푸시 실패
+#### 2. 배포 실패 시
 ```bash
-# ACR 로그인 확인
-az acr login --name <acr-name>
+# Pod 상태 및 로그 확인
+kubectl describe pod {pod-name} -n phonebill-{환경}
+kubectl logs {pod-name} -n phonebill-{환경}
 
-# ACR 권한 확인
-az acr show --name <acr-name> --resource-group <rg-name>
+# ConfigMap/Secret 확인
+kubectl get configmap -n phonebill-{환경}
+kubectl get secret -n phonebill-{환경}
 ```
 
-#### 3. Kubernetes 배포 실패
+#### 3. 네트워크 연결 문제
 ```bash
-# kubectl 컨텍스트 확인
-kubectl config current-context
+# Service와 Endpoint 확인
+kubectl get svc,endpoints -n phonebill-{환경}
 
-# 네임스페이스 확인
-kubectl get namespaces
-
-# 리소스 상태 확인
-kubectl get all -n <namespace>
+# Ingress 설정 확인  
+kubectl describe ingress -n phonebill-{환경}
 ```
-
-#### 4. 파드 시작 실패
-```bash
-# 파드 로그 확인
-kubectl logs <pod-name> -n <namespace>
-
-# 파드 상세 정보 확인
-kubectl describe pod <pod-name> -n <namespace>
-
-# 이벤트 확인
-kubectl get events -n <namespace> --sort-by='.lastTimestamp'
-```
-
-### 로그 위치
-- **Jenkins 로그**: `/var/log/jenkins/jenkins.log`
-- **파이프라인 로그**: Jenkins UI에서 Build History > Console Output
-- **Kubernetes 로그**: `kubectl logs` 명령어 사용
-
-## 🚀 수동 배포 스크립트 사용법
-
-Jenkins 파이프라인 외에도 수동 배포 스크립트를 제공합니다.
-
-### 기본 사용법
-```bash
-# 모든 서비스를 dev 환경에 배포
-./deployment/cicd/scripts/deploy.sh dev
-
-# 특정 서비스만 staging 환경에 배포
-./deployment/cicd/scripts/deploy.sh staging user-service
-
-# 여러 서비스를 prod 환경에 배포
-./deployment/cicd/scripts/deploy.sh prod api-gateway,user-service,bill-service
-
-# 옵션 사용 예시
-./deployment/cicd/scripts/deploy.sh dev all --skip-build --skip-test
-```
-
-### 주요 옵션
-- `--skip-build`: Gradle 빌드 스킵
-- `--skip-test`: 단위 테스트 스킵
-- `--skip-push`: 컨테이너 이미지 푸시 스킵
-- `--force`: 변경사항이 없어도 강제 배포
-- `--dry-run`: 실제 배포 없이 미리보기
-
-## 📈 성능 최적화
-
-### 1. 빌드 성능 개선
-- **Gradle Daemon** 활용: `--daemon` 옵션
-- **병렬 빌드**: `--parallel` 옵션
-- **Build Cache** 활용: `--build-cache` 옵션
-- **Incremental Build** 활용
-
-### 2. 컨테이너 이미지 최적화
-- **Multi-stage Build** 사용
-- **Layer Caching** 최적화
-- **Base Image** 최적화
-- **.dockerignore** 활용
-
-### 3. Kubernetes 배포 최적화
-- **Rolling Update** 전략 사용
-- **Resource Limits** 설정
-- **Readiness/Liveness Probe** 설정
-- **Pod Disruption Budget** 설정
-
-## 🔒 보안 고려사항
-
-### 1. 인증 및 권한 관리
-- Azure Service Principal 최소 권한 원칙
-- Jenkins Credentials 암호화 저장
-- Kubernetes RBAC 적절한 권한 할당
-- 시크릿 정보 환경 변수로 분리
-
-### 2. 컨테이너 보안
-- 취약점 스캐닝 도구 통합
-- 비특권 사용자로 컨테이너 실행
-- 읽기 전용 루트 파일시스템
-- 보안 컨텍스트 설정
-
-### 3. 네트워크 보안
-- Private Registry 사용
-- Network Policy 적용
-- Service Mesh 보안 정책
-- TLS/SSL 암호화
-
-## 📚 참고 자료
-
-### 공식 문서
-- [Jenkins Pipeline](https://jenkins.io/doc/book/pipeline/)
-- [Azure Kubernetes Service](https://docs.microsoft.com/en-us/azure/aks/)
-- [Azure Container Registry](https://docs.microsoft.com/en-us/azure/container-registry/)
-- [Kubernetes](https://kubernetes.io/docs/)
-- [Gradle](https://docs.gradle.org/)
-
-### 모범 사례
-- [Jenkins Best Practices](https://wiki.jenkins.io/display/JENKINS/Jenkins+Best+Practices)
-- [Kubernetes Best Practices](https://kubernetes.io/docs/concepts/configuration/overview/)
-- [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
-
-## 📞 지원
-
-문제가 발생하거나 추가 지원이 필요한 경우:
-
-1. **로그 확인**: Jenkins 콘솔 출력 및 Kubernetes 로그 검토
-2. **문서 검토**: 이 가이드 및 공식 문서 참조
-3. **커뮤니티**: Stack Overflow, Jenkins 커뮤니티 포럼 활용
-4. **팀 지원**: DevOps 팀 또는 플랫폼 팀에 문의
 
 ---
 
-*이 가이드는 phonebill 프로젝트의 Jenkins CI/CD 파이프라인 구축을 위한 완전한 가이드입니다. 프로젝트 요구사항에 따라 설정을 조정하여 사용하시기 바랍니다.*
+## 📝 체크리스트
+
+### 📋 Kustomize 구성 체크리스트
+
+#### 📂 기본 구조 검증
+- [ ] 디렉토리 구조: `deployment/cicd/kustomize/{base,overlays/{dev,staging,prod}}`
+- [ ] 서비스별 base 디렉토리: `base/{common,api-gateway,user-service,bill-service,product-service,kos-mock}`
+- [ ] Base kustomization.yaml 파일 생성 완료
+
+#### 🔧 환경별 Overlay 검증
+**각 환경(dev/staging/prod)별로 다음 파일들이 모두 생성되어야 함:**
+
+**필수 파일 목록:**
+- [ ] `kustomization.yaml` - 환경 설정 및 patch 파일 참조
+- [ ] `configmap-common-patch.yaml` - 환경별 공통 설정 (프로파일, DDL, JWT 설정)
+- [ ] `secret-common-patch.yaml` - 환경별 공통 시크릿 (JWT Secret, Redis 정보)
+- [ ] `ingress-patch.yaml` - 환경별 도메인 및 보안 설정
+- [ ] **`deployment-patch.yaml`** - **환경별 replicas AND resources 설정** ⚠️
+- [ ] `secret-user-service-patch.yaml` - User Service DB 정보
+- [ ] `secret-bill-service-patch.yaml` - Bill Service DB 정보  
+- [ ] `secret-product-service-patch.yaml` - Product Service DB 정보
+
+**⚠️ deployment-patch.yaml 필수 검증 사항:**
+- [ ] **파일명이 정확한지**: `deployment-patch.yaml` (❌ `replica-patch.yaml` 아님)
+- [ ] **Strategic Merge Patch 형식 사용**: YAML 형식, JSON Patch 아님
+- [ ] **replicas 설정**: dev(1), staging(2), prod(3)
+- [ ] **resources 설정**: 환경별 차등 적용
+  - dev: requests(256m CPU, 256Mi Memory), limits(1024m CPU, 1024Mi Memory)
+  - staging: requests(512m CPU, 512Mi Memory), limits(2048m CPU, 2048Mi Memory)
+  - prod: requests(1024m CPU, 1024Mi Memory), limits(4096m CPU, 4096Mi Memory)
+- [ ] **모든 서비스 포함**: api-gateway, user-service, bill-service, product-service, kos-mock
+
+#### 🔍 호환성 검증
+- [ ] base 매니페스트에 없는 항목을 patch에 추가하지 않음
+- [ ] base 매니페스트와 patch 필드 구조 일치
+- [ ] Secret 매니페스트에 'data' 대신 'stringData' 사용
+
+### 📋 배포 전 체크리스트
+
+- [ ] Jenkins 필수 플러그인 설치 완료
+- [ ] Credentials 등록 완료 (Azure, ACR, SonarQube)
+- [ ] SonarQube 프로젝트 설정 완료
+- [ ] 환경별 Database/Redis 준비 완료
+- [ ] 네트워크 및 도메인 설정 완료
+
+### 🚀 배포 후 체크리스트
+
+- [ ] 모든 Pod가 Running 상태
+- [ ] Health Check 통과
+- [ ] Ingress로 외부 접근 가능
+- [ ] 로그에 오류 없음
+- [ ] 기능 테스트 완료
+
+### 💡 일반적인 실수 방지 가이드
+
+**❌ 자주 발생하는 실수들:**
+1. **파일명 실수**: `replica-patch.yaml` 생성 → 정답: `deployment-patch.yaml`
+2. **내용 누락**: replicas만 설정하고 resources 누락 → 정답: 둘 다 설정
+3. **형식 실수**: JSON Patch 사용 → 정답: Strategic Merge Patch 사용
+4. **환경별 차이 없음**: 모든 환경 동일 설정 → 정답: 환경별 차등 설정
+
+**✅ 올바른 deployment-patch.yaml 예시:**
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-gateway
+spec:
+  replicas: 1  # 환경별 차등 적용
+  template:
+    spec:
+      containers:
+      - name: api-gateway
+        resources:  # 반드시 포함
+          requests:
+            cpu: 256m      # 환경별 차등 적용
+            memory: 256Mi  # 환경별 차등 적용
+          limits:
+            cpu: 1024m     # 환경별 차등 적용
+            memory: 1024Mi # 환경별 차등 적용
+```
+
+---
+
+## 📞 지원 정보
+
+### 환경 정보
+- **시스템**: phonebill (통신요금 관리 서비스)
+- **Git 저장소**: [Repository URL]
+- **Jenkins**: [Jenkins URL]
+- **SonarQube**: [SonarQube URL]
+
+### 연락처
+- **DevOps 팀**: 최운영 (데옵스)
+- **백엔드 팀**: 이개발 (백엔더)
+- **QA 팀**: 정테스트 (QA매니저)
+
+---
+
+## 📚 추가 리소스
+
+- [Kustomize 공식 문서](https://kustomize.io/)
+- [Jenkins Pipeline 문법](https://www.jenkins.io/doc/book/pipeline/syntax/)
+- [Azure DevOps 가이드](https://docs.microsoft.com/en-us/azure/devops/)
+
+---
+
+*이 가이드는 phonebill 프로젝트의 CI/CD 파이프라인 구축을 위한 완전한 가이드입니다. 추가 질문이나 지원이 필요하시면 DevOps 팀에 문의하세요.*

@@ -1,34 +1,3 @@
-# Production Environment Configuration for phonebill
-# Jenkins Pipeline Environment Variables
-
-# Azure Configuration
-AZURE_RESOURCE_GROUP=rg-digitalgarage-01
-ACR_NAME=acrdigitalgarage01
-AKS_CLUSTER_NAME=aks-digitalgarage-01
-AKS_NAMESPACE=phonebill-prod
-
-# Service Names
-SERVICES=api-gateway,user-service,bill-service,product-service,kos-mock
-
-# Build Configuration
-GRADLE_OPTS="-Xmx3072m -XX:MaxPermSize=1024m"
-JAVA_OPTS="-Xmx2048m -Xms1024m"
-
-# Docker Configuration
-REGISTRY_URL=${ACR_NAME}.azurecr.io
-IMAGE_TAG_PATTERN=${BUILD_NUMBER}-prod
-
-# Deployment Configuration
-KUSTOMIZE_BASE=deployment/k8s
-KUSTOMIZE_OVERLAY=overlays/prod
-HEALTH_CHECK_TIMEOUT=600
-HEALTH_CHECK_RETRY=15
-
-# SonarQube Configuration
-SONAR_PROJECT_KEY=phonebill-prod
-SONAR_SOURCES=.
-SONAR_EXCLUSIONS=**/target/**,**/build/**,**/*.generated.java
-
-# Notification Configuration
-SLACK_CHANNEL=#phonebill-prod
-EMAIL_RECIPIENTS=prod-team@company.com,ops-team@company.com
+# PROD Environment Configuration  
+resource_group=rg-digitalgarage-01
+cluster_name=aks-digitalgarage-01

@@ -12,6 +12,14 @@ podTemplate(
     slaveConnectTimeout: 300,
     idleMinutes: 30,
     activeDeadlineSeconds: 3600,
+    yaml: '''
+        spec:
+          tolerations:
+          - effect: NoSchedule
+            key: dedicated
+            operator: Equal
+            value: cicd
+    ''',
     containers: [
         containerTemplate(
             name: 'podman', 

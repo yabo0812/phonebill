@@ -7,16 +7,14 @@ metadata:
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
-    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
-    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-ECDSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-ECDSA-AES256-GCM-SHA384"
 spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - phonebill.20.214.196.128.nip.io
+    - phonebill-prod.example.com
     secretName: phonebill-prod-tls
   rules:
-  - host: phonebill.20.214.196.128.nip.io
+  - host: phonebill-prod.example.com
     http:
       paths:
       - path: /api/v1/auth

@@ -10,11 +10,11 @@ spec:
       - name: api-gateway
         resources:
           requests:
-            cpu: 256m
-            memory: 256Mi
+            memory: "256Mi"
+            cpu: "256m"
           limits:
-            cpu: 1024m
-            memory: 1024Mi
+            memory: "1024Mi"
+            cpu: "1024m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -28,11 +28,11 @@ spec:
       - name: user-service
         resources:
           requests:
-            cpu: 256m
-            memory: 256Mi
+            memory: "256Mi"
+            cpu: "256m"
           limits:
-            cpu: 1024m
-            memory: 1024Mi
+            memory: "1024Mi"
+            cpu: "1024m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -46,11 +46,11 @@ spec:
       - name: bill-service
         resources:
           requests:
-            cpu: 256m
-            memory: 256Mi
+            memory: "256Mi"
+            cpu: "256m"
           limits:
-            cpu: 1024m
-            memory: 1024Mi
+            memory: "1024Mi"
+            cpu: "1024m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -64,11 +64,11 @@ spec:
       - name: product-service
         resources:
           requests:
-            cpu: 256m
-            memory: 256Mi
+            memory: "256Mi"
+            cpu: "256m"
           limits:
-            cpu: 1024m
-            memory: 1024Mi
+            memory: "1024Mi"
+            cpu: "1024m"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -82,8 +82,8 @@ spec:
       - name: kos-mock
         resources:
           requests:
-            cpu: 256m
-            memory: 256Mi
+            memory: "256Mi"
+            cpu: "256m"
           limits:
-            cpu: 1024m
-            memory: 1024Mi
+            memory: "1024Mi"
+            cpu: "1024m"

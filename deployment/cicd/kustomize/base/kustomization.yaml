@@ -5,6 +5,9 @@ metadata:
   name: phonebill-base
 
 resources:
+  # Namespace
+  - namespace.yaml
+  
   # Common resources
   - common/cm-common.yaml
   - common/secret-common.yaml
@@ -28,7 +31,7 @@ resources:
   - bill-service/cm-bill-service.yaml
   - bill-service/secret-bill-service.yaml
 
-  # Product Service  
+  # Product Service
   - product-service/deployment.yaml
   - product-service/service.yaml
   - product-service/cm-product-service.yaml
@@ -47,7 +50,7 @@ images:
   - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
     newTag: latest
   - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
-    newTag: latest  
+    newTag: latest
   - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
     newTag: latest
   - name: acrdigitalgarage01.azurecr.io/phonebill/product-service

@@ -169,11 +169,11 @@ podTemplate(
                     # 환경별 디렉토리로 이동
                     cd deployment/cicd/kustomize/overlays/${environment}
 
-                    # 서비스 배열 정의
-                    services=(api-gateway user-service bill-service product-service kos-mock)
+                    # 서비스 배열 정의 (Bash 배열)
+                    svc_list=(api-gateway user-service bill-service product-service kos-mock)
 
                     # 이미지 태그 업데이트
-                    for service in "\${services[@]}"; do
+                    for service in "\${svc_list[@]}"; do
                         \$HOME/bin/kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/\$service:${environment}-${imageTag}
                     done
 
@@ -182,7 +182,7 @@ podTemplate(
 
                     # 배포 상태 확인
                     echo "Waiting for deployments to be ready..."
-                    for service in "\${services[@]}"; do
+                    for service in "\${svc_list[@]}"; do
                         kubectl -n phonebill-${environment} wait --for=condition=available deployment/\$service --timeout=300s
                     done
                 """

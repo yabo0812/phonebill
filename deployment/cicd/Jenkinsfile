@@ -12,6 +12,7 @@ podTemplate(
     slaveConnectTimeout: 300,
     idleMinutes: 30,
     activeDeadlineSeconds: 3600,
+    podRetention: never(),  // 파드 자동 정리 옵션: never(), onFailure(), always(), default()
     yaml: '''
         spec:
           tolerations:

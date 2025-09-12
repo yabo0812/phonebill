@@ -2,33 +2,16 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: user-service
-  namespace: phonebill-prod
 spec:
   replicas: 3
   template:
     spec:
       containers:
-        - name: user-service
-          resources:
-            requests:
-              memory: 1024Mi
-              cpu: 1024m
-            limits:
-              memory: 4096Mi
-              cpu: 4096m
-          livenessProbe:
-            httpGet:
-              path: /actuator/health
-              port: 8080
-            initialDelaySeconds: 120
-            periodSeconds: 30
-            timeoutSeconds: 10
-            failureThreshold: 3
-          readinessProbe:
-            httpGet:
-              path: /actuator/health/readiness
-              port: 8080
-            initialDelaySeconds: 60
-            periodSeconds: 10
-            timeoutSeconds: 5
-            failureThreshold: 3
+      - name: user-service
+        resources:
+          requests:
+            cpu: 1024m
+            memory: 1024Mi
+          limits:
+            cpu: 4096m
+            memory: 4096Mi

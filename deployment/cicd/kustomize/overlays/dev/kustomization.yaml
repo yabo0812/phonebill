@@ -7,7 +7,7 @@ resources:
   - ../../base
 
 patches:
-  - path: configmap-common-patch.yaml
+  - path: cm-common-patch.yaml
     target:
       kind: ConfigMap
       name: cm-common
@@ -64,5 +64,7 @@ images:
   - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
     newTag: dev-latest
 
-commonLabels:
-  environment: dev
+labels:
+  - includeSelectors: true
+    pairs:
+      environment: dev

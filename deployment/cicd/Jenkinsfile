@@ -12,7 +12,7 @@ podTemplate(
     containers: [
         containerTemplate(name: 'podman', image: "mgoltzsche/podman", ttyEnabled: true, command: 'cat', privileged: true),
         containerTemplate(name: 'gradle',
-                        image: 'gradle:jdk17',
+                        image: 'gradle:jdk21',
                         ttyEnabled: true,
                         command: 'cat',
                         envVars: [

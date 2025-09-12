@@ -12,7 +12,7 @@ podTemplate(
     slaveConnectTimeout: 300,
     idleMinutes: 30,
     activeDeadlineSeconds: 3600,
-    podRetention: never(),
+    podRetention: 'never',
     yaml: '''
         spec:
           tolerations:

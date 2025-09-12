@@ -22,6 +22,7 @@ resources:
   # User Service
   - user-service/deployment.yaml
   - user-service/service.yaml
+  - user-service/cm-user-service.yaml
   - user-service/secret-user-service.yaml
   
   # Bill Service

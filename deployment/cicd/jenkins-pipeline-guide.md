@@ -1,476 +1,304 @@
-# phonebill Jenkins CI/CD 파이프라인 가이드
+# phonebill Jenkins CI/CD 파이프라인 구축 가이드
 
-## 📋 프로젝트 정보
+## 📋 개요
 
+**이개발/백엔더**: phonebill 프로젝트의 Jenkins 기반 CI/CD 파이프라인 구축이 완료되었습니다.
+
+### 프로젝트 정보
 - **시스템명**: phonebill
 - **서비스**: api-gateway, user-service, bill-service, product-service, kos-mock
 - **JDK 버전**: 21
-- **ACR**: acrdigitalgarage01
-- **리소스 그룹**: rg-digitalgarage-01
-- **AKS 클러스터**: aks-digitalgarage-01
+- **환경**: dev, staging, prod
+- **컨테이너 레지스트리**: acrdigitalgarage01.azurecr.io
+- **Kubernetes 클러스터**: aks-digitalgarage-01 (rg-digitalgarage-01)
 
-## 🏗️ Jenkins 서버 환경 구성
+## 🏗️ 구축된 CI/CD 아키텍처
 
-### 필수 플러그인 설치
-```
-- Kubernetes
-- Pipeline Utility Steps
-- Docker Pipeline
-- GitHub
-- SonarQube Scanner
-- Azure Credentials
-```
+### 파이프라인 구성
+1. **소스 체크아웃** → Git 소스 코드 가져오기
+2. **AKS 설정** → Azure 인증 및 Kubernetes 클러스터 연결
+3. **빌드 & SonarQube 분석** → Gradle 빌드, 테스트, 코드 품질 분석
+4. **Quality Gate** → SonarQube 품질 게이트 검증
+5. **컨테이너 빌드 & 푸시** → Docker 이미지 빌드 및 ACR 푸시
+6. **Kustomize 배포** → 환경별 Kubernetes 매니페스트 적용
 
-### Jenkins Credentials 등록
-
-#### 1. Azure Service Principal
+### Kustomize 구조
 ```
-Manage Jenkins > Credentials > Add Credentials
-- Kind: Microsoft Azure Service Principal
-- ID: azure-credentials
-- Subscription ID: {구독ID}
-- Client ID: {클라이언트ID}
-- Client Secret: {클라이언트시크릿}
-- Tenant ID: {테넌트ID}
-- Azure Environment: Azure
-```
-
-#### 2. ACR Credentials
-```
-- Kind: Username with password
-- ID: acr-credentials
-- Username: acrdigitalgarage01
-- Password: {ACR_PASSWORD}
+deployment/cicd/kustomize/
+├── base/                           # 기본 매니페스트
+│   ├── kustomization.yaml         # Base 리소스 정의
+│   ├── namespace.yaml             # Namespace 정의
+│   ├── common/                    # 공통 리소스
+│   │   ├── cm-common.yaml
+│   │   ├── secret-common.yaml
+│   │   ├── secret-imagepull.yaml
+│   │   └── ingress.yaml
+│   └── [서비스별 디렉토리]/        # 각 서비스 매니페스트
+│       ├── deployment.yaml
+│       ├── service.yaml
+│       ├── cm-{서비스명}.yaml     # ConfigMap (있는 경우)
+│       └── secret-{서비스명}.yaml  # Secret (있는 경우)
+└── overlays/                      # 환경별 오버레이
+    ├── dev/                       # 개발 환경
+    ├── staging/                   # 스테이징 환경
+    └── prod/                      # 운영 환경
 ```
 
-#### 3. Docker Hub Credentials (Rate Limit 해결용) ⚠️ **필수**
-```
-Manage Jenkins > Credentials > Add Credentials
-- Kind: Username with password
-- ID: dockerhub-credentials
-- Username: {DOCKERHUB_USERNAME}
-- Password: {DOCKERHUB_PASSWORD}
-```
+## ⚙️ 구성 요소
 
-**⚠️ 중요**: Docker Hub 계정이 없으면 다음 중 하나 선택:
-1. Docker Hub 무료 계정 생성 (https://hub.docker.com)
-2. 또는 Jenkinsfile에서 Docker Hub 로그인 제거 (아래 참조)
+### 1. Jenkins 파이프라인 (Jenkinsfile)
+- **Pod Template**: Gradle, Podman, Azure-CLI 컨테이너 사용
+- **자동 정리**: podRetention: never(), 파드 자동 정리 구성
+- **병렬 처리**: 각 서비스별 SonarQube 분석 병렬 실행
+- **타임아웃**: 빌드&푸시 30분, Quality Gate 10분 제한
 
-#### 4. SonarQube Token
-```
-- Kind: Secret text
-- ID: sonarqube-token
-- Secret: {SonarQube토큰}
-```
+### 2. 환경별 Configuration
 
-## 📁 Kustomize 디렉토리 구조
+#### DEV 환경
+- **네임스페이스**: phonebill-dev
+- **레플리카**: 1개
+- **리소스**: requests(256m CPU, 256Mi Memory), limits(1024m CPU, 1024Mi Memory)
+- **프로파일**: dev, DDL_AUTO: update
+- **도메인**: phonebill-api.20.214.196.128.nip.io (HTTP)
 
+#### STAGING 환경
+- **네임스페이스**: phonebill-staging
+- **레플리카**: 2개
+- **리소스**: requests(512m CPU, 512Mi Memory), limits(2048m CPU, 2048Mi Memory)
+- **프로파일**: staging, DDL_AUTO: validate
+- **도메인**: phonebill-staging.yourdomain.com (HTTPS)
+
+#### PROD 환경
+- **네임스페이스**: phonebill-prod
+- **레플리카**: 3개
+- **리소스**: requests(1024m CPU, 1024Mi Memory), limits(4096m CPU, 4096Mi Memory)
+- **프로파일**: prod, DDL_AUTO: validate
+- **도메인**: phonebill.yourdomain.com (HTTPS)
+- **보안**: 짧은 JWT 토큰 유효시간
+
+### 3. 스크립트
+- **deploy.sh**: 수동 배포 스크립트
+- **validate-cicd-setup.sh**: CI/CD 설정 검증 스크립트
+
+## 📦 구축된 파일 목록
+
+### Kustomize 구성 파일
 ```
 deployment/cicd/
 ├── kustomize/
 │   ├── base/
 │   │   ├── kustomization.yaml
 │   │   ├── namespace.yaml
-│   │   ├── common/
-│   │   │   ├── cm-common.yaml
-│   │   │   ├── secret-common.yaml
-│   │   │   ├── secret-imagepull.yaml
-│   │   │   └── ingress.yaml
-│   │   ├── api-gateway/
-│   │   ├── user-service/
-│   │   ├── bill-service/
-│   │   ├── product-service/
-│   │   └── kos-mock/
+│   │   ├── common/ (4개 파일)
+│   │   ├── api-gateway/ (3개 파일)
+│   │   ├── user-service/ (4개 파일)
+│   │   ├── bill-service/ (4개 파일)
+│   │   ├── product-service/ (4개 파일)
+│   │   └── kos-mock/ (3개 파일)
 │   └── overlays/
-│       ├── dev/
-│       ├── staging/
-│       └── prod/
+│       ├── dev/ (12개 파일)
+│       ├── staging/ (13개 파일)
+│       └── prod/ (14개 파일)
 ├── config/
 │   ├── deploy_env_vars_dev
 │   ├── deploy_env_vars_staging
 │   └── deploy_env_vars_prod
 ├── scripts/
-│   └── deploy.sh
-└── Jenkinsfile
+│   ├── deploy.sh (실행 가능)
+│   └── validate-cicd-setup.sh (실행 가능)
+├── Jenkinsfile
+└── jenkins-pipeline-guide.md
 ```
 
-## 🔧 환경별 설정
+## 🚀 Jenkins 설정 방법
 
-### DEV 환경
-- **Namespace**: phonebill-dev
-- **Ingress Host**: phonebill-api.20.214.196.128.nip.io ⚠️ **base와 동일해야 함**
-- **Replicas**: 1
-- **Resources**: requests(256m/256Mi), limits(1024m/1024Mi)
-- **Profile**: dev
-- **DDL**: update
-- **SSL**: false
+### 1. Jenkins 서버 환경 구성
 
-### STAGING 환경
-- **Namespace**: phonebill-staging
-- **Ingress Host**: phonebill.staging-domain.com ⚠️ **환경별 도메인**
-- **Replicas**: 2
-- **Resources**: requests(512m/512Mi), limits(2048m/2048Mi)
-- **Profile**: staging
-- **DDL**: validate
-- **SSL**: true
-
-### PROD 환경
-- **Namespace**: phonebill-prod
-- **Ingress Host**: phonebill.production-domain.com ⚠️ **프로덕션 도메인**
-- **Replicas**: 3
-- **Resources**: requests(1024m/1024Mi), limits(4096m/4096Mi)
-- **Profile**: prod
-- **DDL**: validate
-- **SSL**: true
-- **JWT 토큰**: 30분 (보안 강화)
-
-## 🚀 Jenkins Pipeline Job 생성
-
-### 1. Jenkins 웹 UI에서 새 작업 생성
-- New Item > Pipeline 선택
-- 작업명: phonebill-cicd
-
-### 2. Pipeline 설정
+#### 필수 플러그인 설치
 ```
-SCM: Git
-Repository URL: {Git저장소URL}
-Branch: main
-Script Path: deployment/cicd/Jenkinsfile
+- Kubernetes
+- Pipeline Utility Steps  
+- Docker Pipeline
+- GitHub
+- SonarQube Scanner
+- Azure Credentials
 ```
 
-### 3. Pipeline Parameters 설정
-```
-ENVIRONMENT: Choice Parameter (dev, staging, prod)
-IMAGE_TAG: String Parameter (default: latest)
-```
+#### Jenkins Credentials 등록
+**Manage Jenkins > Credentials > Add Credentials**
 
-## 🎯 SonarQube 프로젝트 설정
+1. **Azure Service Principal**
+   - Kind: Microsoft Azure Service Principal
+   - ID: `azure-credentials`
+   - Subscription ID, Client ID, Client Secret, Tenant ID 입력
+   - Azure Environment: Azure
 
-### Quality Gate 설정
-```
-Coverage: >= 80%
-Duplicated Lines: <= 3%
-Maintainability Rating: <= A
-Reliability Rating: <= A
-Security Rating: <= A
-```
+2. **ACR Credentials**
+   - Kind: Username with password
+   - ID: `acr-credentials`
+   - Username: `acrdigitalgarage01`
+   - Password: {ACR_PASSWORD}
 
-## 📊 배포 실행 방법
+3. **Docker Hub Credentials** (Rate Limit 해결용)
+   - Kind: Username with password
+   - ID: `dockerhub-credentials`
+   - Username: {DOCKERHUB_USERNAME}
+   - Password: {DOCKERHUB_PASSWORD}
+
+4. **SonarQube Token**
+   - Kind: Secret text
+   - ID: `sonarqube-token`
+   - Secret: {SonarQube토큰}
+
+### 2. Jenkins Pipeline Job 생성
+
+1. **New Item > Pipeline** 선택
+2. **Pipeline script from SCM** 설정:
+   - SCM: Git
+   - Repository URL: {Git저장소URL}
+   - Branch: main
+   - Script Path: `deployment/cicd/Jenkinsfile`
+
+3. **Pipeline Parameters** 설정:
+   - ENVIRONMENT: Choice Parameter (dev, staging, prod)
+   - IMAGE_TAG: String Parameter (default: latest)
+
+## 📊 SonarQube 설정
+
+### 각 서비스별 프로젝트 생성
+- 프로젝트 키: `phonebill-{서비스명}-{환경}`
+- Quality Gate 설정:
+  - Coverage: ≥ 80%
+  - Duplicated Lines: ≤ 3%
+  - Maintainability Rating: ≤ A
+  - Reliability Rating: ≤ A
+  - Security Rating: ≤ A
+
+## 🔄 배포 실행 방법
 
 ### 1. Jenkins 파이프라인 실행
-```
-1. Jenkins > phonebill-cicd > Build with Parameters
+1. Jenkins > phonebill 프로젝트 > **Build with Parameters**
 2. ENVIRONMENT 선택 (dev/staging/prod)
 3. IMAGE_TAG 입력 (선택사항)
-4. Build 클릭
+4. **Build** 클릭
+
+### 2. 수동 배포 (선택사항)
+```bash
+# 개발 환경 배포
+./deployment/cicd/scripts/deploy.sh dev 20240912101530
+
+# 스테이징 환경 배포
+./deployment/cicd/scripts/deploy.sh staging 20240912101530
+
+# 운영 환경 배포
+./deployment/cicd/scripts/deploy.sh prod 20240912101530
 ```
 
-### 2. 배포 상태 확인
+### 3. 배포 상태 확인
 ```bash
+# Pod 상태 확인
 kubectl get pods -n phonebill-{환경}
+
+# 서비스 상태 확인
 kubectl get services -n phonebill-{환경}
+
+# Ingress 상태 확인
 kubectl get ingress -n phonebill-{환경}
+
+# 배포 이력 확인
+kubectl rollout history deployment/{서비스명} -n phonebill-{환경}
 ```
 
-### 3. 수동 배포 (필요시)
+## 🔍 설정 검증
+
+### CI/CD 설정 검증 실행
 ```bash
-# DEV 환경 배포
-./deployment/cicd/scripts/deploy.sh dev 20241201120000
-
-# STAGING 환경 배포
-./deployment/cicd/scripts/deploy.sh staging 20241201120000
-
-# PROD 환경 배포
-./deployment/cicd/scripts/deploy.sh prod 20241201120000
+./deployment/cicd/scripts/validate-cicd-setup.sh
 ```
 
-## 🔄 롤백 방법
+**검증 항목:**
+- ✅ 서비스별 매니페스트 파일 존재 확인
+- ✅ Base kustomization.yaml 유효성 검사
+- ✅ 환경별 Overlay 빌드 테스트
+- ✅ Jenkinsfile 구성 확인
+- ✅ 환경별 설정 파일 검증
+- ✅ 스크립트 실행 권한 확인
 
-### 1. 이전 버전으로 롤백
+## 🔧 롤백 방법
+
+### 1. kubectl을 이용한 롤백
 ```bash
+# 이전 버전으로 롤백
 kubectl rollout undo deployment/{서비스명} -n phonebill-{환경} --to-revision=2
+
+# 롤백 상태 확인
 kubectl rollout status deployment/{서비스명} -n phonebill-{환경}
 ```
 
 ### 2. 이미지 태그 기반 롤백
 ```bash
+# 이전 안정 버전으로 수동 배포
 cd deployment/cicd/kustomize/overlays/{환경}
 kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/{서비스명}:{환경}-{이전태그}
 kubectl apply -k .
 ```
 
-## 📝 파이프라인 단계별 설명
+## 🛡️ 보안 및 모니터링
 
-### Stage 1: Get Source
-- Git 저장소에서 소스코드 체크아웃
-- 환경별 설정 파일 로드
+### 파드 자동 정리
+- **podRetention: never()**: 파이프라인 완료 시 파드 즉시 삭제
+- **terminationGracePeriodSeconds: 3**: 3초 내 강제 종료
+- **idleMinutes: 1**: 유휴 시간 1분 설정
 
-### Stage 2: Setup AKS
-- Azure 로그인 및 AKS 클러스터 연결
-- 네임스페이스 생성
+### 리소스 제한
+- **Timeout 설정**: Build&Push 30분, Quality Gate 10분
+- **컨테이너 리소스**: 환경별 차등 할당
+- **네트워크 격리**: 네임스페이스별 분리
 
-### Stage 3: Build & SonarQube Analysis
-- Gradle 빌드 및 테스트
-- 각 서비스별 SonarQube 코드 품질 분석
-- JaCoCo 테스트 커버리지 측정
+## ✅ 구축 완료 체크리스트
 
-### Stage 4: Quality Gate
-- SonarQube Quality Gate 검증
-- 품질 기준 미달 시 파이프라인 중단
+### 📋 사전 준비
+- [x] settings.gradle에서 시스템명과 서비스명 확인
+- [x] 루트 build.gradle에서 JDK버전 확인 (21)
+- [x] 실행정보에서 ACR명, 리소스 그룹, AKS 클러스터명 확인
 
-### Stage 5: Build & Push Images
-- 각 서비스별 컨테이너 이미지 빌드
-- ACR에 이미지 푸시
+### 📂 Kustomize 구성
+- [x] 디렉토리 구조 생성
+- [x] 기존 k8s 매니페스트를 base로 복사
+- [x] Base kustomization.yaml 작성 (모든 리소스 포함)
+- [x] kubectl kustomize 검증 완료
 
-### Stage 6: Update Kustomize & Deploy
-- Kustomize를 이용한 이미지 태그 업데이트
-- Kubernetes 매니페스트 배포
-- 배포 상태 확인
+### 🔧 환경별 Overlay
+- [x] DEV 환경: 12개 파일 생성 (1 replica, HTTP)
+- [x] STAGING 환경: 13개 파일 생성 (2 replicas, HTTPS)
+- [x] PROD 환경: 14개 파일 생성 (3 replicas, HTTPS, 보안 강화)
 
-## ⚠️ 주의사항 및 체크리스트 준수사항
+### ⚙️ 스크립트 및 설정
+- [x] 환경별 설정 파일 작성 (dev/staging/prod)
+- [x] Jenkinsfile 작성 (JDK21, 파드 자동 정리 포함)
+- [x] 수동 배포 스크립트 작성 및 실행 권한 설정
+- [x] 검증 스크립트 작성 및 실행 권한 설정
 
-### 🚨 **체크리스트 핵심 준수사항**
+## 🎯 다음 단계
 
-#### **1. Ingress 설정 규칙** ⚠️ **매우 중요**
-```yaml
-# ✅ DEV 환경: base와 동일한 host 사용
-- host: phonebill-api.20.214.196.128.nip.io  # base와 동일해야 함!
+1. **Jenkins 서버 설정**
+   - 필수 플러그인 설치
+   - Credentials 등록 (azure, acr, dockerhub, sonarqube)
 
-# ✅ STAGING/PROD: 환경별 도메인 사용
-- host: phonebill.staging-domain.com    # staging
-- host: phonebill.production-domain.com # prod
-```
+2. **SonarQube 연동**
+   - 서비스별 프로젝트 생성
+   - Quality Gate 규칙 설정
 
-#### **2. Patch 파일 작성 원칙**
-- ❌ **금지**: base 매니페스트에 없는 항목 추가
-- ✅ **필수**: base 매니페스트와 항목 구조 일치
-- ✅ **필수**: Secret에 `stringData` 사용 (`data` 금지)
-- ✅ **필수**: `patches` 사용 (`patchesStrategicMerge` 금지)
+3. **파이프라인 테스트**
+   - 개발 환경 배포 테스트
+   - 스테이징/운영 환경 배포 준비
 
-#### **3. Deployment Patch 필수 항목**
-```yaml
-# ✅ 반드시 포함해야 할 항목들
-spec:
-  replicas: {환경별설정}  # dev:1, staging:2, prod:3
-  template:
-    spec:
-      containers:
-      - resources:  # 반드시 포함
-          requests: {환경별설정}
-          limits: {환경별설정}
-```
-
-#### **4. Jenkinsfile 검증 포인트**
-- ✅ JDK 버전: `gradle:jdk21` (프로젝트 JDK와 일치)
-- ✅ 서비스 배열: `['api-gateway', 'user-service', 'bill-service', 'product-service', 'kos-mock']`
-- ✅ 변수 문법: `${variable}` (⚠️ `\${variable}` 금지)
-- ✅ ACR 이름: `acrdigitalgarage01` (실행정보와 일치)
-
-### 🔍 **배포 전 필수 검증**
-
-#### **파일 구조 검증**
-```bash
-# 모든 환경별 파일이 존재하는지 확인
-find deployment/cicd/kustomize/overlays -name "*.yaml" | wc -l
-# 결과: 36개 파일이 있어야 함 (각 환경별 12개씩)
-```
-
-#### **Kustomize 빌드 테스트**
-```bash
-# 각 환경별 매니페스트 빌드 테스트
-kubectl kustomize deployment/cicd/kustomize/overlays/dev
-kubectl kustomize deployment/cicd/kustomize/overlays/staging  
-kubectl kustomize deployment/cicd/kustomize/overlays/prod
-# 모두 오류 없이 빌드되어야 함
-```
-
-#### **base vs dev ingress 비교**
-```bash
-# DEV 환경이 base와 동일한 host를 사용하는지 확인
-diff deployment/cicd/kustomize/base/common/ingress.yaml deployment/cicd/kustomize/overlays/dev/ingress-patch.yaml
-# host 라인에서 차이가 없어야 함
-```
-
-### 🛡️ **보안 및 운영**
-
-#### **보안 체크**
-- 모든 `change-in-production` 패스워드를 실제 값으로 변경
-- 프로덕션 환경 도메인 설정 확인
-- SSL 인증서 설정 검증
-- JWT Secret 키 프로덕션 전용으로 변경
-
-#### **성능 모니터링**
-- 각 환경별 리소스 할당량 모니터링
-- 배포 시 트래픽 영향도 확인
-- Pod 리소스 사용량 추적
-
-#### **운영 모니터링**
-- 배포 후 서비스 상태 확인
-- 로그 및 메트릭 모니터링
-- 헬스체크 엔드포인트 확인
-
-## 🆘 문제 해결 및 실수 방지
-
-### **자주 발생하는 실수들**
-
-#### **🚨 1. Ingress Host 실수**
-**문제**: DEV 환경에서 host를 `phonebill-dev-api.xxx`로 변경
-**해결**: DEV는 반드시 base와 동일한 host 사용
-```bash
-# 실수 방지 검증 명령
-grep "host:" deployment/cicd/kustomize/base/common/ingress.yaml
-grep "host:" deployment/cicd/kustomize/overlays/dev/ingress-patch.yaml
-# 두 결과가 동일해야 함
-```
-
-#### **🚨 2. Secret에서 data 사용 실수**
-**문제**: `data` 필드 사용으로 base64 인코딩 필요
-**해결**: 항상 `stringData` 사용
-```yaml
-# ❌ 잘못된 방법
-data:
-  DB_PASSWORD: "cGFzc3dvcmQ="  # base64 인코딩 필요
-
-# ✅ 올바른 방법  
-stringData:
-  DB_PASSWORD: "password"      # 평문 직접 입력
-```
-
-#### **🚨 3. Deployment Patch 누락 항목**
-**문제**: replicas나 resources 누락으로 기본값 사용
-**해결**: 반드시 환경별 설정 포함
-```yaml
-# ✅ 필수 포함 항목
-spec:
-  replicas: 1  # 반드시 명시
-  template:
-    spec:
-      containers:
-      - resources:  # 반드시 포함
-          requests:
-            cpu: 256m
-            memory: 256Mi
-          limits:
-            cpu: 1024m  
-            memory: 1024Mi
-```
-
-#### **🚨 4. Jenkinsfile 변수 문법 실수**
-**문제**: `\${variable}` 사용으로 "syntax error: bad substitution" 발생
-**해결**: Jenkins Groovy에서는 `${variable}` 사용
-```groovy
-# ❌ 잘못된 문법
-sh "echo \${environment}"
-
-# ✅ 올바른 문법
-sh "echo ${environment}"
-```
-
-### **Docker Hub 계정이 없는 경우 대안**
-
-Docker Hub 계정 생성이 어려운 경우, 다음과 같이 Jenkinsfile을 수정할 수 있습니다:
-
-```groovy
-// 수정 전 (Docker Hub 로그인 포함)
-withCredentials([
-    usernamePassword(
-        credentialsId: 'acr-credentials',
-        usernameVariable: 'ACR_USERNAME',
-        passwordVariable: 'ACR_PASSWORD'
-    ),
-    usernamePassword(
-        credentialsId: 'dockerhub-credentials',
-        usernameVariable: 'DOCKERHUB_USERNAME', 
-        passwordVariable: 'DOCKERHUB_PASSWORD'
-    )
-]) {
-    sh "podman login docker.io --username \$DOCKERHUB_USERNAME --password \$DOCKERHUB_PASSWORD"
-    sh "podman login acrdigitalgarage01.azurecr.io --username \$ACR_USERNAME --password \$ACR_PASSWORD"
-    // ...
-}
-
-// 수정 후 (Docker Hub 로그인 제거)
-withCredentials([usernamePassword(
-    credentialsId: 'acr-credentials',
-    usernameVariable: 'ACR_USERNAME',
-    passwordVariable: 'ACR_PASSWORD'
-)]) {
-    sh "podman login acrdigitalgarage01.azurecr.io --username \$ACR_USERNAME --password \$ACR_PASSWORD"
-    // ...
-}
-```
-
-**⚠️ 주의**: Docker Hub 로그인을 제거하면 pull rate limit에 걸릴 수 있습니다.
-
-### **배포 전 최종 검증 스크립트**
-```bash
-#!/bin/bash
-echo "🔍 Jenkins CI/CD 구성 최종 검증 시작..."
-
-# 1. 파일 개수 확인
-echo "1. 파일 개수 검증..."
-OVERLAY_FILES=$(find deployment/cicd/kustomize/overlays -name "*.yaml" | wc -l)
-if [ $OVERLAY_FILES -eq 36 ]; then
-    echo "✅ Overlay 파일 개수 정상 (36개)"
-else
-    echo "❌ Overlay 파일 개수 오류 ($OVERLAY_FILES개, 36개여야 함)"
-fi
-
-# 2. DEV ingress host 검증
-echo "2. DEV Ingress Host 검증..."
-BASE_HOST=$(grep "host:" deployment/cicd/kustomize/base/common/ingress.yaml | awk '{print $3}')
-DEV_HOST=$(grep "host:" deployment/cicd/kustomize/overlays/dev/ingress-patch.yaml | awk '{print $3}')
-if [ "$BASE_HOST" = "$DEV_HOST" ]; then
-    echo "✅ DEV Ingress Host 정상 ($DEV_HOST)"
-else
-    echo "❌ DEV Ingress Host 오류 (base: $BASE_HOST, dev: $DEV_HOST)"
-fi
-
-# 3. Kustomize 빌드 테스트
-echo "3. Kustomize 빌드 테스트..."
-for env in dev staging prod; do
-    if kubectl kustomize deployment/cicd/kustomize/overlays/$env > /dev/null 2>&1; then
-        echo "✅ $env 환경 빌드 성공"
-    else
-        echo "❌ $env 환경 빌드 실패"
-    fi
-done
-
-# 4. Jenkinsfile JDK 버전 확인
-echo "4. Jenkinsfile JDK 버전 검증..."
-if grep -q "gradle:jdk21" deployment/cicd/Jenkinsfile; then
-    echo "✅ JDK 21 버전 정상"
-else
-    echo "❌ JDK 버전 확인 필요"
-fi
-
-# 5. Secret stringData 사용 확인
-echo "5. Secret stringData 사용 검증..."
-if grep -r "stringData:" deployment/cicd/kustomize/overlays/*/secret-*-patch.yaml > /dev/null; then
-    echo "✅ stringData 사용 정상"
-else
-    echo "❌ stringData 사용 확인 필요"
-fi
-
-echo "🎯 검증 완료!"
-```
-
-### **일반적인 문제 해결**
-1. **이미지 빌드 실패**: Dockerfile 경로 및 JAR 파일 확인
-2. **배포 실패**: 리소스 할당량 및 네임스페이스 확인  
-3. **Quality Gate 실패**: 테스트 커버리지 및 코드 품질 개선
-4. **Kustomize 빌드 실패**: patch 파일의 target 매칭 확인
-
-### **로그 확인 방법**
-```bash
-# Jenkins 빌드 로그 확인 (웹 UI에서)
-# Kubernetes Pod 로그 확인
-kubectl logs -n phonebill-{환경} deployment/{서비스명}
-kubectl describe pod -n phonebill-{환경} -l app={서비스명}
-```
+4. **모니터링 설정**
+   - 배포 상태 모니터링
+   - 알림 시스템 구성
 
 ---
 
-## ✅ **체크리스트 완벽 준수로 Jenkins CI/CD 파이프라인 구축 완료!**
-
-**이제 실수 없이 안전하게 CI/CD를 구축하고 운영할 수 있습니다! 🚀**
+**구축자**: 이개발/백엔더  
+**구축일**: 2024년 12월 12일  
+**버전**: v1.0.0

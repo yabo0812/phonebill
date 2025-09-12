@@ -1,53 +1,26 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: phonebill-ingress
+  name: phonebill
+  namespace: phonebill-prod
   annotations:
-    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: /
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
     nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
     nginx.ingress.kubernetes.io/proxy-body-size: "10m"
-    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
-    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
-    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
 spec:
   tls:
     - hosts:
-        - phonebill.production-domain.com
+        - phonebill.yourdomain.com
       secretName: phonebill-prod-tls
   rules:
-    - host: phonebill.production-domain.com
+    - host: phonebill.yourdomain.com
       http:
         paths:
-          - path: /api/auth
-            pathType: Prefix
-            backend:
-              service:
-                name: user-service
-                port:
-                  number: 8080
-          - path: /api/bills
-            pathType: Prefix
-            backend:
-              service:
-                name: bill-service
-                port:
-                  number: 8080
-          - path: /api/products
-            pathType: Prefix
-            backend:
-              service:
-                name: product-service
-                port:
-                  number: 8080
-          - path: /api/kos
-            pathType: Prefix
-            backend:
-              service:
-                name: kos-mock
-                port:
-                  number: 8080
           - path: /
             pathType: Prefix
             backend:

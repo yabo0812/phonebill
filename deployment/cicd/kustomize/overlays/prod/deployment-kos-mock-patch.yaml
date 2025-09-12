@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kos-mock
+  namespace: phonebill-prod
 spec:
   replicas: 3
   template:
@@ -10,15 +11,24 @@ spec:
         - name: kos-mock
           resources:
             requests:
-              cpu: "1024m"
               memory: "1024Mi"
+              cpu: "1024m"
             limits:
-              cpu: "4096m"
               memory: "4096Mi"
-          env:
-            - name: SPRING_PROFILES_ACTIVE
-              value: "prod"
-            - name: SERVER_PORT
-              value: "8080"
-            - name: MANAGEMENT_SERVER_PORT
-              value: "8081"
+              cpu: "4096m"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3

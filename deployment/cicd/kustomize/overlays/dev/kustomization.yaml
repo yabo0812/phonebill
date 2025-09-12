@@ -1,46 +1,16 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-metadata:
-  name: phonebill-dev
+namespace: phonebill-dev
 
 resources:
   - ../../base
 
-namespace: phonebill-dev
-
-labels:
-  - pairs:
-      env: dev
-
-images:
-  - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
-    newTag: dev-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
-    newTag: dev-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
-    newTag: dev-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/product-service
-    newTag: dev-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
-    newTag: dev-latest
-
 patches:
-  # Common patches
   - path: configmap-common-patch.yaml
     target:
       kind: ConfigMap
       name: cm-common
-  - path: secret-common-patch.yaml
-    target:
-      kind: Secret
-      name: secret-common
-  - path: ingress-patch.yaml
-    target:
-      kind: Ingress
-      name: phonebill
-  
-  # Deployment patches
   - path: deployment-api-gateway-patch.yaml
     target:
       kind: Deployment
@@ -61,8 +31,14 @@ patches:
     target:
       kind: Deployment
       name: kos-mock
-  
-  # Secret patches
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: phonebill
+  - path: secret-common-patch.yaml
+    target:
+      kind: Secret
+      name: secret-common
   - path: secret-user-service-patch.yaml
     target:
       kind: Secret
@@ -75,3 +51,18 @@ patches:
     target:
       kind: Secret
       name: secret-product-service
+
+images:
+  - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/product-service
+    newTag: dev-latest
+  - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
+    newTag: dev-latest
+
+commonLabels:
+  environment: dev

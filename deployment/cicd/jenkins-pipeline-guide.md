@@ -43,7 +43,15 @@ Manage Jenkins > Credentials > Add Credentials
 - Password: {ACR_PASSWORD}
 ```
 
-#### 3. SonarQube Token
+#### 3. Docker Hub Credentials (Rate Limit 해결용)
+```
+- Kind: Username with password
+- ID: dockerhub-credentials
+- Username: {DOCKERHUB_USERNAME}
+- Password: {DOCKERHUB_PASSWORD}
+```
+
+#### 4. SonarQube Token
 ```
 - Kind: Secret text
 - ID: sonarqube-token

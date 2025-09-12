@@ -13,6 +13,7 @@ podTemplate(
     idleMinutes: 30,
     activeDeadlineSeconds: 3600,
     podRetention: never(),  // 파드 자동 정리 옵션: never(), onFailure(), always(), default()
+    showRawYaml: false,     // 디버깅용 YAML 출력 비활성화
     yaml: '''
         spec:
           tolerations:
@@ -20,6 +21,8 @@ podTemplate(
             key: dedicated
             operator: Equal
             value: cicd
+          activeDeadlineSeconds: 3600
+          restartPolicy: Never
     ''',
     containers: [
         containerTemplate(
@@ -175,6 +178,23 @@ podTemplate(
                     kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-product-service --timeout=300s
                     kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-kos-mock --timeout=300s
                 """
+            }
+        }
+        
+        // 파이프라인 완료 후 후처리
+        post {
+            always {
+                // 파드 정리는 Jenkins Kubernetes Plugin이 자동으로 처리
+                echo "🧹 Pipeline completed. Pod cleanup handled by Jenkins Kubernetes Plugin."
+                
+                // 성공/실패 여부 로깅
+                script {
+                    if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
+                        echo "✅ Pipeline completed successfully!"
+                    } else {
+                        echo "❌ Pipeline failed with result: ${currentBuild.result}"
+                    }
+                }
             }
         }
     }

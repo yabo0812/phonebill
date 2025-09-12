@@ -6,14 +6,32 @@ namespace: phonebill-dev
 resources:
   - ../../base
 
-patchesStrategicMerge:
-  - configmap-common-patch.yaml
-  - deployment-patch.yaml
-  - ingress-patch.yaml
-  - secret-common-patch.yaml
-  - secret-user-service-patch.yaml
-  - secret-bill-service-patch.yaml
-  - secret-product-service-patch.yaml
+patches:
+  - path: configmap-common-patch.yaml
+    target:
+      kind: ConfigMap
+      name: cm-common
+  - path: deployment-patch.yaml
+  - path: ingress-patch.yaml
+    target:
+      kind: Ingress
+      name: phonebill-ingress
+  - path: secret-common-patch.yaml
+    target:
+      kind: Secret
+      name: secret-common
+  - path: secret-user-service-patch.yaml
+    target:
+      kind: Secret
+      name: secret-user-service
+  - path: secret-bill-service-patch.yaml
+    target:
+      kind: Secret
+      name: secret-bill-service
+  - path: secret-product-service-patch.yaml
+    target:
+      kind: Secret
+      name: secret-product-service
 
 images:
   - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway

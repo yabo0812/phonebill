@@ -45,8 +45,8 @@ podTemplate(
                 withCredentials([azureServicePrincipal('azure-credentials')]) {
                     sh """
                         az login --service-principal -u \$AZURE_CLIENT_ID -p \$AZURE_CLIENT_SECRET -t \$AZURE_TENANT_ID
-                        az aks get-credentials --resource-group \${props.resource_group} --name \${props.cluster_name} --overwrite-existing
-                        kubectl create namespace phonebill-\${environment} --dry-run=client -o yaml | kubectl apply -f -
+                        az aks get-credentials --resource-group ${props.resource_group} --name ${props.cluster_name} --overwrite-existing
+                        kubectl create namespace phonebill-${environment} --dry-run=client -o yaml | kubectl apply -f -
                     """
                 }
             }
@@ -61,35 +61,35 @@ podTemplate(
                         
                         # 각 서비스별 테스트 및 분석
                         ./gradlew :api-gateway:test :api-gateway:jacocoTestReport :api-gateway:sonar \\
-                            -Dsonar.projectKey=phonebill-api-gateway-\${environment} \\
+                            -Dsonar.projectKey=phonebill-api-gateway-${environment} \\
                             -Dsonar.projectName=phonebill-api-gateway \\
                             -Dsonar.java.binaries=build/classes/java/main \\
                             -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \\
                             -Dsonar.exclusions=**/config/**,**/entity/**,**/dto/**,**/*Application.class,**/exception/**
                             
                         ./gradlew :user-service:test :user-service:jacocoTestReport :user-service:sonar \\
-                            -Dsonar.projectKey=phonebill-user-service-\${environment} \\
+                            -Dsonar.projectKey=phonebill-user-service-${environment} \\
                             -Dsonar.projectName=phonebill-user-service \\
                             -Dsonar.java.binaries=build/classes/java/main \\
                             -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \\
                             -Dsonar.exclusions=**/config/**,**/entity/**,**/dto/**,**/*Application.class,**/exception/**
                             
                         ./gradlew :bill-service:test :bill-service:jacocoTestReport :bill-service:sonar \\
-                            -Dsonar.projectKey=phonebill-bill-service-\${environment} \\
+                            -Dsonar.projectKey=phonebill-bill-service-${environment} \\
                             -Dsonar.projectName=phonebill-bill-service \\
                             -Dsonar.java.binaries=build/classes/java/main \\
                             -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \\
                             -Dsonar.exclusions=**/config/**,**/entity/**,**/dto/**,**/*Application.class,**/exception/**
                             
                         ./gradlew :product-service:test :product-service:jacocoTestReport :product-service:sonar \\
-                            -Dsonar.projectKey=phonebill-product-service-\${environment} \\
+                            -Dsonar.projectKey=phonebill-product-service-${environment} \\
                             -Dsonar.projectName=phonebill-product-service \\
                             -Dsonar.java.binaries=build/classes/java/main \\
                             -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \\
                             -Dsonar.exclusions=**/config/**,**/entity/**,**/dto/**,**/*Application.class,**/exception/**
                             
                         ./gradlew :kos-mock:test :kos-mock:jacocoTestReport :kos-mock:sonar \\
-                            -Dsonar.projectKey=phonebill-kos-mock-\${environment} \\
+                            -Dsonar.projectKey=phonebill-kos-mock-${environment} \\
                             -Dsonar.projectName=phonebill-kos-mock \\
                             -Dsonar.java.binaries=build/classes/java/main \\
                             -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \\
@@ -120,12 +120,12 @@ podTemplate(
                     services.each { service ->
                         sh """
                             podman build \\
-                                --build-arg BUILD_LIB_DIR="\${service}/build/libs" \\
-                                --build-arg ARTIFACTORY_FILE="\${service}.jar" \\
+                                --build-arg BUILD_LIB_DIR="${service}/build/libs" \\
+                                --build-arg ARTIFACTORY_FILE="${service}.jar" \\
                                 -f deployment/container/Dockerfile-backend \\
-                                -t acrdigitalgarage01.azurecr.io/phonebill/\${service}:\${environment}-\${imageTag} .
+                                -t acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag} .
 
-                            podman push acrdigitalgarage01.azurecr.io/phonebill/\${service}:\${environment}-\${imageTag}
+                            podman push acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag}
                         """
                     }
                 }
@@ -140,24 +140,24 @@ podTemplate(
                     sudo mv kustomize /usr/local/bin/
 
                     # 환경별 디렉토리로 이동
-                    cd deployment/cicd/kustomize/overlays/\${environment}
+                    cd deployment/cicd/kustomize/overlays/${environment}
 
                     # 이미지 태그 업데이트
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/api-gateway:\${environment}-\${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/user-service:\${environment}-\${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/bill-service:\${environment}-\${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/product-service:\${environment}-\${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/kos-mock:\${environment}-\${imageTag}
+                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/api-gateway:${environment}-${imageTag}
+                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/user-service:${environment}-${imageTag}
+                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/bill-service:${environment}-${imageTag}
+                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/product-service:${environment}-${imageTag}
+                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/kos-mock:${environment}-${imageTag}
 
                     # 매니페스트 적용
                     kubectl apply -k .
 
                     echo "Waiting for deployments to be ready..."
-                    kubectl -n phonebill-\${environment} wait --for=condition=available deployment/\${environment}-api-gateway --timeout=300s
-                    kubectl -n phonebill-\${environment} wait --for=condition=available deployment/\${environment}-user-service --timeout=300s
-                    kubectl -n phonebill-\${environment} wait --for=condition=available deployment/\${environment}-bill-service --timeout=300s
-                    kubectl -n phonebill-\${environment} wait --for=condition=available deployment/\${environment}-product-service --timeout=300s
-                    kubectl -n phonebill-\${environment} wait --for=condition=available deployment/\${environment}-kos-mock --timeout=300s
+                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-api-gateway --timeout=300s
+                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-user-service --timeout=300s
+                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-bill-service --timeout=300s
+                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-product-service --timeout=300s
+                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-kos-mock --timeout=300s
                 """
             }
         }

@@ -171,21 +171,20 @@ podTemplate(
 
                     # 이미지 태그 업데이트
                 """
-                
                 services.each { service ->
-                    sh "kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag}"
+                    sh "\$HOME/bin/kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag}"
                 }
-                
-                sh """
+
                     # 매니페스트 적용
                     kubectl apply -k .
 
+                    # 배포 상태 확인
                     echo "Waiting for deployments to be ready..."
                 """
-                
                 services.each { service ->
                     sh "kubectl -n phonebill-${environment} wait --for=condition=available deployment/${service} --timeout=300s"
                 }
+                """
             }
         }
         

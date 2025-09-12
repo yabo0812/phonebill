@@ -28,7 +28,7 @@ dependencies {
     
     // Test Dependencies (bill service specific)
     testImplementation 'org.testcontainers:postgresql'
-    testImplementation 'redis.embedded:embedded-redis:0.7.3'
+    testImplementation 'it.ozimov:embedded-redis:0.7.3'
     testImplementation 'com.github.tomakehurst:wiremock-jre8:2.35.0'
 }
 

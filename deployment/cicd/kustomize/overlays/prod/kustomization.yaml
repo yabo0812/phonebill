@@ -11,23 +11,23 @@ patches:
     target:
       kind: ConfigMap
       name: cm-common
-  - path: deployment-patch.yaml
+  - path: deployment-api-gateway-patch.yaml
     target:
       kind: Deployment
       name: api-gateway
-  - path: deployment-patch.yaml
+  - path: deployment-user-service-patch.yaml
     target:
       kind: Deployment
       name: user-service
-  - path: deployment-patch.yaml
+  - path: deployment-bill-service-patch.yaml
     target:
       kind: Deployment
       name: bill-service
-  - path: deployment-patch.yaml
+  - path: deployment-product-service-patch.yaml
     target:
       kind: Deployment
       name: product-service
-  - path: deployment-patch.yaml
+  - path: deployment-kos-mock-patch.yaml
     target:
       kind: Deployment
       name: kos-mock

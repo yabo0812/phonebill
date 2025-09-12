@@ -181,20 +181,15 @@ podTemplate(
             }
         }
         
-        // 파이프라인 완료 후 후처리
-        post {
-            always {
-                // 파드 정리는 Jenkins Kubernetes Plugin이 자동으로 처리
-                echo "🧹 Pipeline completed. Pod cleanup handled by Jenkins Kubernetes Plugin."
-                
-                // 성공/실패 여부 로깅
-                script {
-                    if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
-                        echo "✅ Pipeline completed successfully!"
-                    } else {
-                        echo "❌ Pipeline failed with result: ${currentBuild.result}"
-                    }
-                }
+        // 파이프라인 완료 로그 (Scripted Pipeline 방식)
+        stage('Pipeline Complete') {
+            echo "🧹 Pipeline completed. Pod cleanup handled by Jenkins Kubernetes Plugin."
+            
+            // 성공/실패 여부 로깅
+            if (currentBuild.result == null || currentBuild.result == 'SUCCESS') {
+                echo "✅ Pipeline completed successfully!"
+            } else {
+                echo "❌ Pipeline failed with result: ${currentBuild.result}"
             }
         }
     }

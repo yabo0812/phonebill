@@ -19,7 +19,7 @@ podTemplate(
             ttyEnabled: true, 
             command: 'cat', 
             privileged: true,
-            resourceRequestCpu: '1000m',
+            resourceRequestCpu: '500m',
             resourceRequestMemory: '2Gi',
             resourceLimitCpu: '2000m',
             resourceLimitMemory: '4Gi'
@@ -48,16 +48,6 @@ podTemplate(
             resourceRequestMemory: '512Mi',
             resourceLimitCpu: '500m',
             resourceLimitMemory: '1Gi'
-        ),
-        containerTemplate(
-            name: 'envsubst', 
-            image: "hiondal/envsubst", 
-            command: 'sleep', 
-            args: '1h',
-            resourceRequestCpu: '100m',
-            resourceRequestMemory: '256Mi',
-            resourceLimitCpu: '200m',
-            resourceLimitMemory: '512Mi'
         )
     ],
     volumes: [

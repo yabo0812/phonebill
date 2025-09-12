@@ -43,13 +43,18 @@ Manage Jenkins > Credentials > Add Credentials
 - Password: {ACR_PASSWORD}
 ```
 
-#### 3. Docker Hub Credentials (Rate Limit 해결용)
+#### 3. Docker Hub Credentials (Rate Limit 해결용) ⚠️ **필수**
 ```
+Manage Jenkins > Credentials > Add Credentials
 - Kind: Username with password
 - ID: dockerhub-credentials
 - Username: {DOCKERHUB_USERNAME}
 - Password: {DOCKERHUB_PASSWORD}
 ```
+
+**⚠️ 중요**: Docker Hub 계정이 없으면 다음 중 하나 선택:
+1. Docker Hub 무료 계정 생성 (https://hub.docker.com)
+2. 또는 Jenkinsfile에서 Docker Hub 로그인 제거 (아래 참조)
 
 #### 4. SonarQube Token
 ```
@@ -360,6 +365,42 @@ sh "echo \${environment}"
 # ✅ 올바른 문법
 sh "echo ${environment}"
 ```
+
+### **Docker Hub 계정이 없는 경우 대안**
+
+Docker Hub 계정 생성이 어려운 경우, 다음과 같이 Jenkinsfile을 수정할 수 있습니다:
+
+```groovy
+// 수정 전 (Docker Hub 로그인 포함)
+withCredentials([
+    usernamePassword(
+        credentialsId: 'acr-credentials',
+        usernameVariable: 'ACR_USERNAME',
+        passwordVariable: 'ACR_PASSWORD'
+    ),
+    usernamePassword(
+        credentialsId: 'dockerhub-credentials',
+        usernameVariable: 'DOCKERHUB_USERNAME', 
+        passwordVariable: 'DOCKERHUB_PASSWORD'
+    )
+]) {
+    sh "podman login docker.io --username \$DOCKERHUB_USERNAME --password \$DOCKERHUB_PASSWORD"
+    sh "podman login acrdigitalgarage01.azurecr.io --username \$ACR_USERNAME --password \$ACR_PASSWORD"
+    // ...
+}
+
+// 수정 후 (Docker Hub 로그인 제거)
+withCredentials([usernamePassword(
+    credentialsId: 'acr-credentials',
+    usernameVariable: 'ACR_USERNAME',
+    passwordVariable: 'ACR_PASSWORD'
+)]) {
+    sh "podman login acrdigitalgarage01.azurecr.io --username \$ACR_USERNAME --password \$ACR_PASSWORD"
+    // ...
+}
+```
+
+**⚠️ 주의**: Docker Hub 로그인을 제거하면 pull rate limit에 걸릴 수 있습니다.
 
 ### **배포 전 최종 검증 스크립트**
 ```bash

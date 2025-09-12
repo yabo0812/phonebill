@@ -148,9 +148,11 @@ podTemplate(
         stage('Update Kustomize & Deploy') {
             container('azure-cli') {
                 sh """
-                    # Kustomize 설치
+                    # Kustomize 설치 (sudo 없이 사용자 디렉토리에 설치)
                     curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
-                    sudo mv kustomize /usr/local/bin/
+                    mkdir -p \$HOME/bin
+                    mv kustomize \$HOME/bin/
+                    export PATH=\$PATH:\$HOME/bin
 
                     # 환경별 디렉토리로 이동
                     cd deployment/cicd/kustomize/overlays/${environment}

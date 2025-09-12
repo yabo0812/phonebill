@@ -12,6 +12,25 @@ patches:
       kind: ConfigMap
       name: cm-common
   - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: api-gateway
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: user-service
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: bill-service
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: product-service
+  - path: deployment-patch.yaml
+    target:
+      kind: Deployment
+      name: kos-mock
   - path: ingress-patch.yaml
     target:
       kind: Ingress

@@ -63,8 +63,3 @@ images:
     newTag: staging-latest
   - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
     newTag: staging-latest
-
-labels:
-  - includeSelectors: true
-    pairs:
-      environment: staging

@@ -63,8 +63,3 @@ images:
     newTag: prod-latest
   - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
     newTag: prod-latest
-
-labels:
-  - includeSelectors: true
-    pairs:
-      environment: prod

@@ -10,8 +10,8 @@ spec:
       - name: user-service
         resources:
           requests:
-            memory: "256Mi"
-            cpu: "256m"
+            cpu: 256m
+            memory: 256Mi
           limits:
-            memory: "1024Mi"
-            cpu: "1024m"
+            cpu: 1024m
+            memory: 1024Mi

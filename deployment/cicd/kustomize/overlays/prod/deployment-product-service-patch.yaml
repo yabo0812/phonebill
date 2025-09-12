@@ -11,11 +11,11 @@ spec:
         - name: product-service
           resources:
             requests:
-              memory: "1024Mi"
-              cpu: "1024m"
+              memory: 1024Mi
+              cpu: 1024m
             limits:
-              memory: "4096Mi"
-              cpu: "4096m"
+              memory: 4096Mi
+              cpu: 4096m
           livenessProbe:
             httpGet:
               path: /actuator/health

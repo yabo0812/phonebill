@@ -63,8 +63,3 @@ images:
     newTag: dev-latest
   - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
     newTag: dev-latest
-
-labels:
-  - includeSelectors: true
-    pairs:
-      environment: dev

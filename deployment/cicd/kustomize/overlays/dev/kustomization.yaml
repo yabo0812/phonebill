@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: phonebill-dev
+
+resources:
+- ../../base
+
+commonLabels:
+  env: dev
+  
+patchesStrategicMerge:
+- configmap-common-patch.yaml
+- secret-common-patch.yaml
+- ingress-patch.yaml
+- replica-patch.yaml
+- secret-user-service-patch.yaml
+- secret-bill-service-patch.yaml
+- secret-product-service-patch.yaml

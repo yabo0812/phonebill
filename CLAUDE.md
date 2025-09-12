@@ -97,9 +97,9 @@ QA Engineer
 
 [URL링크 참조]
 - URL링크는 WebFetch가 아닌 'curl {URL} > claude/{filename}'명령으로 저장
-- 'claude'디렉토리가 없으면 생성하고 다운로드   
+- 동일한 파일이 있으면 덮어 씀
+- 'claude'디렉토리가 없으면 생성하고 다운로드
 - 저장된 파일을 읽어 사용함
-- 작업을 완료한 후 다운로드한 파일은 삭제함 
 
 ---
 
@@ -306,7 +306,11 @@ QA Engineer
   - 설명: 프론트엔드 서비스를 쿠버네티스 클러스터에 배포하는 가이드  
   - URL: https://raw.githubusercontent.com/cna-bootcamp/clauding-guide/refs/heads/main/guides/deploy/deploy-k8s-front.md
   - 파일명: deploy-k8s-front.md  
-
+- 백엔드Jenkins파이프라인작성가이드
+  - 설명: 백엔드 서비스를 Jenkins를 이용하여 CI/CD하는 배포 가이드  
+  - URL: https://raw.githubusercontent.com/cna-bootcamp/clauding-guide/refs/heads/main/guides/deploy/deploy-jenkins-cicd-back.md
+  - 파일명: deploy-jenkins-cicd-back.md  
+  
 ## 참조 문서
 - 프로젝트지침템플릿
   - 설명: 프로젝트 지침인 CLAUDE.md 파일 템플릿 

@@ -1,0 +1,426 @@
+#!/usr/bin/env groovy
+
+/**
+ * Jenkins Pipeline for phonebill Microservices
+ * Supports multi-environment deployment (dev, staging, prod)
+ * Services: api-gateway, user-service, bill-service, product-service, kos-mock
+ */
+
+pipeline {
+    agent {
+        kubernetes {
+            yaml '''
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    jenkins: agent
+spec:
+  serviceAccountName: jenkins-agent
+  containers:
+  - name: gradle
+    image: gradle:8.5-jdk17
+    command:
+    - cat
+    tty: true
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+    volumeMounts:
+    - name: gradle-cache
+      mountPath: /home/gradle/.gradle
+  - name: podman
+    image: quay.io/podman/stable:latest
+    command:
+    - cat
+    tty: true
+    securityContext:
+      privileged: true
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1"
+  - name: azure-cli
+    image: mcr.microsoft.com/azure-cli:latest
+    command:
+    - cat
+    tty: true
+    resources:
+      requests:
+        memory: "512Mi"
+        cpu: "250m"
+      limits:
+        memory: "1Gi"
+        cpu: "500m"
+  - name: kubectl
+    image: bitnami/kubectl:latest
+    command:
+    - cat
+    tty: true
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "100m"
+      limits:
+        memory: "512Mi"
+        cpu: "250m"
+  volumes:
+  - name: gradle-cache
+    persistentVolumeClaim:
+      claimName: jenkins-gradle-cache
+            '''
+        }
+    }
+    
+    parameters {
+        choice(
+            name: 'ENVIRONMENT',
+            choices: ['dev', 'staging', 'prod'],
+            description: 'Target deployment environment'
+        )
+        choice(
+            name: 'SERVICES_TO_BUILD',
+            choices: ['all', 'api-gateway', 'user-service', 'bill-service', 'product-service', 'kos-mock'],
+            description: 'Services to build and deploy'
+        )
+        booleanParam(
+            name: 'SKIP_TESTS',
+            defaultValue: false,
+            description: 'Skip unit tests during build'
+        )
+        booleanParam(
+            name: 'SKIP_SONAR',
+            defaultValue: false,
+            description: 'Skip SonarQube analysis'
+        )
+        booleanParam(
+            name: 'FORCE_DEPLOY',
+            defaultValue: false,
+            description: 'Force deployment even if no changes detected'
+        )
+    }
+    
+    environment {
+        // Load environment-specific variables
+        CONFIG_FILE = "deployment/cicd/config/deploy_env_vars_${params.ENVIRONMENT}"
+        
+        // Build configuration
+        GRADLE_USER_HOME = '/home/gradle/.gradle'
+        GRADLE_OPTS = '-Xmx2048m -XX:MaxPermSize=512m'
+        
+        // Azure credentials
+        AZURE_CREDENTIALS = credentials('azure-service-principal')
+        ACR_CREDENTIALS = credentials('acr-credentials')
+        
+        // SonarQube
+        SONAR_TOKEN = credentials('sonarqube-token')
+        
+        // Slack notification
+        SLACK_TOKEN = credentials('slack-token')
+    }
+    
+    stages {
+        stage('Initialize') {
+            steps {
+                script {
+                    echo "🚀 Starting phonebill pipeline for ${params.ENVIRONMENT} environment"
+                    
+                    // Load environment-specific configuration
+                    if (fileExists(env.CONFIG_FILE)) {
+                        def props = readProperties file: env.CONFIG_FILE
+                        props.each { key, value ->
+                            env[key] = value
+                        }
+                        echo "✅ Loaded configuration from ${env.CONFIG_FILE}"
+                    } else {
+                        error "❌ Configuration file not found: ${env.CONFIG_FILE}"
+                    }
+                    
+                    // Set services to build
+                    if (params.SERVICES_TO_BUILD == 'all') {
+                        env.SERVICES_LIST = env.SERVICES
+                    } else {
+                        env.SERVICES_LIST = params.SERVICES_TO_BUILD
+                    }
+                    
+                    echo "🎯 Services to build: ${env.SERVICES_LIST}"
+                    echo "📦 Target namespace: ${env.AKS_NAMESPACE}"
+                }
+            }
+        }
+        
+        stage('Checkout & Prepare') {
+            steps {
+                checkout scm
+                script {
+                    env.BUILD_TIMESTAMP = sh(
+                        script: 'date +%Y%m%d-%H%M%S',
+                        returnStdout: true
+                    ).trim()
+                    
+                    env.IMAGE_TAG = "${env.BUILD_NUMBER}-${params.ENVIRONMENT}-${env.BUILD_TIMESTAMP}"
+                    echo "🏷️ Image tag: ${env.IMAGE_TAG}"
+                }
+            }
+        }
+        
+        stage('Build & Test') {
+            parallel {
+                stage('Gradle Build') {
+                    steps {
+                        container('gradle') {
+                            script {
+                                def services = env.SERVICES_LIST.split(',')
+                                for (service in services) {
+                                    echo "🔨 Building ${service}..."
+                                    
+                                    if (!params.SKIP_TESTS) {
+                                        sh """
+                                            ./gradlew ${service}:clean ${service}:test ${service}:build \
+                                                --no-daemon \
+                                                --parallel \
+                                                --build-cache
+                                        """
+                                    } else {
+                                        sh """
+                                            ./gradlew ${service}:clean ${service}:build -x test \
+                                                --no-daemon \
+                                                --parallel \
+                                                --build-cache
+                                        """
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    post {
+                        always {
+                            // Publish test results
+                            script {
+                                def services = env.SERVICES_LIST.split(',')
+                                for (service in services) {
+                                    if (fileExists("${service}/build/test-results/test/*.xml")) {
+                                        publishTestResults(
+                                            testResultsPattern: "${service}/build/test-results/test/*.xml",
+                                            allowEmptyResults: true
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('SonarQube Analysis') {
+            when {
+                not { params.SKIP_SONAR }
+            }
+            steps {
+                container('gradle') {
+                    withSonarQubeEnv('SonarQube') {
+                        sh '''
+                            ./gradlew sonarqube \
+                                -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                                -Dsonar.sources=${SONAR_SOURCES} \
+                                -Dsonar.exclusions="${SONAR_EXCLUSIONS}" \
+                                --no-daemon
+                        '''
+                    }
+                }
+            }
+        }
+        
+        stage('Quality Gate') {
+            when {
+                not { params.SKIP_SONAR }
+            }
+            steps {
+                timeout(time: 5, unit: 'MINUTES') {
+                    waitForQualityGate abortPipeline: true
+                }
+            }
+        }
+        
+        stage('Container Build & Push') {
+            parallel {
+                stage('Build Images') {
+                    steps {
+                        container('podman') {
+                            script {
+                                // Login to ACR
+                                sh """
+                                    echo "${ACR_CREDENTIALS_PSW}" | podman login \
+                                        --username "${ACR_CREDENTIALS_USR}" \
+                                        --password-stdin \
+                                        ${REGISTRY_URL}
+                                """
+                                
+                                def services = env.SERVICES_LIST.split(',')
+                                for (service in services) {
+                                    echo "🐳 Building container image for ${service}..."
+                                    
+                                    sh """
+                                        cd ${service}
+                                        podman build \
+                                            --tag ${REGISTRY_URL}/phonebill/${service}:${IMAGE_TAG} \
+                                            --tag ${REGISTRY_URL}/phonebill/${service}:latest-${params.ENVIRONMENT} \
+                                            --file Dockerfile \
+                                            .
+                                        
+                                        podman push ${REGISTRY_URL}/phonebill/${service}:${IMAGE_TAG}
+                                        podman push ${REGISTRY_URL}/phonebill/${service}:latest-${params.ENVIRONMENT}
+                                    """
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Deploy to Kubernetes') {
+            steps {
+                container('kubectl') {
+                    script {
+                        // Login to Azure and get AKS credentials
+                        sh """
+                            az login --service-principal \
+                                --username "${AZURE_CREDENTIALS_USR}" \
+                                --password "${AZURE_CREDENTIALS_PSW}" \
+                                --tenant "${AZURE_CREDENTIALS_TENANT_ID}"
+                            
+                            az aks get-credentials \
+                                --resource-group ${AZURE_RESOURCE_GROUP} \
+                                --name ${AKS_CLUSTER_NAME} \
+                                --overwrite-existing
+                        """
+                        
+                        // Deploy services using kustomize
+                        def services = env.SERVICES_LIST.split(',')
+                        for (service in services) {
+                            echo "🚀 Deploying ${service} to ${params.ENVIRONMENT}..."
+                            
+                            sh """
+                                cd ${KUSTOMIZE_BASE}/${service}
+                                
+                                # Update image tag in kustomization.yaml
+                                sed -i 's|newTag:.*|newTag: ${IMAGE_TAG}|' ${KUSTOMIZE_OVERLAY}/kustomization.yaml
+                                
+                                # Apply deployment
+                                kubectl apply -k ${KUSTOMIZE_OVERLAY} -n ${AKS_NAMESPACE}
+                                
+                                # Wait for rollout
+                                kubectl rollout status deployment/${service} -n ${AKS_NAMESPACE} --timeout=300s
+                            """
+                        }
+                    }
+                }
+            }
+        }
+        
+        stage('Health Check') {
+            steps {
+                container('kubectl') {
+                    script {
+                        def services = env.SERVICES_LIST.split(',')
+                        for (service in services) {
+                            echo "🏥 Health checking ${service}..."
+                            
+                            retry(count: env.HEALTH_CHECK_RETRY as Integer) {
+                                sh """
+                                    kubectl get deployment ${service} -n ${AKS_NAMESPACE} -o json | \
+                                        jq -e '.status.readyReplicas == .status.replicas and .status.replicas > 0'
+                                """
+                                
+                                sleep time: 30, unit: 'SECONDS'
+                            }
+                            
+                            echo "✅ ${service} is healthy"
+                        }
+                    }
+                }
+            }
+        }
+    }
+    
+    post {
+        always {
+            script {
+                // Archive build artifacts
+                archiveArtifacts(
+                    artifacts: '**/build/libs/*.jar',
+                    allowEmptyArchive: true,
+                    fingerprint: true
+                )
+                
+                // Clean workspace
+                cleanWs()
+            }
+        }
+        
+        success {
+            script {
+                def message = """
+                    ✅ *phonebill Deployment Successful*
+                    • Environment: `${params.ENVIRONMENT}`
+                    • Services: `${env.SERVICES_LIST}`
+                    • Image Tag: `${env.IMAGE_TAG}`
+                    • Build: `${env.BUILD_NUMBER}`
+                    • Duration: `${currentBuild.durationString}`
+                """.stripIndent()
+                
+                // Send Slack notification
+                slackSend(
+                    channel: env.SLACK_CHANNEL,
+                    color: 'good',
+                    message: message,
+                    token: env.SLACK_TOKEN
+                )
+                
+                // Send email notification
+                emailext(
+                    subject: "✅ phonebill Deployment Success - ${params.ENVIRONMENT}",
+                    body: message,
+                    to: env.EMAIL_RECIPIENTS
+                )
+            }
+        }
+        
+        failure {
+            script {
+                def message = """
+                    ❌ *phonebill Deployment Failed*
+                    • Environment: `${params.ENVIRONMENT}`
+                    • Services: `${env.SERVICES_LIST}`
+                    • Build: `${env.BUILD_NUMBER}`
+                    • Error: `${currentBuild.result}`
+                    • Console: ${env.BUILD_URL}console
+                """.stripIndent()
+                
+                // Send Slack notification
+                slackSend(
+                    channel: env.SLACK_CHANNEL,
+                    color: 'danger',
+                    message: message,
+                    token: env.SLACK_TOKEN
+                )
+                
+                // Send email notification
+                emailext(
+                    subject: "❌ phonebill Deployment Failed - ${params.ENVIRONMENT}",
+                    body: message,
+                    to: env.EMAIL_RECIPIENTS
+                )
+            }
+        }
+    }
+}

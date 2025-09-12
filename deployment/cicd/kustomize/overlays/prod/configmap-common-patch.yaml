@@ -1,11 +1,28 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: cm-common
+  name: common-config
 data:
-  CORS_ALLOWED_ORIGINS: "https://phonebill-prod.example.com"
-  JWT_ACCESS_TOKEN_VALIDITY: "3600000"
-  JWT_REFRESH_TOKEN_VALIDITY: "43200000"
-  REDIS_PORT: "6379"
+  # Production Spring profiles
   SPRING_PROFILES_ACTIVE: "prod"
+  
+  # Production database settings
   DDL_AUTO: "validate"
+  
+  # Production logging level
+  LOGGING_LEVEL_ROOT: "INFO"
+  LOGGING_LEVEL_COM_PHONEBILL: "INFO"
+  
+  # Production security settings
+  SECURITY_CORS_ALLOWED_ORIGINS: "https://phonebill.production-domain.com"
+  
+  # JWT Token settings for production (shorter expiry for security)
+  JWT_EXPIRATION: "1800000"  # 30 minutes
+  
+  # Redis settings for production
+  REDIS_HOST: "redis-service.phonebill-prod.svc.cluster.local"
+  REDIS_PORT: "6379"
+  
+  # Production specific configurations
+  MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE: "health,info,prometheus"
+  MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS: "when-authorized"

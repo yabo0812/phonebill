@@ -12,8 +12,7 @@ podTemplate(
     slaveConnectTimeout: 300,
     idleMinutes: 30,
     activeDeadlineSeconds: 3600,
-    podRetention: never(),  // 파드 자동 정리 옵션: never(), onFailure(), always(), default()
-    showRawYaml: false,     // 디버깅용 YAML 출력 비활성화
+    podRetention: never(),
     yaml: '''
         spec:
           tolerations:
@@ -21,8 +20,6 @@ podTemplate(
             key: dedicated
             operator: Equal
             value: cicd
-          activeDeadlineSeconds: 3600
-          restartPolicy: Never
     ''',
     containers: [
         containerTemplate(
@@ -118,7 +115,7 @@ podTemplate(
             timeout(time: 10, unit: 'MINUTES') {
                 def qg = waitForQualityGate()
                 if (qg.status != 'OK') {
-                    error "Pipeline aborted due to quality gate failure: \${qg.status}"
+                    error "Pipeline aborted due to quality gate failure: ${qg.status}"
                 }
             }
         }
@@ -162,22 +159,22 @@ podTemplate(
                     cd deployment/cicd/kustomize/overlays/${environment}
 
                     # 이미지 태그 업데이트
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/api-gateway:${environment}-${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/user-service:${environment}-${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/bill-service:${environment}-${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/product-service:${environment}-${imageTag}
-                    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/kos-mock:${environment}-${imageTag}
-
+                """
+                
+                services.each { service ->
+                    sh "kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag}"
+                }
+                
+                sh """
                     # 매니페스트 적용
                     kubectl apply -k .
 
                     echo "Waiting for deployments to be ready..."
-                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-api-gateway --timeout=300s
-                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-user-service --timeout=300s
-                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-bill-service --timeout=300s
-                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-product-service --timeout=300s
-                    kubectl -n phonebill-${environment} wait --for=condition=available deployment/${environment}-kos-mock --timeout=300s
                 """
+                
+                services.each { service ->
+                    sh "kubectl -n phonebill-${environment} wait --for=condition=available deployment/${service} --timeout=300s"
+                }
             }
         }
         

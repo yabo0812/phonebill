@@ -1,70 +1,68 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
-namespace: phonebill-staging
-
 resources:
   - ../../base
 
+namespace: phonebill-staging
+
 patches:
-  - path: configmap-common-patch.yaml
-    target:
+  # Common ConfigMap
+  - target:
       kind: ConfigMap
       name: cm-common
-  - path: deployment-api-gateway-patch.yaml
-    target:
-      kind: Deployment
-      name: api-gateway
-  - path: deployment-user-service-patch.yaml
-    target:
-      kind: Deployment
-      name: user-service
-  - path: deployment-bill-service-patch.yaml
-    target:
-      kind: Deployment
-      name: bill-service
-  - path: deployment-product-service-patch.yaml
-    target:
-      kind: Deployment
-      name: product-service
-  - path: deployment-kos-mock-patch.yaml
-    target:
-      kind: Deployment
-      name: kos-mock
-  - path: ingress-patch.yaml
-    target:
-      kind: Ingress
-      name: phonebill-ingress
-  - path: secret-common-patch.yaml
-    target:
+    path: configmap-common-patch.yaml
+  
+  # Common Secret
+  - target:
       kind: Secret
       name: secret-common
-  - path: secret-user-service-patch.yaml
-    target:
+    path: secret-common-patch.yaml
+  
+  # Ingress
+  - target:
+      kind: Ingress
+      name: phonebill-ingress
+    path: ingress-patch.yaml
+  
+  # API Gateway
+  - target:
+      kind: Deployment
+      name: api-gateway-deployment
+    path: deployment-api-gateway-patch.yaml
+  
+  # User Service
+  - target:
+      kind: Deployment
+      name: user-service-deployment
+    path: deployment-user-service-patch.yaml
+  - target:
       kind: Secret
       name: secret-user-service
-  - path: secret-bill-service-patch.yaml
-    target:
+    path: secret-user-service-patch.yaml
+  
+  # Bill Service
+  - target:
+      kind: Deployment
+      name: bill-service-deployment
+    path: deployment-bill-service-patch.yaml
+  - target:
       kind: Secret
       name: secret-bill-service
-  - path: secret-product-service-patch.yaml
-    target:
+    path: secret-bill-service-patch.yaml
+  
+  # Product Service
+  - target:
+      kind: Deployment
+      name: product-service-deployment
+    path: deployment-product-service-patch.yaml
+  - target:
       kind: Secret
       name: secret-product-service
-
-images:
-  - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway
-    newTag: staging-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/user-service
-    newTag: staging-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/bill-service
-    newTag: staging-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/product-service
-    newTag: staging-latest
-  - name: acrdigitalgarage01.azurecr.io/phonebill/kos-mock
-    newTag: staging-latest
-
-namePrefix: staging-
-
-commonLabels:
-  environment: staging
+    path: secret-product-service-patch.yaml
+  
+  # KOS Mock
+  - target:
+      kind: Deployment
+      name: kos-mock-deployment
+    path: deployment-kos-mock-patch.yaml

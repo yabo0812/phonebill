@@ -3,15 +3,24 @@ kind: Deployment
 metadata:
   name: bill-service
 spec:
-  replicas: 1
+  replicas: 3
   template:
     spec:
       containers:
-      - name: bill-service
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "256m"
-          limits:
-            memory: "1024Mi"
-            cpu: "1024m"
+        - name: bill-service
+          resources:
+            requests:
+              cpu: "1024m"
+              memory: "1024Mi"
+            limits:
+              cpu: "4096m"
+              memory: "4096Mi"
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "8081"
+            - name: SPRING_JPA_HIBERNATE_DDL_AUTO
+              value: "validate"

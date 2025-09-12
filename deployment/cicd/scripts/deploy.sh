@@ -4,34 +4,40 @@ set -e
 ENVIRONMENT=${1:-dev}
 IMAGE_TAG=${2:-latest}
 
-echo "🚀 Starting deployment for environment: $ENVIRONMENT with image tag: $IMAGE_TAG"
+# 서비스 목록
+SERVICES=("api-gateway" "user-service" "bill-service" "product-service" "kos-mock")
+
+echo "🚀 Starting deployment to ${ENVIRONMENT} environment..."
+echo "📦 Image tag: ${ENVIRONMENT}-${IMAGE_TAG}"
 
 # 환경별 이미지 태그 업데이트
 cd deployment/cicd/kustomize/overlays/${ENVIRONMENT}
 
-echo "📝 Updating image tags..."
 # 각 서비스 이미지 태그 업데이트
-kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/api-gateway:${ENVIRONMENT}-${IMAGE_TAG}
-kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/user-service:${ENVIRONMENT}-${IMAGE_TAG}
-kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/bill-service:${ENVIRONMENT}-${IMAGE_TAG}
-kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/product-service:${ENVIRONMENT}-${IMAGE_TAG}
-kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/kos-mock:${ENVIRONMENT}-${IMAGE_TAG}
+echo "🔄 Updating image tags..."
+for service in "${SERVICES[@]}"; do
+    echo "  - Updating ${service} to acrdigitalgarage01.azurecr.io/phonebill/${service}:${ENVIRONMENT}-${IMAGE_TAG}"
+    kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/${service}:${ENVIRONMENT}-${IMAGE_TAG}
+done
 
-echo "📦 Applying manifests to Kubernetes..."
 # 배포 실행
+echo "🎯 Applying Kubernetes manifests..."
 kubectl apply -k .
 
-echo "⏳ Waiting for deployments to be ready..."
 # 배포 상태 확인
-kubectl rollout status deployment/${ENVIRONMENT}-api-gateway -n phonebill-${ENVIRONMENT}
-kubectl rollout status deployment/${ENVIRONMENT}-user-service -n phonebill-${ENVIRONMENT}
-kubectl rollout status deployment/${ENVIRONMENT}-bill-service -n phonebill-${ENVIRONMENT}
-kubectl rollout status deployment/${ENVIRONMENT}-product-service -n phonebill-${ENVIRONMENT}
-kubectl rollout status deployment/${ENVIRONMENT}-kos-mock -n phonebill-${ENVIRONMENT}
+echo "⏳ Waiting for deployments to be ready..."
+for service in "${SERVICES[@]}"; do
+    echo "  - Checking ${service} deployment status..."
+    kubectl rollout status deployment/${service} -n phonebill-${ENVIRONMENT} --timeout=300s
+done
 
-echo "🔍 Checking deployment status..."
+# 최종 상태 확인
+echo "📋 Final deployment status:"
 kubectl get pods -n phonebill-${ENVIRONMENT}
+echo ""
 kubectl get services -n phonebill-${ENVIRONMENT}
+echo ""
 kubectl get ingress -n phonebill-${ENVIRONMENT}
 
-echo "✅ Deployment completed successfully!"
+echo "✅ Deployment to ${ENVIRONMENT} environment completed successfully!"
+echo "🌐 Access URL: https://$(kubectl get ingress -n phonebill-${ENVIRONMENT} -o jsonpath='{.items[0].spec.rules[0].host}')"

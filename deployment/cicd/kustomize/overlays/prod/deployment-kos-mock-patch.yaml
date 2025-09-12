@@ -3,15 +3,22 @@ kind: Deployment
 metadata:
   name: kos-mock
 spec:
-  replicas: 1
+  replicas: 3
   template:
     spec:
       containers:
-      - name: kos-mock
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "256m"
-          limits:
-            memory: "1024Mi"
-            cpu: "1024m"
+        - name: kos-mock
+          resources:
+            requests:
+              cpu: "1024m"
+              memory: "1024Mi"
+            limits:
+              cpu: "4096m"
+              memory: "4096Mi"
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "prod"
+            - name: SERVER_PORT
+              value: "8080"
+            - name: MANAGEMENT_SERVER_PORT
+              value: "8081"

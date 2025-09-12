@@ -1,17 +1,18 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: kos-mock
+  name: kos-mock-deployment
 spec:
-  replicas: 1
+  replicas: 2
   template:
     spec:
       containers:
-      - name: kos-mock
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "256m"
-          limits:
-            memory: "1024Mi"
-            cpu: "1024m"
+        - name: kos-mock
+          image: acrdigitalgarage01.azurecr.io/phonebill-kos-mock:staging-latest
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "512m"
+            limits:
+              memory: "2048Mi"
+              cpu: "2048m"

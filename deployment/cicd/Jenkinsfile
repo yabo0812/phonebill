@@ -72,14 +72,6 @@ podTemplate(
         def imageTag = getImageTag()
         def environment = params.ENVIRONMENT ?: 'dev'
         def skipSonarQube = (params.SKIP_SONARQUBE?.toLowerCase() == 'true')
-        
-        // 파라미터 값 디버깅 출력
-        echo "=== Parameter Debug Info ==="
-        echo "params.SKIP_SONARQUBE raw value: [${params.SKIP_SONARQUBE}]"
-        echo "params.SKIP_SONARQUBE type: ${params.SKIP_SONARQUBE?.getClass()}"
-        echo "skipSonarQube final boolean value: ${skipSonarQube}"
-        echo "Will skip SonarQube: ${skipSonarQube ? 'YES' : 'NO'}"
-        echo "=========================="
         def services = ['api-gateway', 'user-service', 'bill-service', 'product-service', 'kos-mock']
         
         try {

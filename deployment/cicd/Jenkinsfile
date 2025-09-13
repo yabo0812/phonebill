@@ -71,6 +71,7 @@ podTemplate(
         def props
         def imageTag = getImageTag()
         def environment = params.ENVIRONMENT ?: 'dev'
+        def skipSonarQube = params.SKIP_SONARQUBE ?: false
         def services = ['api-gateway', 'user-service', 'bill-service', 'product-service', 'kos-mock']
         
         try {
@@ -91,14 +92,21 @@ podTemplate(
                 }
             }
 
-            stage('Build & SonarQube Analysis') {
+            stage('Build') {
+                container('gradle') {
+                    sh """
+                        chmod +x gradlew
+                        ./gradlew build -x test
+                    """
+                }
+            }
+
+            stage('SonarQube Analysis & Quality Gate') {
+                when {
+                    not { skipSonarQube }
+                }
                 container('gradle') {
                     withSonarQubeEnv('SonarQube') {
-                        sh """
-                            chmod +x gradlew
-                            ./gradlew build -x test
-                        """
-                        
                         // 각 서비스별 테스트 및 SonarQube 분석
                         services.each { service ->
                             sh """
@@ -110,15 +118,14 @@ podTemplate(
                                     -Dsonar.exclusions=**/config/**,**/entity/**,**/dto/**,**/*Application.class,**/exception/**
                             """
                         }
-                    }
-                }
-            }
-
-            stage('Quality Gate') {
-                timeout(time: 10, unit: 'MINUTES') {
-                    def qg = waitForQualityGate()
-                    if (qg.status != 'OK') {
-                        error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                        
+                        // Quality Gate 확인
+                        timeout(time: 10, unit: 'MINUTES') {
+                            def qg = waitForQualityGate()
+                            if (qg.status != 'OK') {
+                                error "Pipeline aborted due to quality gate failure: ${qg.status}"
+                            }
+                        }
                     }
                 }
             }

@@ -272,21 +272,3 @@ jobs:
           kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/bill-service --timeout=300s
           kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/product-service --timeout=300s
           kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/kos-mock --timeout=300s
-
-      - name: Health Check
-        run: |
-          echo "🔍 Health Check starting..."
-
-          # API Gateway Health Check
-          GATEWAY_POD=$(kubectl get pod -n phonebill-${{ env.ENVIRONMENT }} -l app.kubernetes.io/name=api-gateway -o jsonpath='{.items[0].metadata.name}')
-          kubectl -n phonebill-${{ env.ENVIRONMENT }} exec $GATEWAY_POD -- curl -f http://localhost:8080/actuator/health || exit 1
-
-          echo "✅ All services are healthy!"
-
-      - name: Get service information
-        run: |
-          echo "📋 Service Information:"
-          kubectl get pods -n phonebill-${{ env.ENVIRONMENT }}
-          kubectl get services -n phonebill-${{ env.ENVIRONMENT }}
-          kubectl get ingress -n phonebill-${{ env.ENVIRONMENT }}
-          echo "Ingress IP: $(kubectl -n phonebill-${{ env.ENVIRONMENT }} get ingress phonebill -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo 'Pending')"

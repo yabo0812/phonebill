@@ -39,6 +39,10 @@ patches:
     target:
       kind: Deployment
       name: kos-mock
+  - path: secret-api-gateway-patch.yaml
+    target:
+      kind: Secret
+      name: secret-api-gateway
   - path: secret-user-service-patch.yaml
     target:
       kind: Secret
@@ -51,6 +55,10 @@ patches:
     target:
       kind: Secret
       name: secret-product-service
+  - path: secret-kos-mock-patch.yaml
+    target:
+      kind: Secret
+      name: secret-kos-mock
 
 images:
   - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway

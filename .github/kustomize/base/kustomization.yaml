@@ -7,38 +7,40 @@ metadata:
 resources:
   # Common resources
   - namespace.yaml
+  - common/ingress.yaml
   - common/cm-common.yaml
   - common/secret-common.yaml
   - common/secret-imagepull.yaml
-  - common/ingress.yaml
 
-  # API Gateway service
+  # API Gateway
   - api-gateway/deployment.yaml
   - api-gateway/service.yaml
   - api-gateway/cm-api-gateway.yaml
+  - api-gateway/secret-api-gateway.yaml
 
-  # User service
+  # User Service
   - user-service/deployment.yaml
   - user-service/service.yaml
   - user-service/cm-user-service.yaml
   - user-service/secret-user-service.yaml
 
-  # Bill service
+  # Bill Service
   - bill-service/deployment.yaml
   - bill-service/service.yaml
   - bill-service/cm-bill-service.yaml
   - bill-service/secret-bill-service.yaml
 
-  # Product service
+  # Product Service
   - product-service/deployment.yaml
   - product-service/service.yaml
   - product-service/cm-product-service.yaml
   - product-service/secret-product-service.yaml
 
-  # KOS Mock service
+  # KOS Mock Service
   - kos-mock/deployment.yaml
   - kos-mock/service.yaml
   - kos-mock/cm-kos-mock.yaml
+  - kos-mock/secret-kos-mock.yaml
 
 images:
   - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway

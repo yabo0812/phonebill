@@ -47,13 +47,13 @@ kubectl apply -k .
 echo "⏳ Waiting for deployments to be ready..."
 # 서비스별 배포 상태 확인
 for service in "${services[@]}"; do
-  kubectl rollout status deployment/${ENVIRONMENT}-$service -n phonebill-${ENVIRONMENT} --timeout=300s
+  kubectl rollout status deployment/$service -n phonebill-${ENVIRONMENT} --timeout=300s
 done
 
 echo "🔍 Health check..."
 # API Gateway Health Check (첫 번째 서비스가 API Gateway라고 가정)
 GATEWAY_SERVICE=${services[0]}
-GATEWAY_POD=$(kubectl get pod -n phonebill-${ENVIRONMENT} -l app.kubernetes.io/name=${ENVIRONMENT}-$GATEWAY_SERVICE -o jsonpath='{.items[0].metadata.name}')
+GATEWAY_POD=$(kubectl get pod -n phonebill-${ENVIRONMENT} -l app.kubernetes.io/name=$GATEWAY_SERVICE -o jsonpath='{.items[0].metadata.name}')
 kubectl -n phonebill-${ENVIRONMENT} exec $GATEWAY_POD -- curl -f http://localhost:8080/actuator/health || echo "Health check failed, but deployment completed"
 
 echo "📋 Service Information:"

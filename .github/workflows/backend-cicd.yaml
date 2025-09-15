@@ -180,6 +180,12 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Login to Docker Hub (prevent rate limit)
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
       - name: Login to Azure Container Registry
         uses: docker/login-action@v3
         with:
@@ -261,18 +267,18 @@ jobs:
       - name: Wait for deployments to be ready
         run: |
           echo "Waiting for deployments to be ready..."
-          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/${{ env.ENVIRONMENT }}-api-gateway --timeout=300s
-          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/${{ env.ENVIRONMENT }}-user-service --timeout=300s
-          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/${{ env.ENVIRONMENT }}-bill-service --timeout=300s
-          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/${{ env.ENVIRONMENT }}-product-service --timeout=300s
-          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/${{ env.ENVIRONMENT }}-kos-mock --timeout=300s
+          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/api-gateway --timeout=300s
+          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/user-service --timeout=300s
+          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/bill-service --timeout=300s
+          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/product-service --timeout=300s
+          kubectl -n phonebill-${{ env.ENVIRONMENT }} wait --for=condition=available deployment/kos-mock --timeout=300s
 
       - name: Health Check
         run: |
           echo "🔍 Health Check starting..."
 
           # API Gateway Health Check
-          GATEWAY_POD=$(kubectl get pod -n phonebill-${{ env.ENVIRONMENT }} -l app.kubernetes.io/name=${{ env.ENVIRONMENT }}-api-gateway -o jsonpath='{.items[0].metadata.name}')
+          GATEWAY_POD=$(kubectl get pod -n phonebill-${{ env.ENVIRONMENT }} -l app.kubernetes.io/name=api-gateway -o jsonpath='{.items[0].metadata.name}')
           kubectl -n phonebill-${{ env.ENVIRONMENT }} exec $GATEWAY_POD -- curl -f http://localhost:8080/actuator/health || exit 1
 
           echo "✅ All services are healthy!"
@@ -283,4 +289,4 @@ jobs:
           kubectl get pods -n phonebill-${{ env.ENVIRONMENT }}
           kubectl get services -n phonebill-${{ env.ENVIRONMENT }}
           kubectl get ingress -n phonebill-${{ env.ENVIRONMENT }}
-          echo "Ingress IP: $(kubectl -n phonebill-${{ env.ENVIRONMENT }} get ingress phonebill-ingress -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo 'Pending')"
+          echo "Ingress IP: $(kubectl -n phonebill-${{ env.ENVIRONMENT }} get ingress phonebill -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo 'Pending')"

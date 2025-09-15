@@ -2,7 +2,6 @@ apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
   name: phonebill
-  
   annotations:
     kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/ssl-redirect: "true"
@@ -11,10 +10,10 @@ spec:
   ingressClassName: nginx
   tls:
   - hosts:
-    - phonebill.staging.example.com
-    secretName: phonebill-staging-tls
+    - staging.phonebill.com
+    secretName: staging-phonebill-tls
   rules:
-  - host: phonebill.staging.example.com
+  - host: staging.phonebill.com
     http:
       paths:
       - path: /api/v1/auth

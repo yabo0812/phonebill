@@ -5,9 +5,7 @@ metadata:
   name: phonebill-base
 
 resources:
-  # Namespace
-  - namespace.yaml
-  
+
   # Common resources
   - common/cm-common.yaml
   - common/secret-common.yaml

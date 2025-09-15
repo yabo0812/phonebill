@@ -16,7 +16,6 @@ resources:
   - api-gateway/deployment.yaml
   - api-gateway/service.yaml
   - api-gateway/cm-api-gateway.yaml
-  - api-gateway/secret-api-gateway.yaml
 
   # User Service
   - user-service/deployment.yaml
@@ -40,7 +39,6 @@ resources:
   - kos-mock/deployment.yaml
   - kos-mock/service.yaml
   - kos-mock/cm-kos-mock.yaml
-  - kos-mock/secret-kos-mock.yaml
 
 images:
   - name: acrdigitalgarage01.azurecr.io/phonebill/api-gateway

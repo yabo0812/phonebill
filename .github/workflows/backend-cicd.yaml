@@ -250,7 +250,7 @@ jobs:
 
       - name: Update Kustomize images and deploy
         run: |
-      렉토리로 이동
+          # 환경별 디렉토리로 이동
           cd .github/kustomize/overlays/${{ env.ENVIRONMENT }}
 
           # 각 서비스별 이미지 태그 업데이트

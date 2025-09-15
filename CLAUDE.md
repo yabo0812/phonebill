@@ -310,6 +310,10 @@ QA Engineer
   - 설명: 백엔드 서비스를 Jenkins를 이용하여 CI/CD하는 배포 가이드  
   - URL: https://raw.githubusercontent.com/cna-bootcamp/clauding-guide/refs/heads/main/guides/deploy/deploy-jenkins-cicd-back.md
   - 파일명: deploy-jenkins-cicd-back.md  
+- 백엔드GitHubActions파이프라인작성가이드
+  - 설명: 백엔드 서비스를 GitHub Actions를 이용하여 CI/CD하는 배포 가이드  
+  - URL: https://raw.githubusercontent.com/cna-bootcamp/clauding-guide/refs/heads/main/guides/deploy/deploy-actions-cicd-back.md
+  - 파일명: deploy-actions-cicd-back.md  
   
 ## 참조 문서
 - 프로젝트지침템플릿

@@ -14,8 +14,8 @@
 - **Pod 상태**: Running (2/2) 
 - **연결정보**: `auth-postgres-dev-postgresql.phonebill-dev.svc.cluster.local:5432`
 - **데이터베이스**: `phonebill_auth`
-- **사용자**: `auth_user` / `AuthUser2025!`
-- **관리자**: `postgres` / `Auth2025Dev!`
+- **사용자**: `auth_user` / `AuthUser2025@`
+- **관리자**: `postgres` / `Auth2025Dev@`
 - **스키마**: 7개 테이블 + 20개 인덱스 ✅
 
 ```commandline
@@ -30,8 +30,8 @@ helm install auth-postgres-dev \
 - **Pod 상태**: Running (2/2)
 - **연결정보**: `bill-inquiry-postgres-dev-postgresql.phonebill-dev.svc.cluster.local:5432`
 - **데이터베이스**: `bill_inquiry_db`
-- **사용자**: `bill_inquiry_user` / `BillUser2025!`
-- **관리자**: `postgres` / `Bill2025Dev!`
+- **사용자**: `bill_inquiry_user` / `BillUser2025@`
+- **관리자**: `postgres` / `Bill2025Dev@`
 - **스키마**: 5개 테이블 + 15개 인덱스 ✅
 
 ```commandline
@@ -46,8 +46,8 @@ helm upgrade -i bill-inquiry-postgres-dev \
 - **Pod 상태**: Running (2/2)
 - **연결정보**: `product-change-postgres-dev-postgresql.phonebill-dev.svc.cluster.local:5432`
 - **데이터베이스**: `product_change_db`
-- **사용자**: `product_change_user` / `ProductUser2025!`
-- **관리자**: `postgres` / `Product2025Dev!`
+- **사용자**: `product_change_user` / `ProductUser2025@`
+- **관리자**: `postgres` / `Product2025Dev@`
 - **스키마**: 3개 테이블 + 12개 인덱스 ✅
 
 ```commandline
@@ -61,7 +61,7 @@ helm upgrade -i product-change-postgres-dev \
 - **Helm Release**: `redis-cache-dev`
 - **Pod 상태**: Running (2/2)
 - **연결정보**: `redis-cache-dev-master.phonebill-dev.svc.cluster.local:6379`
-- **인증**: Redis 비밀번호 `Redis2025Dev!`
+- **인증**: Redis 비밀번호 `Redis2025Dev@`
 - **메모리 설정**: 512MB (allkeys-lru 정책)
 - **연결 테스트**: PONG 응답 확인 ✅
 
@@ -90,7 +90,7 @@ auth:
   port: 5432
   database: "phonebill_auth"
   username: "auth_user"
-  password: "AuthUser2025!"
+  password: "AuthUser2025@"
 
 # Bill-Inquiry 서비스용  
 bill-inquiry:
@@ -98,7 +98,7 @@ bill-inquiry:
   port: 5432
   database: "bill_inquiry_db"
   username: "bill_inquiry_user"
-  password: "BillUser2025!"
+  password: "BillUser2025@"
 
 # Product-Change 서비스용
 product-change:
@@ -106,13 +106,13 @@ product-change:
   port: 5432
   database: "product_change_db" 
   username: "product_change_user"
-  password: "ProductUser2025!"
+  password: "ProductUser2025@"
 
 # Redis 캐시 (모든 서비스 공유)
 redis:
   host: "redis-cache-dev-master.phonebill-dev.svc.cluster.local"
   port: 6379
-  password: "Redis2025Dev!"
+  password: "Redis2025Dev@"
 ```
 
 ### Kubernetes Secret 정보

@@ -18,6 +18,13 @@
 - **관리자**: `postgres` / `Auth2025Dev!`
 - **스키마**: 7개 테이블 + 20개 인덱스 ✅
 
+```commandline
+helm install auth-postgres-dev \
+  -f deployment/database/exec/auth-postgres-values.yaml \
+  bitnami/postgresql \
+  --version 12.12.10
+```
+
 ### 2. Bill-Inquiry 서비스 PostgreSQL  
 - **Helm Release**: `bill-inquiry-postgres-dev`
 - **Pod 상태**: Running (2/2)

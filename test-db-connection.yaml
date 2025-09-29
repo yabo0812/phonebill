@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: db-connection-test
+  namespace: phonebill-dg0500
+spec:
+  containers:
+  - name: postgres-client
+    image: postgres:15
+    command: ["sleep", "3600"]
+    env:
+    - name: DB_HOST
+      value: "bill-inquiry-postgres-dev-postgresql"
+    - name: DB_NAME
+      value: "bill_inquiry_db"
+    - name: DB_USERNAME
+      value: "bill_inquiry_user"
+    - name: DB_PASSWORD
+      value: "BillUser2025!"
+    - name: DB_PORT
+      value: "5432"
+  restartPolicy: Never

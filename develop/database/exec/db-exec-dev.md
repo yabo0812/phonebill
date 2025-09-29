@@ -20,7 +20,7 @@
 
 ```commandline
 helm install auth-postgres-dev \
-  -f deployment/database/exec/auth-postgres-values.yaml \
+  -f develop/database/exec/auth-postgres-values.yaml \
   bitnami/postgresql \
   --version 12.12.10
 ```
@@ -34,6 +34,13 @@ helm install auth-postgres-dev \
 - **관리자**: `postgres` / `Bill2025Dev!`
 - **스키마**: 5개 테이블 + 15개 인덱스 ✅
 
+```commandline
+helm upgrade -i bill-inquiry-postgres-dev \
+  -f develop/database/exec/bill-inquiry-postgres-values.yaml \
+  bitnami/postgresql \
+  --version 12.12.10
+```
+
 ### 3. Product-Change 서비스 PostgreSQL
 - **Helm Release**: `product-change-postgres-dev`  
 - **Pod 상태**: Running (2/2)
@@ -43,6 +50,13 @@ helm install auth-postgres-dev \
 - **관리자**: `postgres` / `Product2025Dev!`
 - **스키마**: 3개 테이블 + 12개 인덱스 ✅
 
+```commandline
+helm upgrade -i product-change-postgres-dev \
+  -f develop/database/exec/product-change-postgres-values.yaml \
+  bitnami/postgresql \
+  --version 12.12.10
+```
+
 ### 4. Redis 캐시
 - **Helm Release**: `redis-cache-dev`
 - **Pod 상태**: Running (2/2)
@@ -50,6 +64,12 @@ helm install auth-postgres-dev \
 - **인증**: Redis 비밀번호 `Redis2025Dev!`
 - **메모리 설정**: 512MB (allkeys-lru 정책)
 - **연결 테스트**: PONG 응답 확인 ✅
+
+```commandline
+helm upgrade -i redis-cache-dev \
+  -f develop/database/exec/redis-cache-values.yaml \
+  bitnami/redis 
+```
 
 ## 🔧 리소스 할당 현황
 

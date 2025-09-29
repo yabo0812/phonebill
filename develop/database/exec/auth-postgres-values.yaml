@@ -3,10 +3,10 @@
 global:
   postgresql:
     auth:
-      postgresPassword: "Auth2025Dev!"
+      postgresPassword: "Auth2025Dev@"
       database: "phonebill_auth"
       username: "auth_user"
-      password: "AuthUser2025!"
+      password: "AuthUser2025@"
   storageClass: "managed"
 
 # Primary 설정 (개발환경 단독 구성)
@@ -70,10 +70,12 @@ securityContext:
 
 # 메트릭 설정 (개발환경 모니터링)
 metrics:
-  enabled: true
-  service:
-    type: ClusterIP
+  enabled: false
 
 # 백업 설정 (개발환경 기본)
 backup:
   enabled: false  # 개발환경에서는 수동 백업
+
+image:
+  registry: docker.io
+  repository: bitnamilegacy/postgresql

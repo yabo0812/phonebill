@@ -1,6 +1,6 @@
 # 통신요금 관리 서비스 백엔드 Kubernetes 배포 가이드
 
-## 📋 배포 개요
+### 📋 배포 개요
 
 **시스템명**: phonebill
 **네임스페이스**: phonebill-dev

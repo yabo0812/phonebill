@@ -71,6 +71,7 @@ podTemplate(
         def props
         def imageTag = getImageTag()
         def environment = params.ENVIRONMENT ?: 'dev'
+        def id = params.ID ?: 'dg0511'
         def skipSonarQube = (params.SKIP_SONARQUBE?.toLowerCase() == 'true')
         def services = ['api-gateway', 'user-service', 'bill-service', 'product-service', 'kos-mock']
         
@@ -86,7 +87,7 @@ podTemplate(
                         sh """
                             az login --service-principal -u \$AZURE_CLIENT_ID -p \$AZURE_CLIENT_SECRET -t \$AZURE_TENANT_ID
                             az aks get-credentials --resource-group ${props.resource_group} --name ${props.cluster_name} --overwrite-existing
-                            kubectl create namespace phonebill-${environment} --dry-run=client -o yaml | kubectl apply -f -
+                            kubectl create namespace phonebill-${id} --dry-run=client -o yaml | kubectl apply -f -
                         """
                     }
                 }
@@ -111,8 +112,8 @@ podTemplate(
                             services.each { service ->
                                 sh """
                                     ./gradlew :${service}:test :${service}:jacocoTestReport :${service}:sonar \\
-                                        -Dsonar.projectKey=phonebill-${service}-${environment} \\
-                                        -Dsonar.projectName=phonebill-${service}-${environment} \\
+                                        -Dsonar.projectKey=phonebill-${service}-${id} \\
+                                        -Dsonar.projectName=phonebill-${service}-${id} \\
                                         -Dsonar.java.binaries=build/classes/java/main \\
                                         -Dsonar.coverage.jacoco.xmlReportPaths=build/reports/jacoco/test/jacocoTestReport.xml \\
                                         -Dsonar.exclusions=**/config/**,**/entity/**,**/dto/**,**/*Application.class,**/exception/**
@@ -150,7 +151,7 @@ podTemplate(
                             sh "podman login docker.io --username \$DOCKERHUB_USERNAME --password \$DOCKERHUB_PASSWORD"
                             
                             // ACR 로그인
-                            sh "podman login acrdigitalgarage01.azurecr.io --username \$ACR_USERNAME --password \$ACR_PASSWORD"
+                            sh "podman login acrdigitalgarage03.azurecr.io --username \$ACR_USERNAME --password \$ACR_PASSWORD"
 
                             services.each { service ->
                                 sh """
@@ -158,9 +159,8 @@ podTemplate(
                                         --build-arg BUILD_LIB_DIR="${service}/build/libs" \\
                                         --build-arg ARTIFACTORY_FILE="${service}.jar" \\
                                         -f deployment/container/Dockerfile-backend \\
-                                        -t acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag} .
+                                        -t acrdigitalgarage03.azurecr.io/phonebill/${service}:${id}-${imageTag} .
 
-                                    podman push acrdigitalgarage01.azurecr.io/phonebill/${service}:${environment}-${imageTag}
                                 """
                             }
                         }
@@ -185,7 +185,7 @@ podTemplate(
 
                         # 이미지 태그 업데이트
                         for service in \$services; do
-                            \$HOME/bin/kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/\$service:${environment}-${imageTag}
+                            \$HOME/bin/kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/\$service:${id}-${imageTag}
                         done
 
                         # 매니페스트 적용

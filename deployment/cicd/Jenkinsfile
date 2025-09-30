@@ -185,7 +185,7 @@ podTemplate(
 
                         # 이미지 태그 업데이트
                         for service in \$services; do
-                            \$HOME/bin/kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/\$service:${id}-${imageTag}
+                            \$HOME/bin/kustomize edit set image acrdigitalgarage03.azurecr.io/phonebill/\$service:${id}-${imageTag}
                         done
 
                         # 매니페스트 적용

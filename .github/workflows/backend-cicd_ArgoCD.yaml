@@ -33,10 +33,10 @@ on:
           - 'false'
 
 env:
-  REGISTRY: acrdigitalgarage01.azurecr.io
+  REGISTRY: acrdigitalgarage03.azurecr.io
   IMAGE_ORG: phonebill
-  RESOURCE_GROUP: rg-digitalgarage-01
-  AKS_CLUSTER: aks-digitalgarage-01
+  RESOURCE_GROUP: rg-digitalgarage-03
+  AKS_CLUSTER: aks-digitalgarage-03
 
 jobs:
   build:
@@ -70,10 +70,10 @@ jobs:
           ENV=${{ steps.determine_env.outputs.environment }}
 
           # Initialize variables with defaults
-          REGISTRY="acrdigitalgarage01.azurecr.io"
+          REGISTRY="acrdigitalgarage03.azurecr.io"
           IMAGE_ORG="phonebill"
-          RESOURCE_GROUP="rg-digitalgarage-01"
-          AKS_CLUSTER="aks-digitalgarage-01"
+          RESOURCE_GROUP="rg-digitalgarage-03"
+          AKS_CLUSTER="aks-digitalgarage-03"
 
           # Read environment variables from .github/config file
           if [[ -f ".github/config/deploy_env_vars_${ENV}" ]]; then
@@ -237,7 +237,7 @@ jobs:
           # 각 서비스별 이미지 태그 업데이트
           services="api-gateway user-service bill-service product-service kos-mock"
           for service in $services; do
-            kustomize edit set image acrdigitalgarage01.azurecr.io/phonebill/$service:${{ env.ENVIRONMENT }}-${{ env.IMAGE_TAG }}
+            kustomize edit set image acrdigitalgarage03.azurecr.io/phonebill/$service:${{ env.ENVIRONMENT }}-${{ env.IMAGE_TAG }}
           done
 
           # Git 설정 및 푸시

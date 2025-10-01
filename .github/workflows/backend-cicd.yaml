@@ -44,7 +44,8 @@ jobs:
     name: Build and Test
     runs-on: ubuntu-latest
     outputs:
-      image_tag: ${{ steps.set_outputs.outputs.image_tag }}
+      #image_tag: ${{ steps.set_outputs.outputs.image_tag }}
+      image_tag: dg0511
       environment: ${{ steps.set_outputs.outputs.environment }}
 
     steps:
